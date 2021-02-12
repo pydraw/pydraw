@@ -176,7 +176,7 @@ schrodingers_box.distance(not_a_box)  # Gets the precise distance between the ce
 ---
 
 ## API/Docs
-The documentation for [pydraw](https://pypi.org/project/pydraw) is available at the main website: https://pydraw.graphics
+The documentation for [pydraw](https://pypi.org/project/pydraw) is available (SOON) at the main website: https://pydraw.graphics
 The documentation is shipped with the package so code completion and method descriptors are
 available.
 
