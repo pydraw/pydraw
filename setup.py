@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pydraw",
-    version="0.0.2",
+    version="0.1.0",
     author="Noah Coetsee",
     author_email="noah@noahcoetsee.me",
     description="A package designed to make graphics with Python simple and easy",

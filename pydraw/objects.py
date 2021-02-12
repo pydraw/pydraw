@@ -6,6 +6,7 @@ No hiding spots here (for semicolons)
 import turtle;
 import tkinter as tk;
 import math;
+from pydraw.errors import *;
 
 from pydraw import Screen;
 from pydraw import Location;
@@ -57,6 +58,9 @@ class Object:
         real_y = -self.y() + self._screen.height() / 2 - self.height() / 2;
 
         return real_x, real_y;
+
+    def remove(self):
+        self._screen.remove(self);
 
     def update(self) -> None:
         real_x, real_y = self._get_real_location();
@@ -187,7 +191,7 @@ class Renderable(Object):
         # TODO: We can create a second object here to act as a "border", or we can see what tkinter has in store...
         return self._border;
 
-    def fill(self, fill: bool = None):
+    def fill(self, fill: bool = None) -> bool:
         """
         Returns or sets the current fill boolean
         :param fill: a new fill value, whether or not to fill the polygon
@@ -222,12 +226,16 @@ class Renderable(Object):
 
         return self._visible;
 
+    def vertices(self) -> list[Location]:
+        return self._get_vertices();
+
     def contains(self, *args):
         """
         Returns whether or not a point is contained within the object.
         :param args: You may pass in either two numbers, a Location, or a tuple containing and x and y point.
         :return: a boolean value representing whether or not the point is within the bounds of the object.
         """
+
         x, y = 0, 0;
         count = 0;
 
@@ -241,9 +249,12 @@ class Renderable(Object):
         elif len(args) == 2:
             if type(args[0]) is not float and type(args[0]) is not int \
                     and type(args[1]) is not float and type(args[1]) is not int:
-                raise NameError('Passed arguments must be numbers (x, y), or you may pass a location/tuple.');
+                raise InvalidArgumentError('Passed arguments must be numbers (x, y), '
+                                           'or you may pass a location/tuple.');
             x = args[0];
             y = args[1];
+        else:
+            raise InvalidArgumentError('You must pass in a tuple, Location, or two numbers (x, y)!');
 
         # If the point isn't remotely near us, we don't need to perform any calculations.
         if not (self.x() <= x <= (self.x() + self.width()) and self.y() <= y <= (self.y() + self.height())):
@@ -252,7 +263,7 @@ class Renderable(Object):
         # the contains algorithm uses the line-intersects algorithm to determine if a point is within a polygon.
         # we are going to cast a ray from our point to the positive x. (left to right)
 
-        shape = self._get_vertices();
+        shape = self.vertices();
         point1 = shape[0];
         for i in range(1, len(shape)):
             # A cool trick that gets the next index in an array, or the first index if i is the last index.
@@ -292,6 +303,9 @@ class Renderable(Object):
         :return: true if they are overlapping, false if not.
         """
 
+        if not isinstance(renderable, Renderable):
+            raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
+
         min_ax = self.x();
         max_ax = self.x() + self.width();
 
@@ -325,9 +339,10 @@ class Renderable(Object):
         # Next we are going to use a sweeping line algorithm.
         # Essentially we will process the lines on the x axis, one coordinate at a time (imagine a vertical line scan).
         # Then we will look for their orientations. We will essentially make sure its impossible they do not cross.
-        shape1 = self._get_vertices(self);
+        shape1 = self.vertices();
+
         # noinspection PyProtectedMember
-        shape2 = renderable._get_vertices();
+        shape2 = renderable.vertices();
 
         print('Overlaps Debug: ');
         print(f'Shape #1: {shape1}');
@@ -359,7 +374,7 @@ class Renderable(Object):
             """
 
             return max(point1.x(), point3.x()) >= point2.x() >= min(point1.x(), point3.x()) \
-                   and max(point1.y(), point3.y()) >= point2.y() >= min(point1.y(), point3.y());
+                and max(point1.y(), point3.y()) >= point2.y() >= min(point1.y(), point3.y());
 
         # Okay to begin actually detecting orientations, we want to loop through some edges. But only ones that are
         # relevant. In order to do this we will first have to turn the list of vertices into a list of edges.
@@ -409,6 +424,7 @@ class Renderable(Object):
         return False;
 
     # noinspection PyProtectedMember
+    # noinspection PyUnresolvedReferences
     def _get_vertices(self):
         shape_data = self._screen._screen._shapes[self._ref.turtle.shapeIndex]._data;
 
@@ -525,13 +541,21 @@ class Polygon(Renderable):
         self._ref.shape(str(self._id));
 
 
-# noinspection PyProtectedMember
-class CustomPolygon(Renderable):
+class CustomRenderable(Renderable):
     """
-    Warning: This class is unfinished and if used improperly can have unintended sid effects.
+    A wrapper class to distintify classes that wrap turtle and those that are built on tkinter.
+    """
+    pass;
+
+
+# noinspection PyProtectedMember
+class CustomPolygon(CustomRenderable):
+    """
+    Warning: This class is unfinished and if used improperly can have unintended side effects.
     """
 
-    def __init__(self, screen: Screen, vertices: list,
+    # The below "# noqa" removes a small inspection by pycharm as it complains we do not call the constructor.
+    def __init__(self, screen: Screen, vertices: list, # noqa
                  color: Color = Color('black'),
                  border: Color = None,
                  fill: bool = True,
@@ -586,50 +610,188 @@ class CustomPolygon(Renderable):
             state=state
         );
 
-    def rotate(self, angle_diff: float) -> None:
-        self._angle += angle_diff;
-        self.rotation(self._angle);
+    def rotate(self, angle_diff: float = 0) -> None:
+        if type(angle_diff) is not float and type(angle_diff) is not int:
+            raise InvalidArgumentError('Renderable#rotate() must be passed a number (float or int)!');
+
+        self._rotate(angle_diff);
+        self._rotate(-angle_diff);  # TODO: THIS IS A HACK. I HAVE NO CLUE WHY IT WORKS.
 
     def rotation(self, angle: float = None) -> float:
         if angle is not None:
-            self._angle = angle;
-            self.update();
+            self.rotate(angle - self._angle);
 
         return self._angle;
 
-    def _set_angle(self):
-        # get centroid
+    def vertices(self) -> list[Location]:
+        return self._vertices;
 
-        pass;
+    def _rotate(self, angle_diff: float) -> None:
+        self._angle += angle_diff;
+        print(f'New Angle: {self._angle} (Diff: {angle_diff}');
+        if self._angle >= 360:
+            self._angle = self._angle - 360;
+
+        # We have to update here since we cannot remember previous rotations (update method call won't cut it)!
+        vertices = self.vertices();
+
+        # First get some values that we gonna use later
+        radians = math.radians(self._angle);
+        cosine = math.cos(radians);
+        sine = math.sin(radians);
+
+        # We gonna create a centroid so we can rotate the points around a realistic center
+        # Sorry for those of you that get weird rotations..
+        x_list = [];
+        y_list = [];
+        for vertex in vertices:
+            x_list.append(vertex.x());
+            y_list.append(vertex.y());
+
+        # Create a simple centroid (not full centroid)
+        centroid_x = sum(x_list) / len(y_list);
+        centroid_y = sum(y_list) / len(x_list);
+
+        new_vertices = []
+        for vertex in vertices:
+            # We have to create these separately because they're ironically used in each others calculations xD
+            old_x = vertex.x() - centroid_x;
+            old_y = vertex.y() - centroid_y;
+
+            new_x = old_x * cosine - old_y * sine;
+            new_y = old_x * sine + old_y * cosine;
+
+        self._vertices = new_vertices;
+        self.update();
 
     def update(self):
-        # Update stuffs here
-        pass;
+        old_ref = self._ref;
+
+        xmin = self._vertices[0][0];
+        xmax = self._vertices[0][0];
+        ymin = self._vertices[0][1];
+        ymax = self._vertices[0][1];
+
+        for vertex in self._vertices:
+            if vertex.x() < xmin:
+                xmin = vertex.x();
+            if vertex.x() > xmax:
+                xmax = vertex.x();
+
+            if vertex.y() < ymin:
+                ymin = vertex.y();
+            if vertex.y() > ymax:
+                ymax = vertex.y();
+
+        self._numsides = len(self._vertices);
+        self._location = Location(xmin, ymin);
+        self._width = xmin + (xmax - xmin) / 2;
+        self._height = ymin + (ymax - ymin) / 2;
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+            # tk_vertices.append((self.x() - ((self._screen.width() / 2) + 1),
+            #                                 (self.y() - (self._screen.height() / 2)) + self.height()));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+
+        self._ref = self._screen._screen.cv.create_polygon(
+            tk_vertices,
+            fill=self._screen._screen._colorstr(self._color.__value__()),
+            outline=self._screen._screen._colorstr(self._border.__value__()),
+            state=state
+        );
+
+        self._screen._screen.cv.tag_lower(self._ref, old_ref);
+        self._screen._screen.cv.delete(old_ref);
 
 
-# class Image(Renderable):
-#     def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
-#                  width: float = None, height: float = None,
-#                  color: Color = Color('black'),
-#                  border: Color = None,
-#                  fill: bool = True,
-#                  rotation: float = 0,
-#                  visible: bool = True,
-#                  location: Location = None):
-#         self._image_name = image;
-#         pil_image = PIL.Image.open(image);
-#         self._image = PIL.ImageTk.PhotoImage(pil_image);
-#         screen._screen.addshape(self._image);
-#
-#         # If the width is not defined then we will use the images default width.
-#         if width is None:
-#             width = self._image.width();
-#
-#         if height is None:
-#             height = self._image.height();
-#
-#         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible, location);
-#         self._ref.shape(self._image_name);
+class Image(Renderable):
+    """
+    Image class. Supports basic formats: PNG, GIF, JPG, PPM, etc.
+
+    NOTE: This class is unfinished as supporting images without external dependencies is not that easy.
+    Some methods and constructor attributes will not do anything until a full wrapper is developed for tk.PhotoImage.
+    """
+
+    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
+                 rotation: float = 0,
+                 visible: bool = True,
+                 location: Location = None):
+        self._image_name = image;
+        self._image = tk.PhotoImage(name=image, file=image);
+
+        width = self._image.width();
+        height = self._image.height();
+
+        shape = turtle.Shape('image', self._image);
+
+        # noinspection PyProtectedMember
+        screen._screen.register_shape(self._image_name, shape);
+
+        super().__init__(screen, x, y, width, height, rotation=rotation, visible=visible, location=location);
+        self._ref.shape(self._image_name);
+
+    def width(self, width: float = None) -> float:
+        """
+        Get the width (NOTE: modifying the width is not currently supported). (COMING SOON!!!)
+        """
+        if width is not None:
+            raise UnsupportedError('This method is not fully supported for Images (yet)!');
+
+        return self._width;
+
+    def height(self, height: float = None) -> float:
+        """
+        Get the  height (NOTE: modifying the height is not currently supported). (COMING SOON!!!)
+        """
+
+        if height is not None:
+            raise UnsupportedError('This method is not fully supported for Images (yet)!');
+
+        return self._height;
+
+    def color(self, color: Color = None) -> Color:
+        """
+        Unsupported: This just doesn't really makes sense for an image.
+        """
+
+        raise UnsupportedError('This method is not supported for Images!');
+
+    def rotation(self, angle: float = None) -> float:
+        """
+        Unsupported. (COMING SOON!!!)
+        """
+
+        raise UnsupportedError('This method is not supported for Images (yet)!');
+
+    def rotate(self, angle_diff: float = 0) -> None:
+        """
+        Unsupported. (COMING SOON!!!)
+        """
+
+        raise UnsupportedError('This method is not supported for Images (yet)!');
+
+    def border(self, color: Color = None, fill: bool = None) -> Color:
+        """
+        Unsupported. (COMING SOON!!!)
+        """
+
+        raise UnsupportedError('This method is not supported for Images (yet)!');
+
+    def fill(self, fill: bool = None) -> bool:
+        """
+        Unsupported: This doesn't make sense for images.
+        """
+
+        raise UnsupportedError('This method is not supported for Images!');
+
+    def vertices(self) -> list[Location]:
+        return [self.location(), Location(self.x() + self.width(), self.y()),
+                Location(self.x() + self.width(), self.y() + self.height()),
+                Location(self.x(), self.y() + self.height())];
 
 
 # == NON RENDERABLES == #
@@ -925,10 +1087,10 @@ class Line(Object):
         print(f'Created line: Pos1: {self._pos1}, Pos2: {self._pos2}');
 
         # noinspection PyProtectedMember
-        self._ref = self._screen._screen.cv.create_line(self._pos1.x(),
-                                                        self._pos1.y(),
-                                                        self._pos2.x(),
-                                                        self._pos2.y(),
+        self._ref = self._screen._screen.cv.create_line(self._pos1.x() - screen.width() / 2,
+                                                        self._pos1.y() - screen.height() / 2,
+                                                        self._pos2.x() - screen.width() / 2,
+                                                        self._pos2.y() - screen.height() / 2,
                                                         fill=self._screen._screen._colorstr(self._color.__value__()),
                                                         width=self._thickness, dash=self._dashes, state=state);
 
@@ -975,15 +1137,17 @@ class Line(Object):
         Move both endpoints by the same dx and dy
         :param dx: the distance x to move
         :param dy: the distance y to move
-        :param point: affect only one of the endpoints; options: (1, 2)
+        :param point: affect only one of the endpoints; options: (1, 2), default=0
         :return: None
         """
 
         if point != 0:
             if point == 1:
                 self._pos1.move(dx, dy);
-            else:
+            elif point == 2:
                 self._pos2.move(dx, dy);
+            else:
+                raise IndexError('Attempted to change point other than 1 or 2.');
         else:
             self._pos1.move(dx, dy);
             self._pos2.move(dx, dy);
@@ -1077,7 +1241,10 @@ class Line(Object):
             self._dashes = (self._dashes, self._dashes)
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
-        self._ref = self._screen._screen.cv.create_line(self._pos1.x(), self._pos1.y(), self._pos2.x(), self._pos2.y(),
+        self._ref = self._screen._screen.cv.create_line(self._pos1.x() - self._screen.width() / 2,
+                                                        self._pos1.y() - self._screen.height() / 2,
+                                                        self._pos2.x() - self._screen.width() / 2,
+                                                        self._pos2.y() - self._screen.height() / 2,
                                                         fill=self._screen._screen._colorstr(self.color().__value__()),
                                                         width=self._thickness, dash=self._dashes, state=state);
 

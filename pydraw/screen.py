@@ -1,5 +1,6 @@
 import turtle;
 import inspect;
+import time;
 
 from pydraw import Color;
 from pydraw import Location;
@@ -191,12 +192,34 @@ class Screen:
         return self._screen.getcanvas().winfo_height() - BORDER_CONSTANT;
 
     # Direct Manipulation
+
+    # noinspection PyProtectedMember
+    def remove(self, obj):
+        from pydraw import Renderable, CustomRenderable;
+        if isinstance(obj, Renderable) and not isinstance(obj, CustomRenderable):
+            obj._ref.reset();
+            obj._ref.ht();
+            del obj;
+        else:
+            self._screen.cv.delete(obj._ref);
+            del obj;
+
     def clear(self) -> None:
         """
         Clears the screen.
         :return: None
         """
         self._screen.clear();
+
+    @staticmethod
+    def sleep(delay: float) -> None:
+        """
+        Cause the program to sleep by calling time.sleep(delay)
+        :param delay: the delay in seconds to sleep by
+        :return: None
+        """
+
+        time.sleep(delay);
 
     def update(self) -> None:
         """
@@ -267,13 +290,49 @@ class Screen:
             # custom implemented mouseclick
             self._onmouseclick(self._create_lambda('mouseclick', btn), btn);
 
-    # pending type-definition (function?)
+    class Key:
+        def __init__(self, key: str):
+            self._key = key;
+
+        def key(self) -> str:
+            """
+            Returns the string for the key.
+            :return: the key in ascii
+            """
+            return self._key;
+
+        def __repr__(self):
+            return self.key();
+
+        def __str__(self):
+            return self.key();
+
+        def __add__(self, other):
+            return str(self) + other
+
+        def __radd__(self, other):
+            return other + str(self)
+
+        def __eq__(self, obj) -> bool:
+            """
+            Overrides the equals operator so that we can compare with strings! Fantastic!
+            :param obj: the object to compare to
+            :return: if the key is equal to the object.
+            """
+            if type(obj) is self.__class__:
+                return obj.key() == self.key();
+            elif type(obj) is str:
+                return obj.lower() == self.key().lower();
+            else:
+                return False;
+
     def _create_lambda(self, method: str, key):
         """
-        A hacked method to create lambdas for key-event registration.
+        A super-cool method to create lambdas for key-event registration.
         :param key: the key to create the lambda for
-        :return: A lambda
+        :return: A lambda (😻) [ignore the cat]
         """
+
         if method == 'keydown':
             return lambda: (self._keydown(key));
         elif method == 'keyup':
@@ -291,19 +350,19 @@ class Screen:
         if 'keydown' not in self.registry:
             return;
 
-        self.registry['keydown'](key);
+        self.registry['keydown'](self.Key(key.lower()));
 
     def _keyup(self, key) -> None:
         if 'keyup' not in self.registry:
             return;
 
-        self.registry['keyup'](key);
+        self.registry['keyup'](self.Key(key.lower()));
 
     def _keypress(self, key) -> None:
         if 'keypress' not in self.registry:
             return;
 
-        self.registry['keypress'](key);
+        self.registry['keypress'](self.Key(key.lower()));
 
     def _mousedown(self, button, location) -> None:
         if 'mousedown' not in self.registry:

@@ -14,7 +14,7 @@
 # [x] Ensure canvas sizing is correct.
 
 import time;
-from pydraw import Screen, Color, Location, Rectangle, Oval, Triangle, Text, Polygon, CustomPolygon, Line;
+from pydraw import Screen, Color, Location, Rectangle, Oval, Triangle, Text, Polygon, CustomPolygon, Image, Line;
 
 screen = Screen(800, 600, 'Something Awesome!');
 screen.color(Color('black'));
@@ -55,21 +55,29 @@ waffle = Polygon(screen, 6, screen.width() - (screen.width() / 3), 100, 50, 50, 
 crazy_waffle = CustomPolygon(screen, [(50, 350), (100, 350), (100, 400), (75, 450), (50, 400)], color=Color('green'));
 
 maui = Line(screen, 50, 50, 150, 150, color=Color('magenta'));
+mrspace = Image(screen, 'featuredspace_logo.png', screen.width() / 2, screen.height() / 2, 150, 150);
+mrspace.move(-mrspace.width() / 2, -mrspace.height() / 2);
 
 #
 # print(f'Turtle Pos: {crazy_waffle._ref.pos()}');
 # print(f'Pydraw Pos: {crazy_waffle.location()}');
 # print(f'Supposed Location: {crazy_waffle._get_real_location()}')
 
+state = True;
+
 
 def mousedown(button, location):
+    global state;
     print('Mousedown detected', button, location);
+    crazy_waffle.rotate(5 if state else -5);
+
+    state = not state;
 
 
 def keydown(key):
     print('Keydown: ' + key);
 
-    if key == 'Up':
+    if key == 'up':
         barry.move(0, -10);
     elif key == 'Down':
         barry.move(0, 10);
@@ -77,6 +85,10 @@ def keydown(key):
         barry.move(-10, 0);
     elif key == 'Right':
         barry.move(10, 0);
+
+    if key == 't':
+        print('Removing mrspace...');
+        screen.remove(mrspace);
 
 
 def keyup(key):
@@ -89,6 +101,6 @@ screen.listen();
 running = True;
 while running:
     screen.update();
-    time.sleep(30 / 1000);
+    screen.sleep(30 / 1000);
 
 screen.exit();
