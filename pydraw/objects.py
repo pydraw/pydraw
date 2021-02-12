@@ -710,7 +710,7 @@ class CustomPolygon(CustomRenderable):
 
 class Image(Renderable):
     """
-    Image class. Supports basic formats: PNG, GIF, JPG, PPM, etc.
+    Image class. Supports basic formats: PNG, GIF, JPG, PPM, images.
 
     NOTE: This class is unfinished as supporting images without external dependencies is not that easy.
     Some methods and constructor attributes will not do anything until a full wrapper is developed for tk.PhotoImage.

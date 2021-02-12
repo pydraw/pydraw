@@ -1,4 +1,4 @@
-![pyDraw Logo](./etc/pydraw.png)
+![pyDraw Logo](images/pydraw.png)
 
 This is a simple graphics library designed to make graphics
 and input simple and synchronized.
