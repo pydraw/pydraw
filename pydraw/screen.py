@@ -1,4 +1,5 @@
 import turtle;
+import tkinter as tk;
 import inspect;
 import time;
 
@@ -9,6 +10,7 @@ INPUT_TYPES = [
     'mousedown',
     'mouseup',
     'mousedrag',
+    'mousemove',
     'keydown',
     'keyup',
     'keypress'
@@ -113,6 +115,8 @@ class Screen:
 
     def __init__(self, width=800, height=600, title="pydraw"):
         self._screen = turtle.Screen();
+        self._canvas = self._screen.cv;
+
         self._screen.screensize(width, height);
         self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT);
         # This was not necessary as the canvas will align with the window's dimensions as set in the above line.
@@ -121,6 +125,11 @@ class Screen:
         self._title = title;
 
         self._screen.colormode(255);
+
+        # store the mouse position
+        self._mouse = Location(0, 0);
+        self._gridlines = [];
+        self._gridstate = False;  # grid is disabled by default
 
         # By default we want to make sure that all objects are drawn instantly.
         self._screen.tracer(0);
@@ -149,6 +158,7 @@ class Screen:
         :param color: the color to set the background to
         :return: None
         """
+
         self._screen.bgcolor(color.__value__());
 
     def picture(self, pic: str) -> None:
@@ -157,9 +167,9 @@ class Screen:
         :param pic: the path to said picture from the file
         :return: None
         """
+
         self._screen.bgpic(pic);
 
-    # Size
     def resize(self, width, height) -> None:
         """
         Resize the screen to new dimensions
@@ -167,7 +177,12 @@ class Screen:
         :param height: the height to resize to
         :return: None
         """
-        self._screen.screensize(width, height);
+
+        # noinspection PyBroadException
+        try:
+            self._screen.screensize(width, height);
+        except:
+            pass;
 
     def size(self) -> (int, int):
         """
@@ -175,23 +190,83 @@ class Screen:
         retrieved using the width() and height() methods respectively)
         :return: a tuple containing the width and height of the screen
         """
-        return self._screen.window_width(), self._screen.window_height();
+
+        # noinspection PyBroadException
+        try:
+            return self._screen.window_width(), self._screen.window_height();
+        except:
+            return -1, -1;  # Again, trying to avoid showing errors due to tkinter shutting down.
 
     def width(self) -> int:
         """
         Returns the width of the CANVAS within the screen. Important.
         :return: an integer representing the width of the canvas
         """
-        return self._screen.getcanvas().winfo_width() - BORDER_CONSTANT;
+
+        # noinspection PyBroadException
+        try:
+            return self._screen.getcanvas().winfo_width() - BORDER_CONSTANT;
+        except:
+            return -1;  # Just return -1 because tkinter is shutting down
 
     def height(self) -> int:
         """
         Returns the height of the CANVAS within the screen. Important.
         :return:
         """
-        return self._screen.getcanvas().winfo_height() - BORDER_CONSTANT;
+
+        # noinspection PyBroadException
+        try:
+            return self._screen.getcanvas().winfo_height() - BORDER_CONSTANT;
+        except:
+            return -1;  # Just return -1 because tkinter is shutting down
+
+    def mouse(self) -> Location:
+        """
+        Get the current mouse-position
+        :return: the mouse-position in the form of a Location
+        """
+
+        return self._mouse;
 
     # Direct Manipulation
+    def prompt(self, text: str, title: str = 'Prompt') -> str:
+        """
+        Prompts the user for keyboard input
+        :param: text the text to prompt the user with
+        :param: title the title of the dialog box
+        :return: None
+        """
+
+        text = self._screen.textinput(title, text);
+
+        self._screen.listen();  # keep us nice and listening :)
+        return text;
+
+    def grid(self, rows: int = None, cols: int = None, cellsize: tuple = (50, 50)):
+        from pydraw import Line;
+
+        if len(self._gridlines) > 0:
+            [line.remove() for line in self._gridlines];
+            self._gridlines.clear();
+        self._gridstate = True;
+
+        if rows is not None:
+            cellsize = (self.height() / rows, cellsize[1]);
+        if cols is not None:
+            cellsize = (cellsize[0], self.width() / cols);
+
+        for row in range(int(cellsize[1]), int(self.height()), int(cellsize[1])):
+            self._gridlines.append(Line(self, Location(0, row), Location(self.width(), row), color=Color('lightgray')));
+
+        for col in range(int(cellsize[0]), int(self.width()), int(cellsize[0])):
+            self._gridlines.append(Line(self, Location(col, 0), Location(col, self.height()), color=Color('lightgray')));
+
+    def toggle_grid(self, value=None):
+        if value is None:
+            value = not self._gridstate;
+
+        [line.visible(value) for line in self._gridlines];
 
     # noinspection PyProtectedMember
     def remove(self, obj):
@@ -209,7 +284,11 @@ class Screen:
         Clears the screen.
         :return: None
         """
-        self._screen.clear();
+
+        try:
+            self._screen.clear();
+        except tk.TclError:
+            pass;  # We silently stop TclErrors from appearing to users.
 
     @staticmethod
     def sleep(delay: float) -> None:
@@ -228,7 +307,7 @@ class Screen:
         """
         try:
             self._screen.update();
-        except turtle.Terminator:
+        except (turtle.Terminator, tk.TclError):
             # If we experience the termination exception, we will print the termination of the program
             # and exit the python program.
             print('Terminated.');
@@ -241,6 +320,20 @@ class Screen:
         """
         self._screen.clear();
         turtle.done();
+
+    def _colorstr(self, color: Color) -> str:
+        """
+        Takes a pydraw Color and returns a tkinter-friendly string, while also preventing errors
+        from occurring after tkinter has shut down.
+        :param color: the Color to convert
+        :return: the converted color (tkinter-str)
+        """
+
+        try:
+            # noinspection PyProtectedMember
+            return self._screen._colorstr(color.__value__());
+        except (turtle.TurtleGraphicsError, tk.TclError):
+            pass;
 
     # ------------------------------------------------------- #
 
@@ -266,7 +359,7 @@ class Screen:
                 continue;
 
             self.registry[name.lower()] = function;
-            print('Registered input-function:', name);
+            # print('Registered input-function:', name);
 
         self._listen();
 
@@ -289,6 +382,8 @@ class Screen:
 
             # custom implemented mouseclick
             self._onmouseclick(self._create_lambda('mouseclick', btn), btn);
+
+        self._screen.cv.bind("<Motion>", (self._create_lambda('mousemove', None)))
 
     class Key:
         def __init__(self, key: str):
@@ -343,6 +438,8 @@ class Screen:
             return lambda x, y: (self._mouseup(key, self.create_location(x, y)));
         elif method == 'mousedrag':
             return lambda x, y: (self._mousedrag(key, self.create_location(x, y)));
+        elif method == 'mousemove':
+            return lambda event: (self._mousemove(Location(event.x, event.y)));
         else:
             return None;
 
@@ -387,6 +484,15 @@ class Screen:
             return;
 
         self.registry['mousedrag'](button, location);
+
+    def _mousemove(self, location) -> None:
+        # We will update our internal storage of the mouse-location no matter what
+        self._mouse = location;
+
+        if 'mousemove' not in self.registry:
+            return;
+
+        self.registry['mousemove'](location);
 
     # --- Helper Methods --- #
     def create_location(self, x, y) -> Location:

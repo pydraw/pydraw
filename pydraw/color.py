@@ -4,7 +4,7 @@ class Color:
     """
 
     def __init__(self, *args):
-        if len(args) == 0 or len(args) == 2:
+        if len(args) == 0 or len(args) == 2 or len(args) > 3:
             raise NameError('Invalid arguments passed to color!');
 
         # we should expect three-four arguments for rgb or rgba
@@ -16,7 +16,6 @@ class Color:
             self.r = args[0];
             self.g = args[1];
             self.b = args[2];
-            self.a = None;  # TODO: figure out what to do
 
             self._mode = 0;
         elif len(args) == 1:
@@ -52,7 +51,6 @@ class Color:
         else:
             return self._hex_value;
 
-    @property
     def red(self):
         """
         Get the red property.
@@ -60,7 +58,6 @@ class Color:
         """
         return self.r;
 
-    @property
     def green(self):
         """
         Get the green propety
@@ -68,7 +65,6 @@ class Color:
         """
         return self.g;
 
-    @property
     def blue(self):
         """
         Get the blue property
@@ -76,15 +72,6 @@ class Color:
         """
         return self.b;
 
-    @property
-    def alpha(self):
-        """
-        Get the alpha property (def=1)
-        :return: a
-        """
-        return self.a;
-
-    @property
     def name(self):
         """
         Get the name of the color (only if defined)
@@ -92,7 +79,6 @@ class Color:
         """
         return self._name;
 
-    @property
     def hex(self):
         """
         Get the hex of the color (only if defined)

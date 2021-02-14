@@ -45,12 +45,37 @@ class Object:
     def location(self) -> Location:
         return self._location;
 
-    def move(self, dx: float, dy: float) -> None:
-        self._location.move(dx, dy);
+    def move(self, *args) -> None:
+        """
+        Can take either a tuple, Location, or two numbers (dx, dy)
+        :return: None
+        """
+
+        if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+            diff = (args[0][0], args[0][1]);
+        elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+            print(f'{args}')
+            diff = (args[0], args[1]);
+        else:
+            raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!');
+        
+        self._location.move(diff[0], diff[1]);
         self.update();
 
-    def moveto(self, x: float, y: float) -> None:
-        self._location.moveto(x, y);
+    def moveto(self, *args) -> None:
+        """
+        Move to a new location; takes a Location, tuple, or two numbers (x, y)
+        :return: None
+        """
+        
+        location = self._location;
+        
+        if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+            location = Location(args[0][0], args[0][1]);
+        elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+            location = Location(args[0], args[1]);
+        
+        self._location.moveto(location.x(), location.y());
         self.update();
 
     def _get_real_location(self):
@@ -132,6 +157,14 @@ class Renderable(Object):
 
         return self._height;
 
+    def center(self) -> Location:
+        """
+        Returns the location of the center
+        :return: Location object representing center of Renderable
+        """
+
+        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
+
     def color(self, color: Color = None) -> Color:
         """
         Get or set the color of the object
@@ -204,14 +237,20 @@ class Renderable(Object):
 
         return self._fill;
 
-    def distance(self, renderable) -> float:
+    def distance(self, obj) -> float:
         """
-        Returns the distance between two objects in pixels
-        :param renderable: the Renderable to check distance between
-        :return: the distance between this object and the passed Renderable.
+        Returns the distance between two objs or locations in pixels
+        :param obj: the Renderable/location to check distance between
+        :return: the distance between this obj and the passed Renderable/Location.
         """
 
-        return self._ref.distance(renderable.ref) * PIXEL_RATIO;
+        if type(obj) is not Location and not isinstance(obj, Renderable):
+            raise InvalidArgumentError(f'.distance() must be passed a Renderable or a Location! '
+                                       f'(Passed: {type(obj)}');
+
+        location = obj if type(obj) is Location else obj.center();
+
+        return math.sqrt((location.x() - self.center().x()) ** 2 + (location.y() - self.center().y()) ** 2);
 
     def visible(self, visible: bool = None) -> bool:
         """
@@ -226,10 +265,10 @@ class Renderable(Object):
 
         return self._visible;
 
-    def vertices(self) -> list[Location]:
+    def vertices(self) -> list:
         return self._get_vertices();
 
-    def contains(self, *args):
+    def contains(self, *args) -> bool:
         """
         Returns whether or not a point is contained within the object.
         :param args: You may pass in either two numbers, a Location, or a tuple containing and x and y point.
@@ -257,8 +296,9 @@ class Renderable(Object):
             raise InvalidArgumentError('You must pass in a tuple, Location, or two numbers (x, y)!');
 
         # If the point isn't remotely near us, we don't need to perform any calculations.
-        if not (self.x() <= x <= (self.x() + self.width()) and self.y() <= y <= (self.y() + self.height())):
-            return False;
+        if not isinstance(self, CustomRenderable) and self._angle == 0:
+            if not (self.x() <= x <= (self.x() + self.width()) and self.y() <= y <= (self.y() + self.height())):
+                return False;
 
         # the contains algorithm uses the line-intersects algorithm to determine if a point is within a polygon.
         # we are going to cast a ray from our point to the positive x. (left to right)
@@ -329,11 +369,9 @@ class Renderable(Object):
 
         # Check if one shape is entirely inside the other shape
         if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
-            print('One inside another?');
             return True;
 
         if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
-            print('One inside another?');
             return True;
 
         # Next we are going to use a sweeping line algorithm.
@@ -343,10 +381,6 @@ class Renderable(Object):
 
         # noinspection PyProtectedMember
         shape2 = renderable.vertices();
-
-        print('Overlaps Debug: ');
-        print(f'Shape #1: {shape1}');
-        print(f'Shape #2: {shape2}');
 
         # Orientation method that will determine if it is a triangle (and in what direction [cc or ccw]) or a line.
         def orientation(point1: Location, point2: Location, point3: Location) -> str:
@@ -568,6 +602,9 @@ class CustomPolygon(CustomRenderable):
         self._angle = rotation;
         self._visible = visible;
 
+        if len(vertices) <= 2:
+            raise InvalidArgumentError('Must pass at least 3 vertices to CustomPolygon!');
+
         xmin = vertices[0][0];
         xmax = vertices[0][0];
         ymin = vertices[0][1];
@@ -605,7 +642,7 @@ class CustomPolygon(CustomRenderable):
 
         self._ref = self._screen._screen.cv.create_polygon(
             tk_vertices,
-            fill=self._screen._screen._colorstr(self._color.__value__()),
+            fill=self._screen._colorstr(color),
             outline=self._screen._screen._colorstr(self._border.__value__()),
             state=state
         );
@@ -614,8 +651,14 @@ class CustomPolygon(CustomRenderable):
         if type(angle_diff) is not float and type(angle_diff) is not int:
             raise InvalidArgumentError('Renderable#rotate() must be passed a number (float or int)!');
 
-        self._rotate(angle_diff);
-        self._rotate(-angle_diff);  # TODO: THIS IS A HACK. I HAVE NO CLUE WHY IT WORKS.
+        self._angle += angle_diff;
+        fake_angle = self._angle - angle_diff;
+
+        if self._angle >= 360:
+            self._angle = self._angle - 360;
+
+        self._rotate(self._angle);
+        self._rotate(fake_angle);  # TODO: THIS IS A HACK. I HAVE NO CLUE WHY IT WORKS.
 
     def rotation(self, angle: float = None) -> float:
         if angle is not None:
@@ -623,20 +666,35 @@ class CustomPolygon(CustomRenderable):
 
         return self._angle;
 
-    def vertices(self) -> list[Location]:
+    def center(self) -> Location:
+        """
+        Returns the centroid for the CustomPolygon
+        :return: centroid in the form of a Location
+        """
+
+        # We gonna create a centroid so we can rotate the points around a realistic center
+        # Sorry for those of you that get weird rotations..
+        x_list = [];
+        y_list = [];
+        for vertex in self.vertices():
+            x_list.append(vertex.x());
+            y_list.append(vertex.y());
+
+        # Create a simple centroid (not full centroid)
+        centroid_x = sum(x_list) / len(y_list);
+        centroid_y = sum(y_list) / len(x_list);
+
+        return Location(centroid_x, centroid_y);
+
+    def vertices(self) -> list:
         return self._vertices;
 
-    def _rotate(self, angle_diff: float) -> None:
-        self._angle += angle_diff;
-        print(f'New Angle: {self._angle} (Diff: {angle_diff}');
-        if self._angle >= 360:
-            self._angle = self._angle - 360;
-
+    def _rotate(self, angle: float) -> None:
         # We have to update here since we cannot remember previous rotations (update method call won't cut it)!
         vertices = self.vertices();
 
         # First get some values that we gonna use later
-        radians = math.radians(self._angle);
+        radians = math.radians(angle);
         cosine = math.cos(radians);
         sine = math.sin(radians);
 
@@ -660,6 +718,7 @@ class CustomPolygon(CustomRenderable):
 
             new_x = old_x * cosine - old_y * sine;
             new_y = old_x * sine + old_y * cosine;
+            new_vertices.append(Location(new_x + centroid_x, new_y + centroid_y));
 
         self._vertices = new_vertices;
         self.update();
@@ -699,7 +758,7 @@ class CustomPolygon(CustomRenderable):
 
         self._ref = self._screen._screen.cv.create_polygon(
             tk_vertices,
-            fill=self._screen._screen._colorstr(self._color.__value__()),
+            fill=self._screen._colorstr(self._color),
             outline=self._screen._screen._colorstr(self._border.__value__()),
             state=state
         );
@@ -788,7 +847,7 @@ class Image(Renderable):
 
         raise UnsupportedError('This method is not supported for Images!');
 
-    def vertices(self) -> list[Location]:
+    def vertices(self) -> list:
         return [self.location(), Location(self.x() + self.width(), self.y()),
                 Location(self.x() + self.width(), self.y() + self.height()),
                 Location(self.x(), self.y() + self.height())];
@@ -798,7 +857,7 @@ class Image(Renderable):
 
 
 class Text(Object):
-    _anchor = 'sw';  # sw technically means southwest but it means bottom left anchor. (we change to top left in code)
+    _anchor = 'nw';  # sw technically means southwest but it means bottom left anchor. (we change to top left in code)
     _aligns = {'left': tk.LEFT, 'center': tk.CENTER, 'right': tk.RIGHT};
 
     # noinspection PyProtectedMember
@@ -835,7 +894,7 @@ class Text(Object):
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
         self._ref = self._screen._screen.cv.create_text(self.x() - ((self._screen.width() / 2) + 1),
-                                                        (self.y() - (self._screen.height() / 2)) + self.size(),
+                                                        (self.y() - (self._screen.height() / 2)),
                                                         text=self.text(),
                                                         anchor=Text._anchor,
                                                         justify=Text._aligns[self.align()],
@@ -847,6 +906,7 @@ class Text(Object):
         x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref);
         self._width = x1 - x0;
         self._height = y1 - y0;
+
         screen._screen.cv.update();
 
     def text(self, text: str = None) -> str:
@@ -1040,7 +1100,7 @@ class Text(Object):
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
         self._ref = self._screen._screen.cv.create_text(self.x() - ((self._screen.width() / 2) + 1),
-                                                        (self.y() - (self._screen.height() / 2)) + self.size(),
+                                                        (self.y() - (self._screen.height() / 2)),
                                                         text=self.text(),
                                                         anchor=Text._anchor,
                                                         justify=Text._aligns[self.align()],
@@ -1051,9 +1111,10 @@ class Text(Object):
         self._screen._screen.cv.tag_lower(self._ref, old_ref);
         self._screen._screen.cv.delete(old_ref);
 
-        x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
-        self._width = x1 - x0;
-        self._height = y1 - y0;
+        if self._visible:
+            x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
+            self._width = x1 - x0;
+            self._height = y1 - y0;
 
         self._screen._screen.cv.update();
 
@@ -1084,8 +1145,6 @@ class Line(Object):
         if dashes is not None and type(dashes) is not tuple:
             self._dashes = (dashes, dashes)
 
-        print(f'Created line: Pos1: {self._pos1}, Pos2: {self._pos2}');
-
         # noinspection PyProtectedMember
         self._ref = self._screen._screen.cv.create_line(self._pos1.x() - screen.width() / 2,
                                                         self._pos1.y() - screen.height() / 2,
@@ -1104,7 +1163,7 @@ class Line(Object):
         if len(args) != 0:
             if len(args) == 1 and type(args[0]) is Location or type(args[0]) is tuple:
                 self._pos1 = Location(args[0][0], args[0][1]);
-            elif len(args) == 2 and (type(arg) is float or type(arg) is int for arg in args):
+            elif len(args) == 2 and [(type(arg) is float or type(arg) is int for arg in args)]:
                 self._pos1 = Location(args[0], args[1]);
             else:
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.');
@@ -1163,7 +1222,7 @@ class Line(Object):
 
         if len(args) == 2 and (type(arg) is tuple or type(arg) is Location for arg in args):
             self._pos1.moveto(args[0][0], args[0][1]);
-            self._pos2.moveto(args[1][0], args[1][0]);
+            self._pos2.moveto(args[1][0], args[1][1]);
         elif len(args) == 4 and (type(arg) is int or type(arg) is float for arg in args):
             self._pos1.moveto(args[0], args[1]);
             self._pos2.moveto(args[2], args[3]);
@@ -1173,13 +1232,63 @@ class Line(Object):
 
         self.update();
 
-    def location(self) -> tuple[Location, Location]:
+    # def lookat(self, *args, **kwargs):
+    #     point = 2;
+    #
+    #     if len(args) >= 1 and (type(args[0]) is tuple or type(args[0]) is Location):
+    #         location = Location(args[0][0], args[0][1]);
+    #
+    #         if len(args) > 1 and type(args[1]) is int:
+    #             point = args[1];
+    #     elif len(args) >= 2 and (type(arg) is float or type(arg) is int for arg in args[:2]):
+    #         location = Location(args[0], args[1]);
+    #
+    #         if len(args) > 2 and type(args[2]) is int:
+    #             point = args[2];
+    #     else:
+    #         raise InvalidArgumentError('You must pass either two numbers (x, y), or a tuple/Location!');
+    #
+    #     if 'point' in kwargs:
+    #         if type(kwargs['point']) is not int:
+    #             raise InvalidArgumentError('Point must be an int.');
+    #
+    #         point = kwargs['point'];
+    #
+    #     # so now we have a location but we need to shorten it to be the same length of our line right now.
+    #     slope = (self.pos2().y() - self.pos1().y()) / (self.pos2.x() - self.pos1.x());
+    #     length = self.length();
+    #
+    #     ray_length = self._length(self.pos1().x(), location.x(), self.pos1().y(), location.y());
+    #
+    #
+    #
+    #
+    #     if point == 1:
+    #         self.pos1(location);
+    #     elif point == 2:
+    #         self.pos2(location);
+    #     else:
+    #         raise InvalidArgumentError('Point passed in for change was not a number!');
+
+    def location(self) -> tuple:
         """
         Returns the locations of both the endpoints
         :return: the locations of both the endpoints
         """
 
         return self._pos1, self._pos2;
+
+    def length(self) -> float:
+        """
+        Get the length of the line
+        :return: the length of the line
+        """
+
+        return self._length(self.pos1().x(), self.pos2().x(), self.pos1().y(), self.pos2().y());
+
+    @staticmethod
+    def _length(x1: float, x2: float, y1: float, y2: float) -> float:
+        return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
 
     def color(self, color: Color = None) -> Color:
         """
@@ -1235,20 +1344,23 @@ class Line(Object):
 
     # noinspection PyProtectedMember
     def update(self):
-        old_ref = self._ref;
+        try:
+            old_ref = self._ref;
 
-        if self._dashes is not None and type(self._dashes) is not tuple:
-            self._dashes = (self._dashes, self._dashes)
+            if self._dashes is not None and type(self._dashes) is not tuple:
+                self._dashes = (self._dashes, self._dashes)
 
-        state = tk.NORMAL if self._visible else tk.HIDDEN;
-        self._ref = self._screen._screen.cv.create_line(self._pos1.x() - self._screen.width() / 2,
-                                                        self._pos1.y() - self._screen.height() / 2,
-                                                        self._pos2.x() - self._screen.width() / 2,
-                                                        self._pos2.y() - self._screen.height() / 2,
-                                                        fill=self._screen._screen._colorstr(self.color().__value__()),
-                                                        width=self._thickness, dash=self._dashes, state=state);
+            state = tk.NORMAL if self._visible else tk.HIDDEN;
+            self._ref = self._screen._screen.cv.create_line(self._pos1.x() - self._screen.width() / 2,
+                                                            self._pos1.y() - self._screen.height() / 2,
+                                                            self._pos2.x() - self._screen.width() / 2,
+                                                            self._pos2.y() - self._screen.height() / 2,
+                                                            fill=self._screen._colorstr(self.color()),
+                                                            width=self._thickness, dash=self._dashes, state=state);
 
-        self._screen._screen.cv.tag_lower(self._ref, old_ref);
-        self._screen._screen.cv.delete(old_ref);
+            self._screen._screen.cv.tag_lower(self._ref, old_ref);
+            self._screen._screen.cv.delete(old_ref);
 
-        self._screen._screen.cv.update();
+            self._screen._screen.cv.update();
+        except tk.TclError:
+            pass;  # Just catch TclErrors and throw them out.

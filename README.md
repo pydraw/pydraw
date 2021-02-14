@@ -1,4 +1,6 @@
-![pyDraw Logo](images/pydraw.png)
+![pyDraw](https://i.ibb.co/2dTRYqZ/pydraw.png)
+
+![version](https://img.shields.io/pypi/v/pydraw)
 
 This is a simple graphics library designed to make graphics
 and input simple and synchronized.
@@ -12,13 +14,13 @@ Indicators: (⭐ = Important, 🚀 = Awesome/Fun Feature, 😻 = Cat)
 ### Features
 - Simple, One-Line Shape Construction
 - Consistent Object Management and Manipulation
-- Simplified and Globalized Input System 🚀
-- Multi-Screen support, Top-Left Anchored Coordinate System
+- Simplified and Automatated Input System 🚀
+- Top-Left Anchored Coordinate System
 - Special Shapes, Irregular Polygons
 - Precise `.overlaps()` and `.contains()` methods for all Renderables!
   - Highly Optimized Algorithms for __0.01 * 10<sup>-16</sup>s__ runtime (avg).
 - Separated Location (Vector2D) and Color classes!
-- Support for Tuples/Locations in most cases (no constructors!)
+- Support for Tuples/Locations in most cases (excluding constructors)!
 - Designed for LEARNING! 🚀😻
 
 ## Getting Started
@@ -46,15 +48,17 @@ from pydraw import *
 
 screen = Screen(800, 600, 'My First Project!')  # creates a screen to draw on
 
+fps = 30
 running = True
 while running:
     screen.update()  # We want to update the screen if we make any changes!
-    screen.sleep(30 / 1000)  # Limit our updates by a certain time delay, in this case 30fps
+    screen.sleep((1000 / fps) / 1000)  # Limit our updates by a certain time delay, in this case 30fps
+                                       # The argument is the delay in milliseconds
 
 screen.exit()  # Must be called at the end of a pydraw program
 ```
 
-We can create our first object like so:
+We can create our first object with just one new line:
 ```python
 from pydraw import *
 
@@ -66,10 +70,11 @@ screen = Screen(800, 600, 'My First Project!')
 # positive-y at the bottom of the screen, and positive-x to the right of the screen.
 box = Rectangle(screen, 50, 50, 50, 50) 
 
+fps = 30
 running = True
 while running:
     screen.update()
-    screen.sleep(30 / 1000)
+    screen.sleep((1000 / fps) / 1000)
 
 screen.exit()
 ```
@@ -84,13 +89,13 @@ screen = Screen(800, 600, 'My First Project!')
 box = Rectangle(screen, 50, 50, 50, 50) 
 
 def mousedown(button, location):
-  print('Wow, you pressed the mouse!')
+  print(f'Wow, the {button}-button on the mouse!')
 
 def mouseup(button, location):
   print('How un-impressive...')
 
 def keydown(key):
-  print('Keyboard input is key to creating interactive programs!')
+  print(f'Keyboard input is {key} to creating interactive programs!')
 
 def keyup(key):
   print('For when you really just gotta stop moving, keyup is here to save you.')
@@ -104,11 +109,11 @@ screen.listen()
 #    by making really cool stuff but can't escape how ridiculously input has been handled in the past.
 #    Now defining user input is easy to understand and use.
 
-
+fps = 30
 running = True
 while running:
     screen.update()
-    screen.sleep(30 / 1000)
+    screen.sleep((1000 / fps) / 1000)
 
 screen.exit()
 ```
@@ -117,11 +122,11 @@ This library supports many modifiers and methods for almost all objects:
 ```python
 # ... code above
 
-box = Rectangle(screen, 50, 50, 50, 50)
+box = Rectangle(screen, 50, 50, 50, 50)  # Remember this is (x, y, width, height)!
 box.x(box.y())  # set the box's x coordinate to its y coordinate
                 # notice how you can access the coordinates or change them with methods.
 
-box.location()  # We can get the location like this!
+box.location()  # We can get the Location like this!
 
 box.move(-5, 100)  # move the box by -5 on the x-axis, 100 on the y.
 box.moveto(screen.width() / 2, screen.height() / 2)  # move to near the center of the screen
@@ -149,15 +154,25 @@ box.remove()  # Just get rid of that old box. We can make a better one soon :)
 ```
 
 Lastly we can create some other objects and interact with them:
+
+(It's important to note that all the Renderables below can use the methods listed 
+above (including `overlaps()` and `contains()`, which we see in the excerpt below) 
+except the CustomRenderables: CustomPolygon and Image, which are only supported for
+a few.)
 ```python
 # ... code above
 
 not_a_box = Oval(screen, 400, 50, 100, 100, Color('magenta'))  # now we have a beautiful oval
-almost_a_box = Triangle(screen, 200, 450, 100, 50, Color('yellow'), rotation=30) # three sides?
-# ^ Also note that we are setting the color, and also setting the rotation of the triangle
+almost_a_box = Triangle(screen, 200, 450, 100, 50, Color('yellow'), rotation=30) # uno dos tres
+# ^ Also note that we are setting the color, and also setting the rotation of the triangle,
+# but the other parameters are still in the usual format: (x, y, width, height).
+# IMPORTANT: Triangle's base is on the left, with the triangle's location as its top corner.
 
 # We can create a regular polygon by specifying a number of sides before the location.
+# The constructor is (screen, num_sides, x, y, width, height)!
 schrodingers_box = Polygon(screen, 5, 250, 150, 50, 50, border=Color('red'))
+# Polygon, like Triangle, will also try to put a vertex as close to the top left as possible,
+# so usually you will end up with the base of the polygon at the top.
 
 # We can create an evil polygon like this (we can pass in a list of locations or tuples):
 weird_evil_box = CustomPolygon(screen, [(500, 50), (550, 50), (550, 100), (500, 50)])
@@ -176,9 +191,9 @@ schrodingers_box.distance(not_a_box)  # Gets the precise distance between the ce
 ---
 
 ## API/Docs
-The documentation for [pydraw](https://pypi.org/project/pydraw) is available (SOON) at the main website: https://pydraw.graphics
+The documentation for [pydraw](https://pypi.org/project/pydraw) will be available at the main website: https://pydraw.graphics
 The documentation is shipped with the package so code completion and method descriptors are
-available.
+available for supporting IDEs.
 
 ---
 

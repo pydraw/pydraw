@@ -1,17 +1,17 @@
 import setuptools
 
-with open("README.md", "r") as fh:
+with open("README_stripped.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="pydraw",
-    version="0.1.0",
+    version="0.1.4",
     author="Noah Coetsee",
     author_email="noah@noahcoetsee.me",
-    description="A package designed to make graphics with Python simple and easy",
+    description="A package designed to make graphics with Python simple and easy!",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/FeaturedSpace/pydraw",
+    url="https://github.com/pydraw/pydraw",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
