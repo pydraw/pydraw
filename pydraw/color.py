@@ -1,11 +1,21 @@
+import turtle;
+import tkinter as tk;
+from pydraw.errors import *;
+
+
 class Color:
     """
     An immutable class that contains a color values, usually by name or RGB
     """
 
+    NONE = None;
+
     def __init__(self, *args):
         if len(args) == 0 or len(args) == 2 or len(args) > 3:
             raise NameError('Invalid arguments passed to color!');
+
+        self._name = None;
+        self._hex_value = None;
 
         # we should expect three-four arguments for rgb or rgba
         if len(args) >= 3:
@@ -13,9 +23,9 @@ class Color:
                 if type(arg) is not int:
                     raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.');
 
-            self.r = args[0];
-            self.g = args[1];
-            self.b = args[2];
+            self._r = args[0];
+            self._g = args[1];
+            self._b = args[2];
 
             self._mode = 0;
         elif len(args) == 1:
@@ -24,10 +34,11 @@ class Color:
                     if type(arg) is not int:
                         raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.');
 
-                self.r = args[0][0];
-                self.g = args[0][1];
-                self.b = args[0][2];
+                self._r = args[0][0];
+                self._g = args[0][1];
+                self._b = args[0][2];
 
+                self._mode = 0;
             if type(args[0]) is not str:
                 raise NameError('Expected string but instead found: ' + str(args[0]));
 
@@ -35,9 +46,22 @@ class Color:
             if string.startswith('#'):
                 self._hex_value = string;
                 self._mode = 2;
+
+                rgb = self._rgb(self);
+                self._r = int(rgb[0] / 256);
+                self._g = int(rgb[1] / 256);
+                self._b = int(rgb[2] / 256);
             else:
                 self._name = string;
                 self._mode = 1;
+
+                if self._name != '':
+                    rgb = self._rgb(self);
+                    self._r = int(rgb[0] / 256);
+                    self._g = int(rgb[1] / 256);
+                    self._b = int(rgb[2] / 256);
+                else:
+                    self._r, self._g, self._b = -1, -1, -1;
 
     def __value__(self):
         """
@@ -45,7 +69,7 @@ class Color:
         :return:
         """
         if self._mode == 0:
-            return self.red, self.green, self.blue;
+            return self.red(), self.green(), self.blue();
         elif self._mode == 1:
             return self._name;
         else:
@@ -56,27 +80,35 @@ class Color:
         Get the red property.
         :return: r
         """
-        return self.r;
+        return self._r;
 
     def green(self):
         """
         Get the green propety
         :return: g
         """
-        return self.g;
+        return self._g;
 
     def blue(self):
         """
         Get the blue property
         :return: b
         """
-        return self.b;
+        return self._b;
+
+    def rgb(self):
+        """
+        Get the RGB tuple
+        :return: tuple (R, G, B)
+        """
+        return self.red(), self.green(), self.blue();
 
     def name(self):
         """
         Get the name of the color (only if defined)
         :return: color or None
         """
+
         return self._name;
 
     def hex(self):
@@ -88,7 +120,7 @@ class Color:
 
     def __str__(self):
         if self._mode == 0:
-            string = f'({self.r, self.g, self.b})';
+            string = f'({self._r, self._g, self._b})';
         elif self._mode == 1:
             string = self._name;
         else:
@@ -96,6 +128,26 @@ class Color:
 
         return string;
 
+    @staticmethod
+    def _rgb(color) -> tuple:
+        """
+        Convert a color to an rgb tuple.
+        :param color: the color to convert
+        :return: a tuple representing RGB
+        """
+
+        if color.name() is not None:
+            try:
+                rgb = turtle.getcanvas().winfo_rgb(color.name());
+            except tk.TclError:
+                raise PydrawError('Color-string does not exist: ', color.name());
+        elif color.hex() is not None:
+            rgb = tuple(int(color.hex()[i:i + 2], 16) for i in (0, 2, 4));
+        else:
+            rgb = (color.red(), color.green(), color.blue());
+
+        return rgb;
+    
     @staticmethod
     def all():
         return COLORS
@@ -108,6 +160,8 @@ class Color:
     def __repr__(self):
         return self.__str__();
 
+
+Color.NONE = Color('');
 
 COLORS = [Color('snow'), Color('ghost white'), Color('white smoke'), Color('gainsboro'), Color('floral white'),
           Color('old lace'),

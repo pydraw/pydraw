@@ -1,4 +1,1033 @@
 """
+pyDraw v{version}
+
+This library is a graphics-interface library designed to make graphics in Python
+easier and more simple. It was designed to be easy to teach/learn and to utilize
+some of the basic concepts of OOP and functional programming in its setup.
+
+Documentation: https://docs.pydraw.graphics
+Source: https://github.com/pydraw/pydraw
+
+(Author: Noah Coetsee)
+
+No hiding spots here (for semicolons)
+Hide and seek champion since version 0.1.0
+
+Semicolons are my best friends.
+"""
+
+
+class InvalidArgumentError(ValueError):
+    pass;
+
+
+class UnsupportedError(NameError):
+    pass;
+
+
+class PydrawError(NameError):
+    pass;
+
+
+# from pydraw.errors import *;
+
+
+def verify_type(obj, required_type):
+    """
+    Verifies an objects type is the passed type
+    :param obj: the object to check
+    :param required_type: the expected type
+    :return: True if required type is present or obj is None, else False
+    """
+
+    if type(required_type) is tuple and len(required_type) > 0:
+        if obj is None:
+            return True;
+
+        for allowed_type in required_type:
+            if type(obj) is allowed_type:
+                return True;
+
+    return type(obj) is required_type or obj is None;
+
+
+def verify(*args):
+    """
+    Takes a list of values and expected types and returns if all objects meet their expected types.
+    :param args: a list of objects and types, ex: (some_number, float, some_location, Location)
+    :return: True if all args meet their expected types, throws an error if not.
+    """
+    if len(args) % 2 != 0:
+        raise InvalidArgumentError('The verify() method must be passed an even number of arguments, '
+                                   'Ex: (some_number, float, some_location, Location).');
+
+    for i in range(0, len(args), 2):
+        obj = args[i];
+        expected_type = args[i+1];
+        # print(f'Obj: {obj}, Expected Type: {expected_type}, Meets: {verify_type(obj, expected_type)}');
+
+        if not verify_type(obj, expected_type):
+            raise InvalidArgumentError(f'Type does not match: {obj} : {expected_type}');
+
+
+import turtle;
+import tkinter as tk;
+# from pydraw.errors import *;
+
+
+class Color:
+    """
+    An immutable class that contains a color values, usually by name or RGB
+    """
+
+    NONE = None;
+
+    def __init__(self, *args):
+        if len(args) == 0 or len(args) == 2 or len(args) > 3:
+            raise NameError('Invalid arguments passed to color!');
+
+        self._name = None;
+        self._hex_value = None;
+
+        # we should expect three-four arguments for rgb or rgba
+        if len(args) >= 3:
+            for arg in args:
+                if type(arg) is not int:
+                    raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.');
+
+            self._r = args[0];
+            self._g = args[1];
+            self._b = args[2];
+
+            self._mode = 0;
+        elif len(args) == 1:
+            if type(args[0]) is tuple:
+                for arg in args[0]:
+                    if type(arg) is not int:
+                        raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.');
+
+                self._r = args[0][0];
+                self._g = args[0][1];
+                self._b = args[0][2];
+
+                self._mode = 0;
+            if type(args[0]) is not str:
+                raise NameError('Expected string but instead found: ' + str(args[0]));
+
+            string = str(args[0]);
+            if string.startswith('#'):
+                self._hex_value = string;
+                self._mode = 2;
+
+                rgb = self._rgb(self);
+                self._r = int(rgb[0] / 256);
+                self._g = int(rgb[1] / 256);
+                self._b = int(rgb[2] / 256);
+            else:
+                self._name = string;
+                self._mode = 1;
+
+                if self._name != '':
+                    rgb = self._rgb(self);
+                    self._r = int(rgb[0] / 256);
+                    self._g = int(rgb[1] / 256);
+                    self._b = int(rgb[2] / 256);
+                else:
+                    self._r, self._g, self._b = -1, -1, -1;
+
+    def __value__(self):
+        """
+        Retrieves the value to be interpreted internally by Turtle
+        :return:
+        """
+        if self._mode == 0:
+            return self.red(), self.green(), self.blue();
+        elif self._mode == 1:
+            return self._name;
+        else:
+            return self._hex_value;
+
+    def red(self):
+        """
+        Get the red property.
+        :return: r
+        """
+        return self._r;
+
+    def green(self):
+        """
+        Get the green propety
+        :return: g
+        """
+        return self._g;
+
+    def blue(self):
+        """
+        Get the blue property
+        :return: b
+        """
+        return self._b;
+
+    def rgb(self):
+        """
+        Get the RGB tuple
+        :return: tuple (R, G, B)
+        """
+        return self.red(), self.green(), self.blue();
+
+    def name(self):
+        """
+        Get the name of the color (only if defined)
+        :return: color or None
+        """
+
+        return self._name;
+
+    def hex(self):
+        """
+        Get the hex of the color (only if defined)
+        :return: hex_value or None
+        """
+        return self._hex_value;
+
+    def __str__(self):
+        if self._mode == 0:
+            string = f'({self._r, self._g, self._b})';
+        elif self._mode == 1:
+            string = self._name;
+        else:
+            string = self._hex_value;
+
+        return string;
+
+    @staticmethod
+    def _rgb(color) -> tuple:
+        """
+        Convert a color to an rgb tuple.
+        :param color: the color to convert
+        :return: a tuple representing RGB
+        """
+
+        if color.name() is not None:
+            try:
+                rgb = turtle.getcanvas().winfo_rgb(color.name());
+            except tk.TclError:
+                raise PydrawError('Color-string does not exist: ', color.name());
+        elif color.hex() is not None:
+            rgb = tuple(int(color.hex()[i:i + 2], 16) for i in (0, 2, 4));
+        else:
+            rgb = (color.red(), color.green(), color.blue());
+
+        return rgb;
+    
+    @staticmethod
+    def all():
+        return COLORS
+
+    @staticmethod
+    def random():
+        import random
+        return random.choice(Color.all())
+
+    def __repr__(self):
+        return self.__str__();
+
+
+Color.NONE = Color('');
+
+COLORS = [Color('snow'), Color('ghost white'), Color('white smoke'), Color('gainsboro'), Color('floral white'),
+          Color('old lace'),
+          Color('linen'), Color('antique white'), Color('papaya whip'), Color('blanched almond'), Color('bisque'),
+          Color('peach puff'),
+          Color('navajo white'), Color('lemon chiffon'), Color('mint cream'), Color('azure'), Color('alice blue'),
+          Color('lavender'),
+          Color('lavender blush'), Color('misty rose'), Color('dark slate gray'), Color('dim gray'),
+          Color('slate gray'),
+          Color('light slate gray'), Color('gray'), Color('light grey'), Color('midnight blue'), Color('navy'),
+          Color('cornflower blue'), Color('dark slate blue'),
+          Color('slate blue'), Color('medium slate blue'), Color('light slate blue'), Color('medium blue'),
+          Color('royal blue'), Color('blue'),
+          Color('dodger blue'), Color('deep sky blue'), Color('sky blue'), Color('light sky blue'), Color('steel blue'),
+          Color('light steel blue'),
+          Color('light blue'), Color('powder blue'), Color('pale turquoise'), Color('dark turquoise'),
+          Color('medium turquoise'), Color('turquoise'),
+          Color('cyan'), Color('light cyan'), Color('cadet blue'), Color('medium aquamarine'), Color('aquamarine'),
+          Color('dark green'), Color('dark olive green'),
+          Color('dark sea green'), Color('sea green'), Color('medium sea green'), Color('light sea green'),
+          Color('pale green'), Color('spring green'),
+          Color('lawn green'), Color('medium spring green'), Color('green yellow'), Color('lime green'),
+          Color('yellow green'),
+          Color('forest green'), Color('olive drab'), Color('dark khaki'), Color('khaki'), Color('pale goldenrod'),
+          Color('light goldenrod yellow'),
+          Color('light yellow'), Color('yellow'), Color('gold'), Color('light goldenrod'), Color('goldenrod'),
+          Color('dark goldenrod'), Color('rosy brown'),
+          Color('indian red'), Color('saddle brown'), Color('sandy brown'),
+          Color('dark salmon'), Color('salmon'), Color('light salmon'), Color('orange'), Color('dark orange'),
+          Color('coral'), Color('light coral'), Color('tomato'), Color('orange red'), Color('red'), Color('hot pink'),
+          Color('deep pink'), Color('pink'), Color('light pink'),
+          Color('pale violet red'), Color('maroon'), Color('medium violet red'), Color('violet red'),
+          Color('medium orchid'), Color('dark orchid'), Color('dark violet'), Color('blue violet'), Color('purple'),
+          Color('medium purple'),
+          Color('thistle'), Color('snow2'), Color('snow3'),
+          Color('snow4'), Color('seashell2'), Color('seashell3'), Color('seashell4'), Color('AntiqueWhite1'),
+          Color('AntiqueWhite2'),
+          Color('AntiqueWhite3'), Color('AntiqueWhite4'), Color('bisque2'), Color('bisque3'), Color('bisque4'),
+          Color('PeachPuff2'),
+          Color('PeachPuff3'), Color('PeachPuff4'), Color('NavajoWhite2'), Color('NavajoWhite3'), Color('NavajoWhite4'),
+          Color('LemonChiffon2'), Color('LemonChiffon3'), Color('LemonChiffon4'), Color('cornsilk2'),
+          Color('cornsilk3'),
+          Color('cornsilk4'), Color('ivory2'), Color('ivory3'), Color('ivory4'), Color('honeydew2'), Color('honeydew3'),
+          Color('honeydew4'),
+          Color('LavenderBlush2'), Color('LavenderBlush3'), Color('LavenderBlush4'), Color('MistyRose2'),
+          Color('MistyRose3'),
+          Color('MistyRose4'), Color('azure2'), Color('azure3'), Color('azure4'), Color('SlateBlue1'),
+          Color('SlateBlue2'), Color('SlateBlue3'),
+          Color('SlateBlue4'), Color('RoyalBlue1'), Color('RoyalBlue2'), Color('RoyalBlue3'), Color('RoyalBlue4'),
+          Color('blue2'), Color('blue4'),
+          Color('DodgerBlue2'), Color('DodgerBlue3'), Color('DodgerBlue4'), Color('SteelBlue1'), Color('SteelBlue2'),
+          Color('SteelBlue3'), Color('SteelBlue4'), Color('DeepSkyBlue2'), Color('DeepSkyBlue3'), Color('DeepSkyBlue4'),
+          Color('SkyBlue1'), Color('SkyBlue2'), Color('SkyBlue3'), Color('SkyBlue4'), Color('LightSkyBlue1'),
+          Color('LightSkyBlue2'),
+          Color('LightSkyBlue3'), Color('LightSkyBlue4'), Color('SlateGray1'), Color('SlateGray2'), Color('SlateGray3'),
+          Color('SlateGray4'), Color('LightSteelBlue1'), Color('LightSteelBlue2'), Color('LightSteelBlue3'),
+          Color('LightSteelBlue4'), Color('LightBlue1'), Color('LightBlue2'), Color('LightBlue3'), Color('LightBlue4'),
+          Color('LightCyan2'), Color('LightCyan3'), Color('LightCyan4'), Color('PaleTurquoise1'),
+          Color('PaleTurquoise2'),
+          Color('PaleTurquoise3'), Color('PaleTurquoise4'), Color('CadetBlue1'), Color('CadetBlue2'),
+          Color('CadetBlue3'),
+          Color('CadetBlue4'), Color('turquoise1'), Color('turquoise2'), Color('turquoise3'), Color('turquoise4'),
+          Color('cyan2'), Color('cyan3'),
+          Color('cyan4'), Color('DarkSlateGray1'), Color('DarkSlateGray2'), Color('DarkSlateGray3'),
+          Color('DarkSlateGray4'),
+          Color('aquamarine2'), Color('aquamarine4'), Color('DarkSeaGreen1'), Color('DarkSeaGreen2'),
+          Color('DarkSeaGreen3'),
+          Color('DarkSeaGreen4'), Color('SeaGreen1'), Color('SeaGreen2'), Color('SeaGreen3'), Color('PaleGreen1'),
+          Color('PaleGreen2'),
+          Color('PaleGreen3'), Color('PaleGreen4'), Color('SpringGreen2'), Color('SpringGreen3'), Color('SpringGreen4'),
+          Color('green2'), Color('green3'), Color('green4'), Color('chartreuse2'), Color('chartreuse3'),
+          Color('chartreuse4'),
+          Color('OliveDrab1'), Color('OliveDrab2'), Color('OliveDrab4'), Color('DarkOliveGreen1'),
+          Color('DarkOliveGreen2'),
+          Color('DarkOliveGreen3'), Color('DarkOliveGreen4'), Color('khaki1'), Color('khaki2'), Color('khaki3'),
+          Color('khaki4'),
+          Color('LightGoldenrod1'), Color('LightGoldenrod2'), Color('LightGoldenrod3'), Color('LightGoldenrod4'),
+          Color('LightYellow2'), Color('LightYellow3'), Color('LightYellow4'), Color('yellow2'), Color('yellow3'),
+          Color('yellow4'),
+          Color('gold2'), Color('gold3'), Color('gold4'), Color('goldenrod1'), Color('goldenrod2'), Color('goldenrod3'),
+          Color('goldenrod4'),
+          Color('DarkGoldenrod1'), Color('DarkGoldenrod2'), Color('DarkGoldenrod3'), Color('DarkGoldenrod4'),
+          Color('RosyBrown1'), Color('RosyBrown2'), Color('RosyBrown3'), Color('RosyBrown4'), Color('IndianRed1'),
+          Color('IndianRed2'),
+          Color('IndianRed3'), Color('IndianRed4'), Color('sienna1'), Color('sienna2'), Color('sienna3'),
+          Color('sienna4'), Color('burlywood1'),
+          Color('burlywood2'), Color('burlywood3'), Color('burlywood4'), Color('wheat1'), Color('wheat2'),
+          Color('wheat3'), Color('wheat4'), Color('tan1'),
+          Color('tan2'), Color('tan4'), Color('chocolate1'), Color('chocolate2'), Color('chocolate3'),
+          Color('firebrick1'), Color('firebrick2'),
+          Color('firebrick3'), Color('firebrick4'), Color('brown1'), Color('brown2'), Color('brown3'), Color('brown4'),
+          Color('salmon1'), Color('salmon2'),
+          Color('salmon3'), Color('salmon4'), Color('LightSalmon2'), Color('LightSalmon3'), Color('LightSalmon4'),
+          Color('orange2'),
+          Color('orange3'), Color('orange4'), Color('DarkOrange1'), Color('DarkOrange2'), Color('DarkOrange3'),
+          Color('DarkOrange4'),
+          Color('coral1'), Color('coral2'), Color('coral3'), Color('coral4'), Color('tomato2'), Color('tomato3'),
+          Color('tomato4'), Color('OrangeRed2'),
+          Color('OrangeRed3'), Color('OrangeRed4'), Color('red2'), Color('red3'), Color('red4'), Color('DeepPink2'),
+          Color('DeepPink3'), Color('DeepPink4'),
+          Color('HotPink1'), Color('HotPink2'), Color('HotPink3'), Color('HotPink4'), Color('pink1'), Color('pink2'),
+          Color('pink3'), Color('pink4'),
+          Color('LightPink1'), Color('LightPink2'), Color('LightPink3'), Color('LightPink4'), Color('PaleVioletRed1'),
+          Color('PaleVioletRed2'), Color('PaleVioletRed3'), Color('PaleVioletRed4'), Color('maroon1'), Color('maroon2'),
+          Color('maroon3'), Color('maroon4'), Color('VioletRed1'), Color('VioletRed2'), Color('VioletRed3'),
+          Color('VioletRed4'),
+          Color('magenta2'), Color('magenta3'), Color('magenta4'), Color('orchid1'), Color('orchid2'), Color('orchid3'),
+          Color('orchid4'), Color('plum1'),
+          Color('plum2'), Color('plum3'), Color('plum4'), Color('MediumOrchid1'), Color('MediumOrchid2'),
+          Color('MediumOrchid3'),
+          Color('MediumOrchid4'), Color('DarkOrchid1'), Color('DarkOrchid2'), Color('DarkOrchid3'),
+          Color('DarkOrchid4'),
+          Color('purple1'), Color('purple2'), Color('purple3'), Color('purple4'), Color('MediumPurple1'),
+          Color('MediumPurple2'),
+          Color('MediumPurple3'), Color('MediumPurple4'), Color('thistle1'), Color('thistle2'), Color('thistle3'),
+          Color('thistle4'),
+          Color('gray1'), Color('gray2'), Color('gray3'), Color('gray4'), Color('gray5'), Color('gray6'),
+          Color('gray7'), Color('gray8'), Color('gray9'), Color('gray10'),
+          Color('gray11'), Color('gray12'), Color('gray13'), Color('gray14'), Color('gray15'), Color('gray16'),
+          Color('gray17'), Color('gray18'), Color('gray19'),
+          Color('gray20'), Color('gray21'), Color('gray22'), Color('gray23'), Color('gray24'), Color('gray25'),
+          Color('gray26'), Color('gray27'), Color('gray28'),
+          Color('gray29'), Color('gray30'), Color('gray31'), Color('gray32'), Color('gray33'), Color('gray34'),
+          Color('gray35'), Color('gray36'), Color('gray37'),
+          Color('gray38'), Color('gray39'), Color('gray40'), Color('gray42'), Color('gray43'), Color('gray44'),
+          Color('gray45'), Color('gray46'), Color('gray47'),
+          Color('gray48'), Color('gray49'), Color('gray50'), Color('gray51'), Color('gray52'), Color('gray53'),
+          Color('gray54'), Color('gray55'), Color('gray56'),
+          Color('gray57'), Color('gray58'), Color('gray59'), Color('gray60'), Color('gray61'), Color('gray62'),
+          Color('gray63'), Color('gray64'), Color('gray65'),
+          Color('gray66'), Color('gray67'), Color('gray68'), Color('gray69'), Color('gray70'), Color('gray71'),
+          Color('gray72'), Color('gray73'), Color('gray74'),
+          Color('gray75'), Color('gray76'), Color('gray77'), Color('gray78'), Color('gray79'), Color('gray80'),
+          Color('gray81'), Color('gray82'), Color('gray83'),
+          Color('gray84'), Color('gray85'), Color('gray86'), Color('gray87'), Color('gray88'), Color('gray89'),
+          Color('gray90'), Color('gray91'), Color('gray92'),
+          Color('gray93'), Color('gray94'), Color('gray95'), Color('gray97'), Color('gray98'), Color('gray99')];
+
+
+class Location:
+    def __init__(self, x: float, y: float):
+        self._x = x;
+        self._y = y;
+
+    def move(self, dx: float, dy: float):
+        self._x += dx;
+        self._y += dy;
+
+    def moveto(self, x: float, y: float):
+        self._x = x;
+        self._y = y;
+
+    def x(self, new_x: float = None) -> float:
+        if new_x is not None:
+            self._x = new_x;
+
+        return self._x;
+
+    def y(self, new_y: float = None) -> float:
+        if new_y is not None:
+            self._y = new_y;
+
+        return self._y;
+
+    def __str__(self):
+        return f'(X: {self._x}, Y: {self._y})';
+
+    def __repr__(self):
+        return self.__str__();
+
+    def __iter__(self):
+        """
+        Allows the location to be accessed as a tuple
+        """
+        yield self._x;
+        yield self._y;
+
+    def __getitem__(self, item):
+        """
+        Allows the location to be accessed as a tuple
+        """
+
+        if item == 0:
+            return self._x;
+        elif item == 1:
+            return self._y;
+        else:
+            raise IndexError(f'Accessed index beyond x and y, index: {item}.');
+
+
+import turtle;
+import tkinter as tk;
+import inspect;
+import time;
+
+# from pydraw import Color;
+# from pydraw import Location;
+# from pydraw.errors import *;
+
+INPUT_TYPES = [
+    'mousedown',
+    'mouseup',
+    'mousedrag',
+    'mousemove',
+    'keydown',
+    'keyup',
+    'keypress'
+];
+
+ALPHABET = [
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'f',
+    'g',
+    'h',
+    'i',
+    'j',
+    'k',
+    'l',
+    'm',
+    'n',
+    'o',
+    'p',
+    'q',
+    'r',
+    's',
+    't',
+    'u',
+    'v',
+    'w',
+    'x',
+    'y',
+    'z',
+];
+
+UPPER_ALPHABET = [];
+for letter in ALPHABET:
+    UPPER_ALPHABET.append(letter.upper());
+
+KEYS = [
+           '1',
+           '2',
+           '3',
+           '4',
+           '5',
+           '6',
+           '7',
+           '8',
+           '9',
+           '0',
+
+           # '!',
+           # '@',
+           # '#',
+           # '$',
+           # '%',
+           # '^',
+           # '&',
+           # '*',
+           # '(',
+           # ')',
+
+           '-',  # note: appears to be the shift key?
+
+           # '_',
+           # '=',
+           # '+',
+           # '\\',
+           # '|',
+           # ',',
+           # '<',
+           # '.',
+           # '>'
+           # '/',
+           # '?',
+
+           'Up',
+           'Down',
+           'Left',
+           'Right',
+
+           'space',
+           'Shift_L',
+           'Shift_R',
+           'Control_L',
+           'Control_R'
+       ] + ALPHABET + UPPER_ALPHABET;
+
+BUTTONS = [
+    1,
+    2,
+    3
+];
+
+BORDER_CONSTANT = 10;
+
+
+class Screen:
+    """
+    A class containing methods and values that can be manipulated in order to affect
+    the window that is created. Sort of like a canvas.
+    """
+
+    def __init__(self, width=800, height=600, title="pydraw"):
+        self._screen = turtle.Screen();
+        self._canvas = self._screen.cv;
+        self._root = self._canvas.winfo_toplevel();
+
+        # The only thing on the canvas is itself, so we prevent anything stupid from happening.
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"));
+
+        self._screen.screensize(width, height);
+        self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT);
+        # This was not necessary as the canvas will align with the window's dimensions as set in the above line.
+
+        self._screen.title(title);
+        self._title = title;
+
+        self._screen.colormode(255);
+
+        # store the mouse position
+        self._mouse = Location(0, 0);
+        self._gridlines = [];
+        self._gridstate = False;  # grid is disabled by default
+
+        # By default we want to make sure that all objects are drawn instantly.
+        self._screen.tracer(0);
+        self._screen.update();
+
+        # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler);
+        # atexit.register(self._exit_handler)
+
+        # --- #
+
+        self.registry = {};  # The input function registry (stores input callbacks)
+
+    def title(self, title: str = None) -> str:
+        """
+        Get or set the title of the screen.
+        :param title: the title to set to, if any
+        :return: the title
+        """
+
+        if title is not None:
+            self._title = title;
+            self._screen.title(title);
+
+        return self._title;
+
+    def color(self, color: Color) -> None:
+        """
+        Set the background color of the screen.
+        :param color: the color to set the background to
+        :return: None
+        """
+
+        self._screen.bgcolor(color.__value__());
+
+    def picture(self, pic: str) -> None:
+        """
+        Set the background picture of the screen.
+        :param pic: the path to said picture from the file
+        :return: None
+        """
+
+        self._screen.bgpic(pic);
+
+    def resize(self, width, height) -> None:
+        """
+        Resize the screen to new dimensions
+        :param width: the width to resize to
+        :param height: the height to resize to
+        :return: None
+        """
+
+        # noinspection PyBroadException
+        try:
+            self._screen.screensize(width, height);
+        except:
+            pass;
+
+    def size(self) -> (int, int):
+        """
+        Get the size of the WINDOW (please note this is not the canvas, and those attributes should be
+        retrieved using the width() and height() methods respectively)
+        :return: a tuple containing the width and height of the WINDOW
+        """
+
+        # noinspection PyBroadException
+        try:
+            return self._screen.window_width(), self._screen.window_height();
+        except:
+            return -1, -1;  # Again, trying to avoid showing errors due to tkinter shutting down.
+
+    def width(self) -> int:
+        """
+        Returns the width of the CANVAS within the screen. Important.
+        :return: an integer representing the width of the canvas
+        """
+
+        # noinspection PyBroadException
+        try:
+            return self._screen.getcanvas().winfo_width() - BORDER_CONSTANT;
+        except:
+            return -1;  # Just return -1 because tkinter is shutting down
+
+    def height(self) -> int:
+        """
+        Returns the height of the CANVAS within the screen. Important.
+        :return:
+        """
+
+        # noinspection PyBroadException
+        try:
+            return self._screen.getcanvas().winfo_height() - BORDER_CONSTANT;
+        except:
+            return -1;  # Just return -1 because tkinter is shutting down
+
+    def mouse(self) -> Location:
+        """
+        Get the current mouse-position
+        :return: the mouse-position in the form of a Location
+        """
+
+        return self._mouse;
+
+    # Direct Manipulation
+    def prompt(self, text: str, title: str = 'Prompt') -> str:
+        """
+        Prompts the user for keyboard input
+        :param: text the text to prompt the user with
+        :param: title the title of the dialog box
+        :return: None
+        """
+
+        text = self._screen.textinput(title, text);
+
+        self._screen.listen();  # keep us nice and listening :)
+        return text;
+
+    def grid(self, rows: int = None, cols: int = None, cellsize: tuple = (50, 50)):
+        # from pydraw import Line;
+
+        if len(self._gridlines) > 0:
+            [line.remove() for line in self._gridlines];
+            self._gridlines.clear();
+        self._gridstate = True;
+
+        if rows is not None:
+            cellsize = (self.height() / rows, cellsize[1]);
+        if cols is not None:
+            cellsize = (cellsize[0], self.width() / cols);
+
+        for row in range(int(cellsize[1]), int(self.height()), int(cellsize[1])):
+            self._gridlines.append(Line(self, Location(0, row), Location(self.width(), row),
+                                        color=Color('lightgray')));
+
+        for col in range(int(cellsize[0]), int(self.width()), int(cellsize[0])):
+            self._gridlines.append(Line(self, Location(col, 0), Location(col, self.height()),
+                                        color=Color('lightgray')));
+
+    def toggle_grid(self, value=None):
+        if value is None:
+            value = not self._gridstate;
+
+        if len(self._gridlines) == 0:
+            self.grid();  # Create a grid if one does not exist.
+
+        [line.visible(value) for line in self._gridlines];
+
+    def grab(self, filename: str = None) -> str:
+        """
+        Grabs a screenshot of the image and saves it to the directory with the specified filename!
+        Note that if no filename is specified the file will be given a name based on the epoch time.
+        :param filename: the name of the file to save the screenshot to.
+        :return: the name of the file.
+        """
+
+        # noinspection PyBroadException
+        try:
+            from PIL import ImageGrab;
+
+            # We need to get the exact canvas coordinates. (bruh)
+            x1 = self._root.winfo_rootx() + self._canvas.winfo_x() + BORDER_CONSTANT;
+            y1 = self._root.winfo_rooty() + self._canvas.winfo_y() + BORDER_CONSTANT;
+            x2 = x1 + self.width() - BORDER_CONSTANT;
+            y2 = y1 + self.height() - BORDER_CONSTANT;
+
+            if filename is None:
+                filename = 'pydraw' + str(time.time() % 10000);
+
+            if not filename.endswith('.png'):
+                filename += '.png';
+
+            ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename);
+            return filename;
+        except:
+            raise UnsupportedError('As PIL is not installed, you cannot grab the screen! ' 
+                                   'Install Pillow via: \'pip install pillow\'.');
+
+    # noinspection PyProtectedMember
+    def remove(self, obj):
+        # from pydraw import Renderable, CustomRenderable;
+        if isinstance(obj, Renderable) and not isinstance(obj, CustomRenderable):
+            obj._ref.reset();
+            obj._ref.ht();
+            del obj;
+        else:
+            self._screen.cv.delete(obj._ref);
+            del obj;
+
+    # noinspection PyProtectedMember
+    def front(self, obj):
+        # from pydraw import Renderable, CustomRenderable;
+        if isinstance(obj, Renderable) and not isinstance(obj, CustomRenderable):
+            obj._ref.forward(0);
+        else:
+            self._canvas.tag_raise(obj._ref);
+
+    def clear(self) -> None:
+        """
+        Clears the screen.
+        :return: None
+        """
+
+        try:
+            self._screen.clear();
+        except (tk.TclError, AttributeError):
+            pass;  # We silently stop TclErrors from appearing to users.
+
+    @staticmethod
+    def sleep(delay: float) -> None:
+        """
+        Cause the program to sleep by calling time.sleep(delay)
+        :param delay: the delay in seconds to sleep by
+        :return: None
+        """
+
+        time.sleep(delay);
+
+    def update(self) -> None:
+        """
+        Updates the screen.
+        :return: None
+        """
+        try:
+            self._screen.update();
+        except (turtle.Terminator, tk.TclError, AttributeError):
+            # If we experience the termination exception, we will print the termination of the program
+            # and exit the python program.
+            print('Terminated.');
+            exit(1);
+
+    def exit(self) -> None:
+        """
+        You must call this method to have the window properly exit.
+        :return: None
+        """
+        self._screen.clear();
+        turtle.done();
+
+    def _colorstr(self, color: Color) -> str:
+        """
+        Takes a pydraw Color and returns a tkinter-friendly string, while also preventing errors
+        from occurring after tkinter has shut down.
+        :param color: the Color to convert
+        :return: the converted color (tkinter-str)
+        """
+
+        try:
+            # noinspection PyProtectedMember
+            # noinspection PyUnresolvedReferences
+            colorstr = self._screen._colorstr(color.__value__());
+            return colorstr;
+        except (turtle.TurtleGraphicsError, tk.TclError):
+            pass;
+
+    # ------------------------------------------------------- #
+
+    def listen(self) -> None:
+        """
+        Reads the file for input functions and registers them as callbacks!
+        The input-type is determined by the name of the function.
+
+        Allowed Names:
+          - mousedown
+          - mouseup
+          - mousedrag
+          - keydown
+          - keyup
+          - keypress (deprecated)
+        :return: None
+        """
+
+        frm = inspect.stack()[1];
+        mod = inspect.getmodule(frm[0]);
+        for (name, function) in inspect.getmembers(mod, inspect.isfunction):
+            if name.lower() not in INPUT_TYPES:
+                continue;
+
+            self.registry[name.lower()] = function;
+            # print('Registered input-function:', name);
+
+        self._listen();
+
+    def _listen(self):
+        self._screen.listen();
+
+        # Keyboard
+        for key in KEYS:
+            self._screen.onkeypress(self._create_lambda('keydown', key), key);
+            self._screen.onkeyrelease(self._create_lambda('keyup', key), key);
+
+            # custom implemented keypress
+            self._onkeytype(self._create_lambda('keypress', key), key);
+
+        # Mouse
+        for btn in BUTTONS:
+            self._screen.onclick(self._create_lambda('mousedown', btn), btn);  # mousedown
+            self._onrelease(self._create_lambda('mouseup', btn), btn);
+            self._ondrag(self._create_lambda('mousedrag', btn), btn);
+
+            # custom implemented mouseclick
+            self._onmouseclick(self._create_lambda('mouseclick', btn), btn);
+
+        self._screen.cv.bind("<Motion>", (self._create_lambda('mousemove', None)))
+
+    class Key:
+        def __init__(self, key: str):
+            self._key = key;
+
+        def key(self) -> str:
+            """
+            Returns the string for the key.
+            :return: the key in ascii
+            """
+            return self._key;
+
+        def __repr__(self):
+            return self.key();
+
+        def __str__(self):
+            return self.key();
+
+        def __add__(self, other):
+            return str(self) + other
+
+        def __radd__(self, other):
+            return other + str(self)
+
+        def __eq__(self, obj) -> bool:
+            """
+            Overrides the equals operator so that we can compare with strings! Fantastic!
+            :param obj: the object to compare to
+            :return: if the key is equal to the object.
+            """
+            if type(obj) is self.__class__:
+                return obj.key() == self.key();
+            elif type(obj) is str:
+                return obj.lower() == self.key().lower();
+            else:
+                return False;
+
+    def _create_lambda(self, method: str, key):
+        """
+        A super-cool method to create lambdas for key-event registration.
+        :param key: the key to create the lambda for
+        :return: A lambda (😻) [ignore the cat]
+        """
+
+        if method == 'keydown':
+            return lambda: (self._keydown(key));
+        elif method == 'keyup':
+            return lambda: (self._keyup(key));
+        elif method == 'mousedown':
+            return lambda x, y: (self._mousedown(key, self.create_location(x, y)));
+        elif method == 'mouseup':
+            return lambda x, y: (self._mouseup(key, self.create_location(x, y)));
+        elif method == 'mousedrag':
+            return lambda x, y: (self._mousedrag(key, self.create_location(x, y)));
+        elif method == 'mousemove':
+            return lambda event: (self._mousemove(Location(event.x, event.y)));
+        else:
+            return None;
+
+    def _keydown(self, key) -> None:
+        if 'keydown' not in self.registry:
+            return;
+
+        self.registry['keydown'](self.Key(key.lower()));
+
+    def _keyup(self, key) -> None:
+        if 'keyup' not in self.registry:
+            return;
+
+        self.registry['keyup'](self.Key(key.lower()));
+
+    def _keypress(self, key) -> None:
+        if 'keypress' not in self.registry:
+            return;
+
+        self.registry['keypress'](self.Key(key.lower()));
+
+    def _mousedown(self, button, location) -> None:
+        if 'mousedown' not in self.registry:
+            return;
+
+        self.registry['mousedown'](button, location);
+
+    def _mouseup(self, button, location) -> None:
+        if 'mouseup' not in self.registry:
+            return;
+
+        self.registry['mouseup'](button, location);
+
+    def _mouseclick(self, button, location) -> None:
+        if 'mouseclick' not in self.registry:
+            return;
+
+        self.registry['mouseclick'](button, location);
+
+    def _mousedrag(self, button, location) -> None:
+        if 'mousedrag' not in self.registry:
+            return;
+
+        self.registry['mousedrag'](button, location);
+
+    def _mousemove(self, location) -> None:
+        # We will update our internal storage of the mouse-location no matter what
+        self._mouse = location;
+
+        if 'mousemove' not in self.registry:
+            return;
+
+        self.registry['mousemove'](location);
+
+    # --- Helper Methods --- #
+    def create_location(self, x, y) -> Location:
+        """
+        Is passed turtle-based coordinates and converts them into normal coordinates
+        :param x: the x component
+        :param y: the y component
+        :return: a location comprised of the passed x and y components
+        """
+        return Location(x + (self.width() / 2), -y + (self.height() / 2));
+
+    # -- Internals -- #
+    def _onrelease(self, fun, btn, add=None):
+        """
+        An internal method hooking into the TKinter canvas.
+        :param fun: the function to call upon mouse release
+        :param btn: the mouse button to bind to
+        :param add: i have no clue what this does
+        :return: None
+        """
+
+        def eventfun(event):
+            x, y = (self._screen.cv.canvasx(event.x) / self._screen.xscale,
+                    -self._screen.cv.canvasy(event.y) / self._screen.yscale)
+            fun(x, y)
+
+        self._screen.cv.bind("<Button%s-ButtonRelease>" % btn, eventfun, add);
+
+    def _ondrag(self, fun, btn, add=None):
+        """
+        An internal method hooking into the TKinter canvas.
+        :param fun: the function to call upon drag
+        :param btn: the mouse button to bind to
+        :param add: i have no clue
+        :return: None
+        """
+
+        # noinspection PyBroadException
+        def eventfun(event):
+            try:
+                x, y = (self._screen.cv.canvasx(event.x) / self._screen.xscale,
+                        -self._screen.cv.canvasy(event.y) / self._screen.yscale)
+                fun(x, y)
+            except Exception:
+                pass
+
+        self._screen.cv.bind("<Button%s-Motion>" % btn, eventfun, add);
+
+    def _onmouseclick(self, fun, btn, add=None):
+        pass;
+
+    def _onkeytype(self, fun, btn, add=None):
+        pass;
+
+
+"""
 Objects in the PyDraw library
 
 (Author: Noah Coetsee)
@@ -8,12 +1037,12 @@ import turtle;
 import tkinter as tk;
 import math;
 
-# from pydraw.errors import *;  # util gives us our errors for us :)
-from pydraw.util import *;
+# # from pydraw.errors import *;  # util gives us our errors for us :)
+# from pydraw.util import *;
 
-from pydraw import Screen;
-from pydraw import Location;
-from pydraw import Color;
+# from pydraw import Screen;
+# from pydraw import Location;
+# from pydraw import Color;
 
 PIXEL_RATIO = 20;
 
@@ -1716,3 +2745,5 @@ class Line(Object):
             self._screen._screen.cv.update();
         except tk.TclError:
             pass;  # Just catch TclErrors and throw them out.
+
+

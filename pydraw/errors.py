@@ -4,3 +4,7 @@ class InvalidArgumentError(ValueError):
 
 class UnsupportedError(NameError):
     pass;
+
+
+class PydrawError(NameError):
+    pass;
