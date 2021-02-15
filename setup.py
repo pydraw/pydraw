@@ -5,7 +5,7 @@ with open("README_stripped.md", "r") as fh:
 
 setuptools.setup(
     name="pydraw",
-    version="1.0.0a",
+    version="1.0.0a1",
     author="Noah Coetsee",
     author_email="noah@noahcoetsee.me",
     description="A package designed to make graphics with Python simple and easy!",
@@ -19,7 +19,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        'tkinter',
         'pillow'
     ],
     python_requires='>=3.6',
