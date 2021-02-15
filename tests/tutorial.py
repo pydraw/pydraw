@@ -62,6 +62,8 @@ mrspace.move(-mrspace.width() / 2, -mrspace.height() / 2);
 mrspace.width(64);
 mrspace.color(Color('red'))
 
+cool_barry = Image(screen, 'cool_barry.jpg', screen.width() / 3, screen.height() / 2, 150, 150);
+
 print(f'Screen Size: {screen.size()}')
 
 mrspace.rotation(45)

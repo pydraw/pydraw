@@ -945,6 +945,8 @@ class Image(Renderable):
     You can install PIL/Pillow by running: `pip install pillow` in a terminal!
     """
 
+    TKINTER_TYPES = ['.png', '.gif', '.ppm'];
+
     def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
                  width: float = None,
                  height: float = None,
@@ -954,7 +956,17 @@ class Image(Renderable):
                  visible: bool = True,
                  location: Location = None):
         self._image_name = image;
-        self._image = tk.PhotoImage(name=image, file=image);
+
+        if image[len(image) - 4:len(image)] in self.TKINTER_TYPES:
+            self._image = tk.PhotoImage(name=image, file=image);
+        else:
+            try:
+                from PIL import Image, ImageTk;
+                image = Image.open(self._image_name);
+                self._image = ImageTk.PhotoImage(image);
+            except:
+                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
+                                       'Install Pillow via: \'pip install pillow\'.');
 
         self._width = self._image.width();
         self._height = self._image.height();
@@ -1146,7 +1158,7 @@ class Image(Renderable):
             except (RuntimeError, AttributeError):
                 pass;  # We are catching some stupid errors from Tkinter involving images and program exiting.
             except:
-                raise UnsupportedError('As PIL is not installed, you cannot modify images!'
+                raise UnsupportedError('As PIL is not installed, you cannot modify images! '
                                        'Install Pillow via: \'pip install pillow\'.');
 
         try:
