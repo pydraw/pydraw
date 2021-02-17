@@ -1616,7 +1616,7 @@ class Renderable(Object):
         try:
             super().update();
             self._ref.shapesize(stretch_wid=self.height() / PIXEL_RATIO, stretch_len=self.width() / PIXEL_RATIO);
-            self._ref.setheading(self._angle);
+            self._ref.setheading(-self._angle);
 
             if self._visible:
                 self._ref.showturtle();
