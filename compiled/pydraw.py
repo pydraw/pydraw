@@ -1266,7 +1266,7 @@ class Renderable(Object):
         """
 
         verify(angle_diff, (float, int));
-        self.rotation(self._angle + angle_diff);
+        self.rotation(self._angle - angle_diff);
 
     def border(self, color: Color = None, fill: bool = None) -> Color:
         """
