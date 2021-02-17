@@ -393,6 +393,8 @@ class Renderable(Object):
         # we are going to cast a ray from our point to the positive x. (left to right)
 
         shape = self.vertices();
+        shape = tuple(shape[:]) + (shape[0],);  # Add the first vertex back again to get the last edge.
+
         point1 = shape[0];
         for i in range(1, len(shape)):
             # A cool trick that gets the next index in an array, or the first index if i is the last index.
@@ -730,7 +732,7 @@ class CustomRenderable(Renderable):
 # noinspection PyProtectedMember
 class CustomPolygon(CustomRenderable):
     """
-    Warning: This class is unfinished and if used improperly can have unintended side effects.
+    An Irregular Polygon that is passed a list of vertices that can be rotated and translated!
     """
 
     # The below "# noqa" removes a small inspection by pycharm as it complains we do not call the constructor.
@@ -738,8 +740,8 @@ class CustomPolygon(CustomRenderable):
                  color: Color = Color('black'),
                  border: Color = None,
                  fill: bool = True,
-                 visible: bool = True,
-                 rotation: float = 0):
+                 rotation: float = 0,
+                 visible: bool = True):
         self._screen = screen;
         self._color = color;
         self._border = border if border is not None else Color('');
@@ -858,14 +860,25 @@ class CustomPolygon(CustomRenderable):
     def vertices(self) -> list:
         return self._vertices;
 
+    def clone(self):
+        """
+        Clone this CustomPolygon!
+        :return: a CustomPolygon
+        """
+        return CustomPolygon(self._screen, self._vertices, self._color, self._border, self._fill, self._angle,
+                             self._visible);
+
+    def transform(self, transform: tuple = None) -> tuple:
+        raise UnsupportedError('Renderable#transform() is not supported for CustomPolygon!');
+
     def _rotate(self, angle: float) -> None:
         # We have to update here since we cannot remember previous rotations (update method call won't cut it)!
         vertices = self.vertices();
 
         # First get some values that we gonna use later
-        radians = math.radians(angle);
-        cosine = math.cos(radians);
-        sine = math.sin(radians);
+        theta = math.radians(angle);
+        cosine = math.cos(theta);
+        sine = math.sin(theta);
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -885,9 +898,9 @@ class CustomPolygon(CustomRenderable):
             old_x = vertex.x() - centroid_x;
             old_y = vertex.y() - centroid_y;
 
-            new_x = old_x * cosine - old_y * sine;
-            new_y = old_x * sine + old_y * cosine;
-            new_vertices.append(Location(new_x + centroid_x, new_y + centroid_y));
+            new_x = (old_x * cosine - old_y * sine) + centroid_x;
+            new_y = (old_x * sine + old_y * cosine) + centroid_y;
+            new_vertices.append(Location(new_x, new_y));
 
         self._vertices = new_vertices;
         self.update();
@@ -936,6 +949,8 @@ class CustomPolygon(CustomRenderable):
         self._screen._screen.cv.delete(old_ref);
 
 
+# While technically this is a normal renderable, I've grouped it with the
+# CustomRenderables due to its special-case dependency on PIP.
 class Image(Renderable):
     """
     Image class. Supports basic formats: PNG, GIF, JPG, PPM, images.
@@ -981,7 +996,7 @@ class Image(Renderable):
         # noinspection PyProtectedMember
         screen._screen.register_shape(self._image_name, shape);
 
-        super().__init__(screen, x, y, self._width, self._height, color=Color(''), border=None,
+        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=None,
                          rotation=rotation, visible=visible, location=location);
         self._ref.shape(self._image_name);
 
@@ -1137,13 +1152,13 @@ class Image(Renderable):
                     self._monkey_patch_del();  # If we do have PIL we need to monkey patch this immediately.
                     self._patched = True;
 
-                image = Image.open(self._image_name);
+                image = Image.open(self._image_name).convert('RGBA');
 
-                if self._color is not None:
+                if self._color is not None and self._color != Color.NONE:
                     color_layer = Image.new('RGB', image.size,
                                             (self._color.red(), self._color.green(), self._color.blue()));
                     mask = Image.new('RGBA', image.size, (0, 0, 0, self._mask));
-                    image = Image.composite(image, color_layer, mask).convert('RGB');
+                    image = Image.composite(image, color_layer, mask).convert('RGBA');
 
                 if self._border is not None:
                     image = ImageOps.expand(image, border=10, fill=self._border.rgb())
@@ -1152,7 +1167,7 @@ class Image(Renderable):
                 image = image.resize((self.width(), self.height()), Image.ANTIALIAS);
 
                 if self._angle != 0:
-                    image = image.rotate(self._angle, resample=Image.BICUBIC, expand=True);
+                    image = image.rotate(-self._angle, resample=Image.BILINEAR, expand=1, fillcolor=None)
 
                 self._image = ImageTk.PhotoImage(image=image);
             except (RuntimeError, AttributeError):
@@ -1550,7 +1565,7 @@ class Line(Object):
 
         self.update();
 
-    def moveto(self, *args) -> None:
+    def moveto(self, *args, **kwargs) -> None:
         """
         Move both of the endpoints to new locations.
         :param args: Either two locations, tuples, or four numbers (x1, y1, x2, y2).
@@ -1563,7 +1578,29 @@ class Line(Object):
         elif len(args) == 4 and (type(arg) is int or type(arg) is float for arg in args):
             self._pos1.moveto(args[0], args[1]);
             self._pos2.moveto(args[2], args[3]);
-        else:
+        elif len(kwargs) == 0:
+            raise TypeError('Incorrect Argumentation: Requires either two locations, tuples, or four numbers (x1, y1, '
+                            'x2, y2)');
+
+        if len(kwargs.keys()) > 0:
+            for key, value in kwargs.items():
+                if key.lower() == 'pos1' and type(value) is tuple or type(value) is Location:
+                    pos1 = value;
+                    verify(pos1[0], (float, int), pos1[1], (float, int));
+                    self._pos1 = Location(pos1[0], pos1[1]);
+                elif key.lower() == 'pos2' and type(value) is tuple or type(value) is Location:
+                    pos2 = value;
+                    verify(pos2[0], (float, int), pos2[1], (float, int));
+                    self._pos2 = Location(pos2[0], pos2[1]);
+                elif key.lower() == 'x1' and type(value) is float or type(value) is int:
+                    self._pos1.x(value);
+                elif key.lower() == 'y1' and type(value) is float or type(value) is int:
+                    self._pos1.y(value);
+                elif key.lower() == 'x2' and type(value) is float or type(value) is int:
+                    self._pos2.x(value);
+                elif key.lower() == 'y2' and type(value) is float or type(value) is int:
+                    self._pos2.y(value);
+        elif len(args) == 0:
             raise TypeError('Incorrect Argumentation: Requires either two locations, tuples, or four numbers (x1, y1, '
                             'x2, y2)');
 
@@ -1608,27 +1645,46 @@ class Line(Object):
 
         theta = math.atan2(self.pos1().y() - location.y(), self.pos1().x() - location.x()) \
                 - math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x());
+        
+        self.rotate(math.degrees(theta));
+
+    def rotation(self, angle: float = None):
+        """
+        Get or set the rotation of the line (works via pos2().
+        :param angle: the angle in degrees to rotate by, if any
+        :return: the angle of the line
+        """
+
+        theta = math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x());
+        theta = math.degrees(theta);
+        if angle is not None:
+            self.rotate(angle + theta);
+
+        return theta;
+
+    def rotate(self, angle_diff: float, point: int = 1):
+        """
+        Rotate the line around one of the vertices (1 by default)
+        :param angle_diff: the angle to rotate by
+        :param point: the point to serve as the origin.
+        :return:
+        """
+
+        origin = self._pos1 if point == 1 else self._pos2;
+        point = self._pos2 if point == 1 else self._pos1;
+
+        theta = math.radians(angle_diff);
 
         cosine = math.cos(theta);
         sine = math.sin(theta);
 
-        old_x = self.pos2().x() - self.pos1().x();
-        old_y = self.pos2().y() - self.pos1().y();
+        old_x = point.x() - origin.x();
+        old_y = point.y() - origin.y();
 
-        new_x = old_x * cosine - old_y * sine;
-        new_y = old_x * sine + old_y * cosine;
+        new_x = (old_x * cosine - old_y * sine) + origin.x();
+        new_y = (old_x * sine + old_y * cosine) + origin.y();
 
-        new_x += self.pos1().x();
-        new_y += self.pos1().y();
-
-        # if point == 1:
-        #     self.pos1(location);
-        # elif point == 2:
-        #     self.pos2(location);
-        # else:
-        #     raise InvalidArgumentError('Point passed in for change was not a number!');
-
-        self.pos2().moveto(new_x, new_y);
+        point.moveto(new_x, new_y);
         self.update();
 
     def location(self) -> tuple:
@@ -1705,6 +1761,22 @@ class Line(Object):
             self.update();
 
         return self._visible;
+
+    def transform(self, transform: tuple = None):
+        """
+        Copy the line's length and angle!
+        :param transform:
+        :return:
+        """
+
+    def clone(self):
+        """
+        Clone a new line!
+        :return: A clone of this line
+        """
+
+        return Line(self._screen, self._pos1, self._pos2, color=self._color, thickness=self._thickness,
+                    dashes=self._dashes, visible=self._visible);
 
     # noinspection PyProtectedMember
     def update(self):

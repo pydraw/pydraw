@@ -17,7 +17,7 @@ import time;
 from pydraw import Screen, Color, Location, Rectangle, Oval, Triangle, Text, Polygon, CustomPolygon, Image, Line;
 
 screen = Screen(800, 600, 'Something Awesome!');
-screen.color(Color('black'));
+screen.color(Color('white'));
 
 noah = Triangle(screen, 23, 45, 35, 60, Color('green'));
 noah.rotation(90);
@@ -56,10 +56,17 @@ waffle.border(Color.NONE);
 crazy_waffle = CustomPolygon(screen, [(50, 350), (100, 350), (100, 400), (75, 450), (50, 400)], color=Color('green'));
 
 maui = Line(screen, 50, 50, 150, 150, color=Color('magenta'));
-mrspace = Image(screen, 'featuredspace_logo.png', screen.width() / 2, screen.height() / 2, 150, 150);
-mrspace.move(-mrspace.width() / 2, -mrspace.height() / 2);
+moana = maui.clone();
+moana.rotation(45);
+moana.color(Color('gray17'));
 
-mrspace.width(64);
+maui.moveto(pos1=Location(200, 100));
+
+mrspace = Image(screen, 'featuredspace_logo.png', screen.width() / 2, screen.height() / 2);
+mrspace.width(50);
+mrspace.height(50)
+
+mrspace.move(-mrspace.width() / 2, -mrspace.height() / 2);
 mrspace.color(Color('red'))
 
 cool_barry = Image(screen, 'cool_barry.jpg', screen.width() / 3, screen.height() / 2, 150, 150);
@@ -67,7 +74,7 @@ cool_barry = Image(screen, 'cool_barry.jpg', screen.width() / 3, screen.height()
 print(f'Screen Size: {screen.size()}')
 
 mrspace.rotation(45)
-mrspace.border(Color('green'));
+# mrspace.border(Color('green'));
 
 state = True;
 

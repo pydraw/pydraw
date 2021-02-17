@@ -39,6 +39,8 @@ with open(output_file, 'w') as output:
         with open(input_file, 'r') as file:
             # Replace any module-import statements. It doesn't matter now.
             filtered = file.read().replace(f'from {input_module}', f'# from {input_module}');
+            filtered = filtered.replace(f'import {input_module}', f'# import {input_module}');
+            filtered = filtered.replace('{version}', '1.0.0');
             output.write(filtered);
             output.write('\n\n');  # double space between files.
 
