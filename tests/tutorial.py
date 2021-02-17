@@ -54,7 +54,7 @@ waffle = Polygon(screen, 6, screen.width() - (screen.width() / 3), 100, 50, 50, 
 waffle.border(Color('red'));
 waffle.border(Color.NONE);
 crazy_waffle = CustomPolygon(screen, [(50, 350), (100, 350), (100, 400), (75, 450), (50, 400)], color=Color('green'));
-
+crazy_waffle.color(Color('#fff222'))
 maui = Line(screen, 50, 50, 150, 150, color=Color('magenta'));
 moana = maui.clone();
 moana.rotation(45);

@@ -142,7 +142,10 @@ class Color:
             except tk.TclError:
                 raise PydrawError('Color-string does not exist: ', color.name());
         elif color.hex() is not None:
-            rgb = tuple(int(color.hex()[i:i + 2], 16) for i in (0, 2, 4));
+            if len(color.hex()) != 7:
+                raise InvalidArgumentError('A color hex must be six characers long. Ex: "#FFFFFF"');
+            hexval = color.hex().replace('#', '');
+            rgb = tuple(int(hexval[i:i + 2], 16) for i in (0, 2, 4));
         else:
             rgb = (color.red(), color.green(), color.blue());
 

@@ -128,6 +128,7 @@ class Screen:
 
         self._screen.title(title);
         self._title = title;
+        self._color = Color('white')
 
         self._screen.colormode(255);
 
@@ -160,14 +161,18 @@ class Screen:
 
         return self._title;
 
-    def color(self, color: Color) -> None:
+    def color(self, color: Color = None) -> None:
         """
         Set the background color of the screen.
         :param color: the color to set the background to
         :return: None
         """
 
-        self._screen.bgcolor(color.__value__());
+        if color is not None:
+            self._color = color;
+            self._screen.bgcolor(color.__value__());
+        return self._color;
+
 
     def picture(self, pic: str) -> None:
         """
