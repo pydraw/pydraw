@@ -5,7 +5,7 @@ with open("README_stripped.md", "r") as fh:
 
 setuptools.setup(
     name="pydraw",
-    version="0.1.4",
+    version="1.0.0",
     author="Noah Coetsee",
     author_email="noah@noahcoetsee.me",
     description="A package designed to make graphics with Python simple and easy!",
@@ -17,6 +17,9 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+    ],
+    install_requires=[
+        'pillow'
     ],
     python_requires='>=3.6',
 )

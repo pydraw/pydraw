@@ -1,0 +1,18 @@
+"""
+pyDraw v{version}
+
+This library is a graphics-interface library designed to make graphics in Python
+easier and more simple. It was designed to be easy to teach/learn and to utilize
+some of the basic concepts of OOP and functional programming in its setup.
+
+Documentation: https://docs.pydraw.graphics
+Source: https://github.com/pydraw/pydraw
+
+(Author: Noah Coetsee)
+
+No hiding spots here (for semicolons)
+Hide and seek champion since version 0.1.0
+
+Semicolons are my best friends.
+"""
+

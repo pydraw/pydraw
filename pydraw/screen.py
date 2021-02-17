@@ -5,6 +5,7 @@ import time;
 
 from pydraw import Color;
 from pydraw import Location;
+from pydraw.errors import *;
 
 INPUT_TYPES = [
     'mousedown',
@@ -116,6 +117,10 @@ class Screen:
     def __init__(self, width=800, height=600, title="pydraw"):
         self._screen = turtle.Screen();
         self._canvas = self._screen.cv;
+        self._root = self._canvas.winfo_toplevel();
+
+        # The only thing on the canvas is itself, so we prevent anything stupid from happening.
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"));
 
         self._screen.screensize(width, height);
         self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT);
@@ -134,6 +139,9 @@ class Screen:
         # By default we want to make sure that all objects are drawn instantly.
         self._screen.tracer(0);
         self._screen.update();
+
+        # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler);
+        # atexit.register(self._exit_handler)
 
         # --- #
 
@@ -186,9 +194,9 @@ class Screen:
 
     def size(self) -> (int, int):
         """
-        Get the size of the screen (please note this is not the canvas, and those attributes should be
+        Get the size of the WINDOW (please note this is not the canvas, and those attributes should be
         retrieved using the width() and height() methods respectively)
-        :return: a tuple containing the width and height of the screen
+        :return: a tuple containing the width and height of the WINDOW
         """
 
         # noinspection PyBroadException
@@ -257,16 +265,51 @@ class Screen:
             cellsize = (cellsize[0], self.width() / cols);
 
         for row in range(int(cellsize[1]), int(self.height()), int(cellsize[1])):
-            self._gridlines.append(Line(self, Location(0, row), Location(self.width(), row), color=Color('lightgray')));
+            self._gridlines.append(Line(self, Location(0, row), Location(self.width(), row),
+                                        color=Color('lightgray')));
 
         for col in range(int(cellsize[0]), int(self.width()), int(cellsize[0])):
-            self._gridlines.append(Line(self, Location(col, 0), Location(col, self.height()), color=Color('lightgray')));
+            self._gridlines.append(Line(self, Location(col, 0), Location(col, self.height()),
+                                        color=Color('lightgray')));
 
     def toggle_grid(self, value=None):
         if value is None:
             value = not self._gridstate;
 
+        if len(self._gridlines) == 0:
+            self.grid();  # Create a grid if one does not exist.
+
         [line.visible(value) for line in self._gridlines];
+
+    def grab(self, filename: str = None) -> str:
+        """
+        Grabs a screenshot of the image and saves it to the directory with the specified filename!
+        Note that if no filename is specified the file will be given a name based on the epoch time.
+        :param filename: the name of the file to save the screenshot to.
+        :return: the name of the file.
+        """
+
+        # noinspection PyBroadException
+        try:
+            from PIL import ImageGrab;
+
+            # We need to get the exact canvas coordinates. (bruh)
+            x1 = self._root.winfo_rootx() + self._canvas.winfo_x() + BORDER_CONSTANT;
+            y1 = self._root.winfo_rooty() + self._canvas.winfo_y() + BORDER_CONSTANT;
+            x2 = x1 + self.width() - BORDER_CONSTANT;
+            y2 = y1 + self.height() - BORDER_CONSTANT;
+
+            if filename is None:
+                filename = 'pydraw' + str(time.time() % 10000);
+
+            if not filename.endswith('.png'):
+                filename += '.png';
+
+            ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename);
+            return filename;
+        except:
+            raise UnsupportedError('As PIL is not installed, you cannot grab the screen! ' 
+                                   'Install Pillow via: \'pip install pillow\'.');
 
     # noinspection PyProtectedMember
     def remove(self, obj):
@@ -279,6 +322,14 @@ class Screen:
             self._screen.cv.delete(obj._ref);
             del obj;
 
+    # noinspection PyProtectedMember
+    def front(self, obj):
+        from pydraw import Renderable, CustomRenderable;
+        if isinstance(obj, Renderable) and not isinstance(obj, CustomRenderable):
+            obj._ref.forward(0);
+        else:
+            self._canvas.tag_raise(obj._ref);
+
     def clear(self) -> None:
         """
         Clears the screen.
@@ -287,7 +338,7 @@ class Screen:
 
         try:
             self._screen.clear();
-        except tk.TclError:
+        except (tk.TclError, AttributeError):
             pass;  # We silently stop TclErrors from appearing to users.
 
     @staticmethod
@@ -307,7 +358,7 @@ class Screen:
         """
         try:
             self._screen.update();
-        except (turtle.Terminator, tk.TclError):
+        except (turtle.Terminator, tk.TclError, AttributeError):
             # If we experience the termination exception, we will print the termination of the program
             # and exit the python program.
             print('Terminated.');
@@ -331,7 +382,9 @@ class Screen:
 
         try:
             # noinspection PyProtectedMember
-            return self._screen._colorstr(color.__value__());
+            # noinspection PyUnresolvedReferences
+            colorstr = self._screen._colorstr(color.__value__());
+            return colorstr;
         except (turtle.TurtleGraphicsError, tk.TclError):
             pass;
 
