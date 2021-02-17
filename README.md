@@ -188,10 +188,76 @@ schrodingers_box.distance(not_a_box)  # Gets the precise distance between the ce
 # code below ...
 ```
 
+### Text, Images, and Lines
+
+pyDraw has specific APIs for Text, Images, and Lines that will sometimes deviate from the 
+standard methods slightly.
+
+#### Text
+```python
+# ... code above
+
+text = Text(screen, 'Some Cool Text!', screen.width(), screen.height(), Color('purple'))
+text.move(-text.width() / 2, -text.height() / 2)  # You can get the width and height to perfectly center
+                                                  # any text easily!
+text.font('Calibri')
+text.rotate(45)  # You can still rotate text if you want :)
+
+text.bold(True)
+text.underline(True)
+text.strikethrough(False)
+
+# code below ...
+```
+
+#### Images
+```python
+# ... code above
+
+image = Image(screen, 'image.png', screen.width() / 3, screen.height() / 3)
+# ^ We can load an image like this, and it will display on teh screen
+# Note that we cannot add a size or color without having PIL installed, which will be installed 
+# on the system if pydraw is installed via 'pip install pydraw'. If you use the file version of 
+# pydraw, 'pydraw.py', you must also install PIL onto the system in order to manipulate images via:
+# 'pip install pillow' (Pillow is the fork of PIL, still maintained to this day).
+
+# Now that we know we have PIL installed we can have some fun
+image.width(150)
+image.height(150)
+
+image.rotate(5)
+
+image.color(Color('red'), alpha=123)
+# ^ This will tint the image with a red color, at an alpha level of 123 (default).
+# If you increase the alpha, the image will become less visible and the tint-color more so,
+# and vice versa.
+
+# code below ...
+```
+
+#### Lines
+```python
+# ... code above
+
+# Let's create a nice line that goes across the screen with a beautiful blue color.
+line = Line(screen, 150, 150, screen.width() - 50, screen.height() - 50, color = Color('blue'))
+
+# We can modify the line's thickness:
+line.thickness(5)
+
+# We can even rotate the line!
+line.rotate(35, point=1)  # Note that here we are specifying which point to rotate AROUND!
+
+# We can use a special feature of lines to make them point at stuff!
+line.lookat(another_location)  # SUPER NIFTY!
+
+# code below ...
+```
+
 ---
 
 ## API/Docs
-The documentation for [pydraw](https://pypi.org/project/pydraw) will be available at the main website: https://pydraw.graphics
+The documentation for [pydraw](https://pypi.org/project/pydraw) wis available at the main website: https://pydraw.graphics
 The documentation is shipped with the package so code completion and method descriptors are
 available for supporting IDEs.
 
@@ -200,7 +266,7 @@ available for supporting IDEs.
 ## DIY
 If you want to build your own version of pydraw, just fork this repository and run 
 `python -m build` in the terminal. You should get a release/ directory with a pydraw.py held
-dearly within it.
+dearly within it. (As well as a `pydraw.py` file in the `compiled/` directory!)
 
 ---
 
