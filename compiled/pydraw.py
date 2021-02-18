@@ -572,6 +572,15 @@ class Screen:
         # --- #
 
         self.registry = {};  # The input function registry (stores input callbacks)
+        
+    def get_screen(self) -> turtle._screen:
+        return self._screen
+        
+    def get_canvas(self) -> turtle._canvas:
+        return self._canvas
+    
+    def get_root(self) -> turtle._root:
+        return self._root
 
     def title(self, title: str = None) -> str:
         """
