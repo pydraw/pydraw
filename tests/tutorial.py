@@ -62,6 +62,9 @@ moana.color(Color('gray17'));
 
 maui.moveto(pos1=Location(200, 100));
 
+crazy_waffle.moveto(600, 350)
+tester_square = Rectangle(screen, 600, 350, 10, 10)
+
 mrspace = Image(screen, 'featuredspace_logo.png', screen.width() / 2, screen.height() / 2);
 mrspace.width(50);
 mrspace.height(50)
@@ -86,6 +89,7 @@ def mousedown(button, location):
     global state;
     print('Mousedown detected', button, location);
     crazy_waffle.rotate(5 if state else -5);
+    crazy_waffle.move(10, -10)
 
     if button == 3:
         print('grabbed screen');
