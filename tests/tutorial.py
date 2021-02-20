@@ -1,17 +1,11 @@
 # PyDraw Demonstration
 # Noah Coetsee
 
-# List:
-# [x] Change color to take list of arguments and interpret type.
-# [x] Border for filled/framed option is good. (see below)
-# - Color alpha needs to be finished. ** = custom alpha isn't possible
-# [1/2] Custom method / distance(object: Object) - Returns the distance between the centers of two objects.
-# [1/2] .overlaps(object: Object) method
-# - Mouseclick and Keypress. | not doing it.
-# [x] 'shift_left', 'shift_right'
-# [x] object.x(x: float) -> None | Change x coordinate directly (any object);
-# [x] Change coordinate access in Location class to method
-# [x] Ensure canvas sizing is correct.
+"""
+This file is where I put random tests and methods in here. If you want to understand more about the chaotic
+thing that is my brain, you can try to decipher all of this... But yeah, here's like almost all of the methods
+in pydraw scattered about lol.
+"""
 
 import time;
 from pydraw import Screen, Color, Location, Rectangle, Oval, Triangle, Text, Polygon, CustomPolygon, Image, Line;

@@ -1302,7 +1302,7 @@ class Text(Object):
                                                         fill=self._screen._screen._colorstr(self.color().__value__()),
                                                         font=font_data,
                                                         state=state,
-                                                        angle=self._angle);
+                                                        angle=-self._angle);
 
         x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref);
         self._width = x1 - x0;
@@ -1520,7 +1520,7 @@ class Text(Object):
                                                         fill=self._screen._colorstr(self._color),
                                                         font=font_data,
                                                         state=state,
-                                                        angle=self._angle);
+                                                        angle=-self._angle);
         self._screen._screen.cv.tag_lower(self._ref, old_ref);
         self._screen._screen.cv.delete(old_ref);
 
@@ -1606,25 +1606,53 @@ class Line(Object):
         self.update();
         return self._pos2;
 
-    def move(self, dx: float, dy: float, point: int = 0) -> None:
+    def move(self, *args, **kwargs) -> None:
         """
         Move both endpoints by the same dx and dy
         :param dx: the distance x to move
         :param dy: the distance y to move
-        :param point: affect only one of the endpoints; options: (1, 2), default=0
+        :param point: affect only one of the endpoints; options: (1, 2), default=0 (Must be
         :return: None
         """
 
-        if point != 0:
-            if point == 1:
-                self._pos1.move(dx, dy);
-            elif point == 2:
-                self._pos2.move(dx, dy);
+        """
+        Can take either a tuple, Location, or two numbers (dx, dy)
+        :return: None
+        """
+
+        diff = (0, 0);
+
+        # Basically we don't have an empty tuple at the start.
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
+                              type(args[0]) is tuple and not len(args[0]) == 0):
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+                diff = (args[0][0], args[0][1]);
+            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+                diff = (args[0], args[1]);
             else:
-                raise IndexError('Attempted to change point other than 1 or 2.');
+                raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!');
+
+        for (name, value) in kwargs.items():
+            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+                raise InvalidArgumentError('Object#move() must take either a tuple/location '
+                                           'or two numbers (dx, dy)!');
+
+            if name.lower() == 'dx':
+                diff = (value, diff[1]);
+            if name.lower() == 'dy':
+                diff = (diff[0], value);
+
+        if 'point' in kwargs:
+            point = kwargs['point'];
+            verify(point, int);
+            if point == 1:
+                self._pos1.move(diff[0], diff[1]);
+            elif point == 2:
+                self._pos2.move(diff[0], diff[1]);
+            elif point != 0:
+                raise InvalidArgumentError('You must pass either 1 or 2 in as a point, or 0 for both points!');
         else:
-            self._pos1.move(dx, dy);
-            self._pos2.move(dx, dy);
+            self.move(diff[0], diff[1]);
 
         self.update();
 

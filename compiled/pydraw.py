@@ -214,7 +214,10 @@ class Color:
             except tk.TclError:
                 raise PydrawError('Color-string does not exist: ', color.name());
         elif color.hex() is not None:
-            rgb = tuple(int(color.hex()[i:i + 2], 16) for i in (0, 2, 4));
+            if len(color.hex()) != 7:
+                raise InvalidArgumentError('A color hex must be six characers long. Ex: "#FFFFFF"');
+            hexval = color.hex().replace('#', '');
+            rgb = tuple(int(hexval[i:i + 2], 16) for i in (0, 2, 4));
         else:
             rgb = (color.red(), color.green(), color.blue());
 
@@ -554,6 +557,7 @@ class Screen:
 
         self._screen.title(title);
         self._title = title;
+        self._color = Color('white')
 
         self._screen.colormode(255);
 
@@ -586,14 +590,18 @@ class Screen:
 
         return self._title;
 
-    def color(self, color: Color) -> None:
+    def color(self, color: Color = None) -> None:
         """
         Set the background color of the screen.
         :param color: the color to set the background to
         :return: None
         """
 
-        self._screen.bgcolor(color.__value__());
+        if color is not None:
+            self._color = color;
+            self._screen.bgcolor(color.__value__());
+        return self._color;
+
 
     def picture(self, pic: str) -> None:
         """
@@ -1823,6 +1831,69 @@ class CustomPolygon(CustomRenderable):
             state=state
         );
 
+    def move(self, *args, **kwargs):
+        """
+        Can take either a tuple, Location, or two numbers (dx, dy)
+        :return: None
+        """
+
+        diff = (0, 0);
+
+        # Basically we don't have an empty tuple at the start.
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
+                              type(args[0]) is tuple and not len(args[0]) == 0):
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+                diff = (args[0][0], args[0][1]);
+            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+                diff = (args[0], args[1]);
+            else:
+                raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!');
+
+        for (name, value) in kwargs.items():
+            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+                raise InvalidArgumentError('Object#move() must take either a tuple/location '
+                                           'or two numbers (dx, dy)!');
+
+            if name.lower() == 'dx':
+                diff = (value, diff[1]);
+            if name.lower() == 'dy':
+                diff = (diff[0], value);
+
+        for vertice in self._vertices:
+            vertice.move(diff[0], diff[1]);
+
+        self._location.move(diff[0], diff[1]);
+        self.update();
+
+    def moveto(self, *args, **kwargs):
+        """
+        Move to a new location; takes a Location, tuple, or two numbers (x, y)
+        :return: None
+        """
+
+        location = self._location;
+
+        # Basically we don't have an empty tuple at the start.
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
+                              type(args[0]) is tuple and not len(args[0]) == 0):
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+                location = Location(args[0][0], args[0][1]);
+            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+                location = Location(args[0], args[1]);
+
+        for (name, value) in kwargs.items():
+            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+                raise InvalidArgumentError('Object#move() must take either a tuple/location '
+                                           'or two numbers (dx, dy)!');
+
+            if name.lower() == 'x':
+                location = Location(value, location.y());
+            if name.lower() == 'y':
+                location = Location(location.x(), value);
+
+        diff = (location.x() - self._location.x(), location.y() - self._location.y());
+        self.move(diff);
+
     def width(self, width: float = None) -> float:
         """
         Get the width of the CustomPolygon
@@ -2511,8 +2582,8 @@ class Line(Object):
             self._pos1 = Location(args[0], args[1]);
             self._pos2 = Location(args[2], args[3]);
         else:
-            raise TypeError('Incorrect Argumentation: Line requires either two Locations, tuples, or four '
-                            'numbers (x1, y1, x2, y2).');
+            raise InvalidArgumentError('Incorrect Argumentation: Line requires either two Locations, tuples, or four '
+                                       'numbers (x1, y1, x2, y2).');
 
         self._color = color;
         self._thickness = thickness;
@@ -2674,7 +2745,7 @@ class Line(Object):
 
         theta = math.atan2(self.pos1().y() - location.y(), self.pos1().x() - location.x()) \
                 - math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x());
-        
+
         self.rotate(math.degrees(theta));
 
     def rotation(self, angle: float = None):
