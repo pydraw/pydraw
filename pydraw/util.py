@@ -36,4 +36,4 @@ def verify(*args):
         # print(f'Obj: {obj}, Expected Type: {expected_type}, Meets: {verify_type(obj, expected_type)}');
 
         if not verify_type(obj, expected_type):
-            raise InvalidArgumentError(f'Type does not match: {obj} : {expected_type}');
+            raise InvalidArgumentError(f'Type does not match: {type(obj)} ({obj}) : {expected_type}');

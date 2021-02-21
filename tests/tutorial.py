@@ -21,6 +21,7 @@ barry.border(Color('yellow'), fill=False);
 print(barry.visible());
 mustachio = Oval(screen, screen.width() - 20, screen.height() - 20, 20, 20);
 mustachio.color(Color('red'));
+mustachio.move(dx=30, dy=50);
 
 print(f'Screen | Width: {screen.width()}, Height: {screen.height()}');
 print(Color.random());
@@ -49,7 +50,7 @@ waffle.border(Color('red'));
 waffle.border(Color.NONE);
 crazy_waffle = CustomPolygon(screen, [(50, 350), (100, 350), (100, 400), (75, 450), (50, 400)], color=Color('green'));
 crazy_waffle.color(Color('#fff222'))
-maui = Line(screen, 50, 50, 150, 150, color=Color('magenta'));
+maui = Line(screen, 50, 50, 150, 150, Color('purple'), 2);
 moana = maui.clone();
 moana.rotation(45);
 moana.color(Color('gray17'));
@@ -59,18 +60,18 @@ maui.moveto(pos1=Location(200, 100));
 crazy_waffle.moveto(600, 350)
 tester_square = Rectangle(screen, 600, 350, 10, 10)
 
-mrspace = Image(screen, 'featuredspace_logo.png', screen.width() / 2, screen.height() / 2);
+mrspace = Image(screen, '../images/featuredspace_logo.png', screen.width() / 2, screen.height() / 2);
 mrspace.width(50);
 mrspace.height(50)
 
 mrspace.move(-mrspace.width() / 2, -mrspace.height() / 2);
 mrspace.color(Color('red'))
 
-cool_barry = Image(screen, 'cool_barry.jpg', screen.width() / 3, screen.height() / 2, 150, 150);
+cool_barry = Image(screen, '../images/cool_barry.jpg', screen.width() / 3, screen.height() / 2, 150, 150);
 
 print(f'Screen Size: {screen.size()}')
 
-mrspace.rotation(45)
+mrspace.rotation(45);
 # mrspace.border(Color('green'));
 
 state = True;
@@ -83,7 +84,9 @@ def mousedown(button, location):
     global state;
     print('Mousedown detected', button, location);
     crazy_waffle.rotate(5 if state else -5);
-    crazy_waffle.move(10, -10)
+    crazy_waffle.move(10, -10);
+    barry.lookat(mrspace);
+    text.lookat(barry);
 
     if button == 3:
         print('grabbed screen');

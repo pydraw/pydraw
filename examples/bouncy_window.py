@@ -3,7 +3,6 @@ from pydraw import *
 screen = Screen(800, 600)
 
 box1 = Rectangle(screen, screen.width() / 2 - 150, screen.height() / 2 - 250, 50, 50, color=Color('red'))
-
 box2 = Rectangle(screen, screen.width() / 2 - 250, screen.height() / 2 - 150, 50, 50, color=Color('blue'))
 
 box1_dx = 2
@@ -35,7 +34,6 @@ while running:
     if box1.overlaps(box2):
         box1.color(Color.random())
         box2.color(Color.random())
-
     
     screen.update()
     screen.sleep(fps / 1000)

@@ -1,15 +1,109 @@
+from pydraw.errors import *;
+
+
 class Location:
-    def __init__(self, x: float, y: float):
-        self._x = x;
-        self._y = y;
+    def __init__(self, *args, **kwargs):
+        location = (0, 0);
 
-    def move(self, dx: float, dy: float):
-        self._x += dx;
-        self._y += dy;
+        # Basically we don't have an empty tuple at the start.
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
+                              type(args[0]) is tuple and not len(args[0]) == 0):
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+                location = (args[0][0], args[0][1]);
+            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+                location = (args[0], args[1]);
+        elif len(kwargs) == 0:
+            raise InvalidArgumentError('Location constructor takes a tuple/location '
+                                       'or two numbers (x, y)!');
 
-    def moveto(self, x: float, y: float):
-        self._x = x;
-        self._y = y;
+        for (name, value) in kwargs.items():
+            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+                raise InvalidArgumentError('Location constructor takes a tuple/location '
+                                           'or two numbers (x, y)!');
+
+            if name.lower() == 'x':
+                location = (value, location[1]);
+            if name.lower() == 'y':
+                location = (location[0], value);
+
+        self._x = location[0];
+        self._y = location[1];
+
+    def move(self, *args, **kwargs):
+        """
+        Moves the location to a new location!
+
+        Can take two coordinates (x, y), a tuple, or a Location
+        :param x: the x to move to
+        :param y: the y to move to
+        :return: the location (after change)
+        """
+
+        diff = (0, 0);
+
+        # Basically we don't have an empty tuple at the start.
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is diff or
+                              type(args[0]) is tuple and not len(args[0]) == 0):
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is diff:
+                diff = (args[0][0], args[0][1]);
+            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+                diff = (args[0], args[1]);
+        elif len(kwargs) == 0:
+            raise InvalidArgumentError('move() takes a tuple/Location '
+                                       'or two numbers (dx, dy)!');
+
+        for (name, value) in kwargs.items():
+            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+                raise InvalidArgumentError('move() takes a tuple/Location '
+                                           'or two numbers (dx, dy)!');
+
+            if name.lower() == 'dx':
+                diff = (value, diff[1]);
+            if name.lower() == 'dy':
+                diff = (diff[0], value);
+
+        self._x += diff[0];
+        self._y += diff[1];
+
+        return self;
+
+    def moveto(self, *args, **kwargs):
+        """
+        Moves the location by a specified difference.
+
+        Can take two numbers (dx, dy), a tuple, or a Location
+        :param dx: the dx to move by
+        :param dy: the dy to move by
+        :return: the location (after change)
+        """
+
+        location = (self._x, self._y);
+
+        # Basically we don't have an empty tuple at the start.
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
+                              type(args[0]) is tuple and not len(args[0]) == 0):
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+                location = (args[0][0], args[0][1]);
+            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+                location = (args[0], args[1]);
+        elif len(kwargs) == 0:
+            raise InvalidArgumentError('moveto() takes a tuple/location '
+                                       'or two numbers (dx, dy)!');
+
+        for (name, value) in kwargs.items():
+            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+                raise InvalidArgumentError('moveto() takes a tuple/location '
+                                           'or two numbers (dx, dy)!');
+
+            if name.lower() == 'x':
+                location = (value, location[1]);
+            if name.lower() == 'y':
+                location = (location[0], value);
+
+        self._x = location[0];
+        self._y = location[1];
+
+        return self;
 
     def x(self, new_x: float = None) -> float:
         if new_x is not None:
@@ -47,3 +141,15 @@ class Location:
             return self._y;
         else:
             raise IndexError(f'Accessed index beyond x and y, index: {item}.');
+
+    def __len__(self):
+        return 2;  # Always 2!
+
+    def __eq__(self, other):
+        if type(other) is not Location and type(other) is not tuple:
+            return False;
+
+        if len(other) != 2:
+            return False;
+
+        return self.x() == other[0] and self.y() == other[1];

@@ -116,12 +116,13 @@ class Screen:
 
     def __init__(self, width=800, height=600, title="pydraw"):
         self._screen = turtle.Screen();
+        self._turtle = turtle;
         self._canvas = self._screen.cv;
         self._root = self._canvas.winfo_toplevel();
 
         # The only thing on the canvas is itself, so we prevent anything stupid from happening.
-        self._canvas.configure(scrollregion=self._canvas.bbox("all"));
-
+        # self._canvas.configure(scrollregion=self._canvas.bbox("all"));
+        self._turtle.mode('logo');
         self._screen.screensize(width, height);
         self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT);
         # This was not necessary as the canvas will align with the window's dimensions as set in the above line.
@@ -130,6 +131,9 @@ class Screen:
         self._title = title;
         self._color = Color('white')
 
+        self._objects = [];  # Store objects on the screen :)
+        self._fullscreen = False;
+
         self._screen.colormode(255);
 
         # store the mouse position
@@ -137,8 +141,11 @@ class Screen:
         self._gridlines = [];
         self._gridstate = False;  # grid is disabled by default
 
+        self._helpers = [];
+        self._helperstate = 0;
+
         # By default we want to make sure that all objects are drawn instantly.
-        self._screen.tracer(0);
+        self._screen.tracer(False);
         self._screen.update();
 
         # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler);
@@ -161,7 +168,7 @@ class Screen:
 
         return self._title;
 
-    def color(self, color: Color = None) -> None:
+    def color(self, color: Color = None) -> Color:
         """
         Set the background color of the screen.
         :param color: the color to set the background to
@@ -172,7 +179,6 @@ class Screen:
             self._color = color;
             self._screen.bgcolor(color.__value__());
         return self._color;
-
 
     def picture(self, pic: str) -> None:
         """
@@ -234,6 +240,45 @@ class Screen:
         except:
             return -1;  # Just return -1 because tkinter is shutting down
 
+    def center(self) -> Location:
+        """
+        Gets the center of the screen.
+        """
+        return Location(self.width() / 2, self.height() / 2);
+
+    # noinspection PyMethodMayBeStatic
+    def top_left(self) -> Location:
+        """
+        Returns the top left corner of the screen
+        :return: Location
+        """
+
+        return Location(0, 0);
+
+    def top_right(self) -> Location:
+        """
+        Returns the top right corner of the screen
+        :return: Location
+        """
+
+        return Location(self.width(), 0);
+
+    def bottom_left(self) -> Location:
+        """
+        Returns the bottom left corner of the screen
+        :return: Location
+        """
+
+        return Location(0, self.height());
+
+    def bottom_right(self) -> Location:
+        """
+        Returns the bottom right corner of the screen
+        :return: Location
+        """
+
+        return Location(self.width(), self.height());
+
     def mouse(self) -> Location:
         """
         Get the current mouse-position
@@ -256,12 +301,15 @@ class Screen:
         self._screen.listen();  # keep us nice and listening :)
         return text;
 
-    def grid(self, rows: int = None, cols: int = None, cellsize: tuple = (50, 50)):
-        from pydraw import Line;
+    def grid(self, rows: int = None, cols: int = None, cellsize: tuple = (50, 50), helpers: bool = True):
+        from pydraw import Line, Text;
 
         if len(self._gridlines) > 0:
             [line.remove() for line in self._gridlines];
             self._gridlines.clear();
+        if len(self._helpers) > 0:
+            [helper.remove() for helper in self._helpers];
+            self._helpers.clear();
         self._gridstate = True;
 
         if rows is not None:
@@ -269,13 +317,32 @@ class Screen:
         if cols is not None:
             cellsize = (cellsize[0], self.width() / cols);
 
+        if helpers:
+            textsize = int((self.width() + self.height() / 2) / 70);  # Text size is proportionate to screensize.
+
         for row in range(int(cellsize[1]), int(self.height()), int(cellsize[1])):
-            self._gridlines.append(Line(self, Location(0, row), Location(self.width(), row),
-                                        color=Color('lightgray')));
+            line = Line(self, Location(0, row), Location(self.width(), row),
+                                        color=Color('lightgray'));
+            self._gridlines.append(line);
+            self._objects.remove(line);  # Don't want this in our objects list :)
+
+            if helpers:
+                helper = Text(self, str(row), 15, row, color=Color('gray'), size=textsize);
+                helper.move(-helper.width() / 2, -helper.height() / 2);
+                self._helpers.append(helper);
+                self._objects.remove(helper);
 
         for col in range(int(cellsize[0]), int(self.width()), int(cellsize[0])):
-            self._gridlines.append(Line(self, Location(col, 0), Location(col, self.height()),
-                                        color=Color('lightgray')));
+            line = Line(self, Location(col, 0), Location(col, self.height()),
+                                        color=Color('lightgray'));
+            self._gridlines.append(line);
+            self._objects.remove(line);  # Don't want this in our objects list :)
+
+            if helpers:
+                helper = Text(self, str(col), col, 10, color=Color('gray'), size=textsize);
+                helper.move(-helper.width() / 2, -helper.height() / 2);
+                self._helpers.append(helper);
+                self._objects.remove(helper);
 
     def toggle_grid(self, value=None):
         if value is None:
@@ -285,6 +352,41 @@ class Screen:
             self.grid();  # Create a grid if one does not exist.
 
         [line.visible(value) for line in self._gridlines];
+        [helper.visible(value) for helper in self._helpers];
+
+    def gridlines(self) -> tuple:
+        """
+        Allows you to retrieve the lines of the grid, but note that you cannot modify them!
+        :return: a tuple (immutable list) of the gridlines.
+        """
+
+        return tuple(self._gridlines);
+
+    def _redraw_grid(self):
+        """
+        An internal method to redraw the grid to the screen after screen.clear() is called.
+        """
+        from pydraw import Line, Text;
+
+        new_lines = [];
+        for line in self._gridlines:
+            new_line = Line(self, line.pos1(), line.pos2(), color=line.color());
+            line.remove();
+            self._objects.remove(new_line);  # Still don't want this in the main objects list.
+            new_lines.append(new_line);
+
+        new_helpers = [];
+        for helper in self._helpers:
+            new_helper = Text(self, helper.text(), helper.x(), helper.y(), color=helper.color(), size=helper.size());
+            helper.remove();
+            self._objects.remove(new_helper);
+            new_helpers.append(new_helper);
+
+        self._gridlines.clear();
+        self._gridlines = new_lines;
+
+        self._helpers.clear();
+        self._helpers = new_helpers;
 
     def grab(self, filename: str = None) -> str:
         """
@@ -313,8 +415,31 @@ class Screen:
             ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename);
             return filename;
         except:
-            raise UnsupportedError('As PIL is not installed, you cannot grab the screen! ' 
+            raise UnsupportedError('As PIL is not installed, you cannot grab the screen! '
                                    'Install Pillow via: \'pip install pillow\'.');
+
+    def fullscreen(self, fullscreen: bool = None) -> bool:
+        """
+        Get or set the fullscreen state of the application. Note that this will not resize your shapes, nor
+        will it REPOSITION them. It is highly recommended that you call this method before creating any shapes!
+        :param fullscreen: the new fullscreen state, if any
+        :return: the current fullscreen state of the Screen
+        """
+
+        if fullscreen is not None:
+            self._fullscreen = fullscreen;
+            self._root.attributes("-fullscreen", fullscreen);
+
+        return self._fullscreen;
+
+    def _add(self, obj) -> None:
+        """
+        Internal method which adds object to a list upon construction.
+        :param obj: the object to add.
+        :return: None
+        """
+
+        self._objects.append(obj);
 
     # noinspection PyProtectedMember
     def remove(self, obj):
@@ -322,10 +447,23 @@ class Screen:
         if isinstance(obj, Renderable) and not isinstance(obj, CustomRenderable):
             obj._ref.reset();
             obj._ref.ht();
+            self._objects.remove(obj);
             del obj;
         else:
             self._screen.cv.delete(obj._ref);
+            if obj in self._objects:
+                self._objects.remove(obj);
+            elif obj not in self._gridlines and obj not in self._helpers:
+                raise ValueError(f'Object: {obj} is not registered with the screen? Did you call the constructor?');
             del obj;
+
+    def objects(self) -> tuple:
+        """
+        Retrieves all objects on the Screen!
+        :return: A tuple (immutable list) of Objects (you will want to check types for certain methods!)
+        """
+
+        return tuple(self._objects);
 
     # noinspection PyProtectedMember
     def front(self, obj):
@@ -343,6 +481,9 @@ class Screen:
 
         try:
             self._screen.clear();
+            if self._gridstate:
+                self._redraw_grid();  # Redraw the grid if it was active.
+            self.color(self._color);  # Redraw the color of the screen.
         except (tk.TclError, AttributeError):
             pass;  # We silently stop TclErrors from appearing to users.
 
@@ -367,15 +508,29 @@ class Screen:
             # If we experience the termination exception, we will print the termination of the program
             # and exit the python program.
             print('Terminated.');
-            exit(1);
+            exit(0);
+
+    def stop(self) -> None:
+        """
+        Holds the screen and all objects and prevents the window from closing.
+        (Best used in place of a while loop if the program is simply drawing shapes with no change over time)
+        :return: None
+        """
+
+        self.update();
+        self._turtle.done();
 
     def exit(self) -> None:
         """
-        You must call this method to have the window properly exit.
+        Called at the end of pydraw programs as an event for succesful program execution and termination.
+        For something similar to turtle.done() see Screen.stop()
         :return: None
         """
+
         self._screen.clear();
-        turtle.done();
+        self.stop();
+        self._root.destroy();
+        exit(0);
 
     def _colorstr(self, color: Color) -> str:
         """

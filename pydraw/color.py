@@ -48,9 +48,9 @@ class Color:
                 self._mode = 2;
 
                 rgb = self._rgb(self);
-                self._r = int(rgb[0] / 256);
-                self._g = int(rgb[1] / 256);
-                self._b = int(rgb[2] / 256);
+                self._r = int(rgb[0]);
+                self._g = int(rgb[1]);
+                self._b = int(rgb[2]);
             else:
                 self._name = string;
                 self._mode = 1;
@@ -118,6 +118,14 @@ class Color:
         """
         return self._hex_value;
 
+    def clone(self):
+        """
+        Clone this color!
+        :return: a clone.
+        """
+
+        return Color(self.__value__());
+
     def __str__(self):
         if self._mode == 0:
             string = f'({self._r, self._g, self._b})';
@@ -127,6 +135,12 @@ class Color:
             string = self._hex_value;
 
         return string;
+
+    def __eq__(self, other):
+        if type(other) is not Color:
+            return False;
+
+        return other.rgb() == self.rgb();
 
     @staticmethod
     def _rgb(color) -> tuple:
@@ -142,9 +156,15 @@ class Color:
             except tk.TclError:
                 raise PydrawError('Color-string does not exist: ', color.name());
         elif color.hex() is not None:
-            if len(color.hex()) != 7:
-                raise InvalidArgumentError('A color hex must be six characers long. Ex: "#FFFFFF"');
             hexval = color.hex().replace('#', '');
+
+            if len(hexval) != 6:
+                if len(hexval) == 3:
+                    hexval = ''.join([char * 2 for char in hexval]);  # Optimized string manipulation.
+                else:
+                    raise InvalidArgumentError('A color hex must be six or three characers long. '
+                                               'Ex: "#FFFFFF" or "#FFF"');
+
             rgb = tuple(int(hexval[i:i + 2], 16) for i in (0, 2, 4));
         else:
             rgb = (color.red(), color.green(), color.blue());
@@ -153,12 +173,22 @@ class Color:
     
     @staticmethod
     def all():
-        return COLORS
+        """
+        Get all color values that have a string-name.
+        :return: a tuple (immutable list) of all Colors.
+        """
+
+        return tuple(COLORS.copy());
 
     @staticmethod
     def random():
+        """
+        Retrieve a random Color.
+        :return: returns
+        """
+
         import random
-        return random.choice(Color.all())
+        return random.choice(COLORS).clone();
 
     def __repr__(self):
         return self.__str__();

@@ -7,6 +7,7 @@ Objects in the PyDraw library
 import turtle;
 import tkinter as tk;
 import math;
+from typing import Union;
 
 # from pydraw.errors import *;  # util gives us our errors for us :)
 from pydraw.util import *;
@@ -29,6 +30,9 @@ class Object:
 
         self._screen = screen;
         self._location = location if location is not None else Location(x, y);
+
+        # noinspection PyProtectedMember
+        self._screen._add(self);
 
         if isinstance(self, Renderable):
             self._ref = turtle.Turtle();
@@ -58,29 +62,7 @@ class Object:
         :return: None
         """
 
-        diff = (0, 0);
-
-        # Basically we don't have an empty tuple at the start.
-        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
-                              type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
-                diff = (args[0][0], args[0][1]);
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
-                diff = (args[0], args[1]);
-            else:
-                raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!');
-
-        for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('Object#move() must take either a tuple/location '
-                                           'or two numbers (dx, dy)!');
-
-            if name.lower() == 'dx':
-                diff = (value, diff[1]);
-            if name.lower() == 'dy':
-                diff = (diff[0], value);
-
-        self._location.move(diff[0], diff[1]);
+        self._location.move(*args, **kwargs);
         self.update();
 
     def moveto(self, *args, **kwargs) -> None:
@@ -89,27 +71,7 @@ class Object:
         :return: None
         """
 
-        location = self._location;
-
-        # Basically we don't have an empty tuple at the start.
-        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
-                              type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
-                location = Location(args[0][0], args[0][1]);
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
-                location = Location(args[0], args[1]);
-
-        for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('Object#move() must take either a tuple/location '
-                                           'or two numbers (dx, dy)!');
-
-            if name.lower() == 'x':
-                location = Location(value, location.y());
-            if name.lower() == 'y':
-                location = Location(location.x(), value);
-
-        self._location.moveto(location.x(), location.y());
+        self._location.moveto(*args, **kwargs);
         self.update();
 
     def _get_real_location(self):
@@ -237,7 +199,20 @@ class Renderable(Object):
         """
 
         verify(angle_diff, (float, int));
-        self.rotation(self._angle - angle_diff);
+        self.rotation(self._angle + angle_diff);
+
+    def lookat(self, obj):
+        if isinstance(obj, Object):
+            obj = obj.location();
+        elif type(obj) is not Location and type(obj) is not tuple:
+            raise InvalidArgumentError('Renderable#lookat() must be passed either a renderable or a location!')
+
+        location = Location(obj[0], obj[1]);
+
+        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) - math.radians(self.rotation());
+        theta = math.degrees(theta);
+
+        self.rotate(theta);
 
     def border(self, color: Color = None, fill: bool = None) -> Color:
         """
@@ -483,8 +458,8 @@ class Renderable(Object):
             :param point3: the third point to check from another line segment
             :return: the orientation of the passed points
             """
-            result = (point2.y() - point1.y() * (point3.x() - point2.x())) - \
-                     ((point2.x() - point1.x()) * (point3.y() - point2.y()));
+            result = (float(point2.y() - point1.y()) * (point3.x() - point2.x())) - \
+                  (float(point2.x() - point1.x()) * (point3.y() - point2.y()));
 
             if result > 0:
                 return 'clockwise';
@@ -508,9 +483,12 @@ class Renderable(Object):
         shape1_edges = [];
         shape2_edges = [];
 
+        shape1 = tuple(shape1[:]) + (shape1[0],);
+        shape2 = tuple(shape2[:]) + (shape2[0],);
+
         shape1_point1 = shape1[0];
         for i in range(1, len(shape1)):
-            shape1_point2 = shape1[i % len(shape1)];
+            shape1_point2 = shape1[i % len(shape1)];  # 1, 2, 3, 3 % 5
             shape1_edges.append((shape1_point1, shape1_point2));
             shape1_point1 = shape1_point2;
 
@@ -528,21 +506,22 @@ class Renderable(Object):
                 orientation3 = orientation(edge2[0], edge2[1], edge1[0]);
                 orientation4 = orientation(edge2[0], edge2[1], edge1[1]);
 
+
                 # If orientations 1 and 2 are different as well as 3 and 4 then they intersect!
                 if orientation1 != orientation2 and orientation3 != orientation4:
                     return True;
 
                 # There's some special cases we should check where a point from one segment is on the other segment
-                if orientation1 == 0 and point_on_segment(edge1[0], edge2[0], edge1[1]):
+                if orientation1 == 'co-linear' and point_on_segment(edge1[0], edge2[0], edge1[1]):
                     return True;
 
-                if orientation2 == 0 and point_on_segment(edge1[0], edge2[1], edge1[1]):
+                if orientation2 == 'co-linear' and point_on_segment(edge1[0], edge2[1], edge1[1]):
                     return True;
 
-                if orientation3 == 0 and point_on_segment(edge2[0], edge1[0], edge1[1]):
+                if orientation3 == 'co-linear' and point_on_segment(edge2[0], edge1[0], edge2[1]):
                     return True;
 
-                if orientation4 == 0 and point_on_segment(edge2[0], edge1[1], edge2[1]):
+                if orientation4 == 'co-linear' and point_on_segment(edge2[0], edge1[1], edge2[1]):
                     return True;
 
         # If none of the above conditions were ever met we just return False. Hopefully we are correct xD.
@@ -587,7 +566,7 @@ class Renderable(Object):
         try:
             super().update();
             self._ref.shapesize(stretch_wid=self.height() / PIXEL_RATIO, stretch_len=self.width() / PIXEL_RATIO);
-            self._ref.setheading(-self._angle);
+            self._ref.setheading(self._angle);
 
             if self._visible:
                 self._ref.showturtle();
@@ -633,15 +612,45 @@ class Oval(Renderable):
                  location: Location = None):
         self._id = 'circle';
         self._wedges = PIXEL_RATIO;
+        self._slices = [];  # not using this for now
         super(Oval, self).__init__(screen, x, y, width, height, color, border, fill, rotation, visible, location);
         self._ref.shape('circle');
 
     def wedges(self, wedges: int) -> int:
+        verify(wedges, int);
+        if wedges < 20:
+            raise InvalidArgumentError('Ovals can be at least 20 wedges. If you need less, '
+                                       'just multiply your desired amount by 2 until it is above 20!');
+
         self._update_vertices(self._generate_vertices(PIXEL_RATIO / 2, wedges=wedges));
         self._wedges = wedges;
         self.update();
 
         return self._wedges;
+
+    def slices(self) -> tuple:
+        """
+        Gets the slices of the Oval based on wedges. Note that this generates slices that are not tied to the oval,
+        these are simply slices of the oval based on its wedges. You can use them how you see fit.
+        :return: a tuple (immutable list) of CustomPolygons
+        """
+
+        return self._generate_slices();
+
+    def _generate_slices(self) -> list:
+
+        shape = self.vertices();
+        shape = tuple(shape[:]) + (shape[0],);
+
+        slices = [];
+        for i in range(0, len(shape) - 1):
+            vertex1 = shape[i];
+            vertex2 = self.center();
+            vertex3 = shape[i + 1];
+
+            slc = CustomPolygon(self._screen, [vertex1, vertex2, vertex3], self.color());
+            slices.append(slc);
+        return slices;
 
     @staticmethod
     def _generate_vertices(radius, angle_diff: float = 18, wedges: int = None):
@@ -774,9 +783,10 @@ class CustomPolygon(CustomRenderable):
 
         self._numsides = len(real_vertices);
         self._vertices = real_vertices;
+        self._current_vertices = self._vertices;
         self._location = Location(xmin, ymin);
-        self._width = xmin + (xmax - xmin) / 2;
-        self._height = ymin + (ymax - ymin) / 2;
+        self._width = xmax - xmin;
+        self._height = ymax - ymin;
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in real_vertices:
@@ -800,32 +810,10 @@ class CustomPolygon(CustomRenderable):
         :return: None
         """
 
-        diff = (0, 0);
-
-        # Basically we don't have an empty tuple at the start.
-        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
-                              type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
-                diff = (args[0][0], args[0][1]);
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
-                diff = (args[0], args[1]);
-            else:
-                raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!');
-
-        for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('Object#move() must take either a tuple/location '
-                                           'or two numbers (dx, dy)!');
-
-            if name.lower() == 'dx':
-                diff = (value, diff[1]);
-            if name.lower() == 'dy':
-                diff = (diff[0], value);
-
         for vertice in self._vertices:
-            vertice.move(diff[0], diff[1]);
+            vertice.move(*args, **kwargs);
 
-        self._location.move(diff[0], diff[1]);
+        self._location.move(*args, **kwargs);
         self.update();
 
     def moveto(self, *args, **kwargs):
@@ -865,7 +853,10 @@ class CustomPolygon(CustomRenderable):
         """
 
         if width is not None:
-            raise UnsupportedError('Modifying the width/height of CustomPolygons is not currently possible');
+            verify(width, (float, int));
+            self._width = width;
+            self.update();
+            # raise UnsupportedError('Modifying the width/height of CustomPolygons is not currently possible');
 
         return self._width;
 
@@ -877,7 +868,10 @@ class CustomPolygon(CustomRenderable):
         """
 
         if height is not None:
-            raise UnsupportedError('Modifying the width/height of CustomPolygons is not currently possible');
+            verify(height, (float, int))
+            self._height = height;
+            self.update();
+            # raise UnsupportedError('Modifying the width/height of CustomPolygons is not currently possible');
 
         return self._height;
 
@@ -890,13 +884,16 @@ class CustomPolygon(CustomRenderable):
         if self._angle >= 360:
             self._angle = self._angle - 360;
 
-        self._rotate(self._angle);
-        self._rotate(fake_angle);  # TODO: THIS IS A HACK. I HAVE NO CLUE WHY IT WORKS.
+        self.update();
+
+        # self._rotate(self._angle);
+        # self._rotate(fake_angle);  # TODO: THIS IS A HACK. I HAVE NO CLUE WHY IT WORKS.
 
     def rotation(self, angle: float = None) -> float:
         if angle is not None:
             verify(angle, (float, int));
-            self.rotate(angle - self._angle);
+            self._angle = angle;
+            self.update();
 
         return self._angle;
 
@@ -921,7 +918,7 @@ class CustomPolygon(CustomRenderable):
         return Location(centroid_x, centroid_y);
 
     def vertices(self) -> list:
-        return self._vertices;
+        return self._current_vertices.copy();
 
     def clone(self):
         """
@@ -932,28 +929,22 @@ class CustomPolygon(CustomRenderable):
                              self._visible);
 
     def transform(self, transform: tuple = None) -> tuple:
-        raise UnsupportedError('Renderable#transform() is not supported for CustomPolygon!');
+        if transform is not None:
+            raise UnsupportedError('Setting Renderable#transform() is not supported for CustomPolygon!');
 
-    def _rotate(self, angle: float) -> None:
+        return self.width(), self.height(), self.rotation();
+
+    def _rotate(self, angle: float) -> list:
         # We have to update here since we cannot remember previous rotations (update method call won't cut it)!
-        vertices = self.vertices();
+        vertices = self._current_vertices;
 
         # First get some values that we gonna use later
         theta = math.radians(angle);
         cosine = math.cos(theta);
         sine = math.sin(theta);
 
-        # We gonna create a centroid so we can rotate the points around a realistic center
-        # Sorry for those of you that get weird rotations..
-        x_list = [];
-        y_list = [];
-        for vertex in vertices:
-            x_list.append(vertex.x());
-            y_list.append(vertex.y());
-
-        # Create a simple centroid (not full centroid)
-        centroid_x = sum(x_list) / len(y_list);
-        centroid_y = sum(y_list) / len(x_list);
+        centroid_x = self.center().x();
+        centroid_y = self.center().y();
 
         new_vertices = []
         for vertex in vertices:
@@ -965,8 +956,7 @@ class CustomPolygon(CustomRenderable):
             new_y = (old_x * sine + old_y * cosine) + centroid_y;
             new_vertices.append(Location(new_x, new_y));
 
-        self._vertices = new_vertices;
-        self.update();
+        return new_vertices;
 
     def update(self):
         old_ref = self._ref;
@@ -989,15 +979,28 @@ class CustomPolygon(CustomRenderable):
 
         self._numsides = len(self._vertices);
         self._location = Location(xmin, ymin);
-        self._width = xmin + (xmax - xmin) / 2;
-        self._height = ymin + (ymax - ymin) / 2;
+
+        width = xmax - xmin;
+        height = ymax - ymin;
+
+        cx = xmin + (width / 2);
+        cy = ymin + (height / 2);
+
+        # calculate the scaling factor
+        scale_factor = (self._width / width, self._height / height);
+
+        self._current_vertices = self._vertices.copy();
+        for vertex in self._current_vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, scale_factor[1] * (vertex.y() - cy) + cy);
+            vertex.move(dx=(self._width - width) / 2);
+            vertex.move(dy=(self._height - height) / 2);
+
+        self._current_vertices = self._rotate(self._angle);
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
-        for vertex in self._vertices:
+        for vertex in self._current_vertices:
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
                                 (vertex.y() - (self._screen.height() / 2))));
-            # tk_vertices.append((self.x() - ((self._screen.width() / 2) + 1),
-            #                                 (self.y() - (self._screen.height() / 2)) + self.height()));
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
@@ -1174,17 +1177,33 @@ class Image(Renderable):
         :return: a list of Locations representing the vertices
         """
 
-        # TODO: Fix this to account for angle
+        vertices = [self.location(), Location(self.x() + self.width(), self.y()),
+                    Location(self.x() + self.width(), self.y() + self.height()),
+                    Location(self.x(), self.y() + self.height())];
 
         if self._angle != 0:
-            raise UnsupportedError('Calling .overlaps() or .contains() on an image with a rotation'
-                                   'is not currently possible with pydraw! This feature should be aded soon,'
-                                   'but if you\'d like to voice your support for such a feature, please visit:'
-                                   'https://github.com/pydraw/pydraw/issues and submit an issue! :)');
 
-        return [self.location(), Location(self.x() + self.width(), self.y()),
-                Location(self.x() + self.width(), self.y() + self.height()),
-                Location(self.x(), self.y() + self.height())];
+            # First get some values that we gonna use later
+            theta = math.radians(self._angle);
+            cosine = math.cos(theta);
+            sine = math.sin(theta);
+
+            center_x = self.center().x();
+            center_y = self.center().y();
+
+            new_vertices = []
+            for vertex in vertices:
+                # We have to create these separately because they're ironically used in each others calculations xD
+                old_x = vertex.x() - center_x;
+                old_y = vertex.y() - center_y;
+
+                new_x = (old_x * cosine - old_y * sine) + center_x;
+                new_y = (old_x * sine + old_y * cosine) + center_y;
+                new_vertices.append(Location(new_x, new_y));
+
+            vertices = new_vertices;
+
+        return vertices;
 
     @staticmethod
     def _monkey_patch_del():
@@ -1454,7 +1473,7 @@ class Text(Object):
 
     def rotation(self, rotation: float = None) -> float:
         """
-        Get or set the rotation of the text
+        Get or set the rotation of the text [Inconsistency: ROTATES AROUND TOP LEFT]
         :param rotation: the strikethrough to set to, if any
         :return: the rotation of the text
         """
@@ -1468,13 +1487,24 @@ class Text(Object):
 
     def rotate(self, angle_diff: float = 0) -> None:
         """
-        Rotate the angle of the text by a difference, in degrees
+        Rotate the angle of the text by a difference, in degrees [Inconsistency: ROTATES AROUND TOP LEFT]
         :param angle_diff: the angle difference to rotate by
-        :return: None
+        :return: Nonea
         """
 
         verify(angle_diff, (float, int));
         self.rotation(self._angle + angle_diff);
+
+    def lookat(self, obj):
+        if isinstance(obj, Object):
+            obj = obj.location();
+        elif type(obj) is not Location:
+            raise InvalidArgumentError('Renderable#lookat() must be passed either a renderable or a location!')
+
+        theta = math.atan2(obj.y() - self.y(), obj.x() - self.x()) - math.radians(self.rotation());
+        theta = math.degrees(theta);
+
+        self.rotate(theta);
 
     def visible(self, visible: bool = None) -> bool:
         """
@@ -1512,24 +1542,27 @@ class Text(Object):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        self._ref = self._screen._screen.cv.create_text(self.x() - ((self._screen.width() / 2) + 1),
-                                                        (self.y() - (self._screen.height() / 2)),
-                                                        text=self.text(),
-                                                        anchor=Text._anchor,
-                                                        justify=Text._aligns[self.align()],
-                                                        fill=self._screen._colorstr(self._color),
-                                                        font=font_data,
-                                                        state=state,
-                                                        angle=-self._angle);
-        self._screen._screen.cv.tag_lower(self._ref, old_ref);
-        self._screen._screen.cv.delete(old_ref);
+        try:
+            self._ref = self._screen._screen.cv.create_text(self.x() - ((self._screen.width() / 2) + 1),
+                                                            (self.y() - (self._screen.height() / 2)),
+                                                            text=self.text(),
+                                                            anchor=Text._anchor,
+                                                            justify=Text._aligns[self.align()],
+                                                            fill=self._screen._colorstr(self._color),
+                                                            font=font_data,
+                                                            state=state,
+                                                            angle=-self._angle);
+            self._screen._screen.cv.tag_lower(self._ref, old_ref);
+            self._screen._screen.cv.delete(old_ref);
 
-        if self._visible:
-            x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
-            self._width = x1 - x0;
-            self._height = y1 - y0;
+            if self._visible:
+                x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
+                self._width = x1 - x0;
+                self._height = y1 - y0;
 
-        self._screen._screen.cv.update();
+            self._screen._screen.cv.update();
+        except tk.TclError:
+            pass;
 
 
 class Line(Object):
@@ -1538,17 +1571,37 @@ class Line(Object):
         super().__init__(screen);
         self._screen = screen;
 
-        if len(args) == 2 and (type(arg) is tuple or type(arg) is Location for arg in args):
-            self._pos1 = Location(args[0][0], args[0][1]);
-            self._pos2 = Location(args[1][0], args[1][1]);
-        elif len(args) == 4 and (type(arg) is float or type(arg) is int for arg in args):
-            self._pos1 = Location(args[0], args[1]);
-            self._pos2 = Location(args[2], args[3]);
-        else:
+        if len(args) == 0:
             raise InvalidArgumentError('Incorrect Argumentation: Line requires either two Locations, tuples, or four '
                                        'numbers (x1, y1, x2, y2).');
+        elif len(args) >= 2:
+            if len(args) >= 4 and [type(arg) is float or type(arg) is int for arg in args[0:4]]:
+                self._pos1 = Location(args[0], args[1]);
+                self._pos2 = Location(args[2], args[3]);
+                excess = args[4:];
+            elif [type(arg) is tuple or type(arg) is Location for arg in args[0:2]]:
+                self._pos1 = Location(args[0][0], args[0][1]);
+                self._pos2 = Location(args[1][0], args[1][1]);
+                excess = args[2:];
 
-        self._color = color;
+        if len(excess) > 0:
+            count = 0;
+            for arg in excess:
+                if count == 0:
+                    verify(arg, Color);
+                    color = arg;
+                elif count == 1:
+                    verify(arg, int);
+                    thickness = arg;
+                elif count == 2:
+                    verify(arg, (int, tuple));
+                    dashes = arg;
+                elif count == 3:
+                    verify(arg, bool);
+                    visible = arg;
+                count += 1;
+
+        self._color = color
         self._thickness = thickness;
         self._dashes = dashes;
         self._visible = visible;
@@ -1825,7 +1878,7 @@ class Line(Object):
 
         return self._thickness;
 
-    def dashes(self, dashes: bool = None) -> bool:
+    def dashes(self, dashes: int = None) -> Union[int, tuple]:
         """
         Retrive or enable/disable the dashes for the line
         :param dashes: the visibility to set to, if any
@@ -1833,7 +1886,7 @@ class Line(Object):
         """
 
         if dashes is not None:
-            verify(dashes, bool);
+            verify(dashes, int);
             self._dashes = dashes;
             self.update();
 
