@@ -564,8 +564,8 @@ class Renderable(Object):
         # noinspection PyBroadException
         try:
             super().update();
-            self._ref.shapesize(stretch_wid=self.height() / PIXEL_RATIO, stretch_len=self.width() / PIXEL_RATIO);
-            self._ref.setheading(self._angle + 90);
+            self._ref.shapesize(stretch_wid=self.width() / PIXEL_RATIO, stretch_len=self.height() / PIXEL_RATIO);
+            self._ref.setheading(self._angle);
 
             if self._visible:
                 self._ref.showturtle();
