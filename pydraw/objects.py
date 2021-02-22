@@ -627,7 +627,7 @@ class Oval(Renderable):
 
         return self._wedges;
 
-    def slices(self) -> tuple:
+    def slices(self) -> list:
         """
         Gets the slices of the Oval based on wedges. Note that this generates slices that are not tied to the oval,
         these are simply slices of the oval based on its wedges. You can use them how you see fit.
@@ -878,15 +878,11 @@ class CustomPolygon(CustomRenderable):
         verify(angle_diff, (float, int));
 
         self._angle += angle_diff;
-        fake_angle = self._angle - angle_diff;
 
         if self._angle >= 360:
             self._angle = self._angle - 360;
 
         self.update();
-
-        # self._rotate(self._angle);
-        # self._rotate(fake_angle);  # TODO: THIS IS A HACK. I HAVE NO CLUE WHY IT WORKS.
 
     def rotation(self, angle: float = None) -> float:
         if angle is not None:
@@ -1240,7 +1236,8 @@ class Image(Renderable):
                     gray = ImageOps.grayscale(image)
                     result = ImageOps.colorize(gray, (0, 0, 0, 0),
                                                (
-                                               self._color.red(), self._color.green(), self._color.blue(), self._mask));
+                                                   self._color.red(), self._color.green(), self._color.blue(),
+                                                   self._mask));
                     result.putalpha(alpha);
                     image = result;
 
@@ -1276,7 +1273,7 @@ class Text(CustomRenderable):
     _aligns = {'left': tk.LEFT, 'center': tk.CENTER, 'right': tk.RIGHT};
 
     # noinspection PyProtectedMember
-    def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),
+    def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
                  font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
                  underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
         self._screen = screen;
@@ -1363,6 +1360,7 @@ class Text(CustomRenderable):
 
         return self._text;
 
+    # noinspection PyMethodOverriding
     def width(self) -> float:
         """
         Get the width of the text (cannot be modified)
@@ -1371,6 +1369,7 @@ class Text(CustomRenderable):
 
         return self._width;
 
+    # noinspection PyMethodOverriding
     def height(self) -> float:
         """
         Get the height of the text, (cannot be modified, although technically the font-size is the text's height)
@@ -1529,32 +1528,6 @@ class Text(CustomRenderable):
         self.rotate(theta);
 
     def vertices(self) -> list:
-        import tkinter.font as tkfont;
-
-        # Handle font and decorations
-        decorations = '';
-        if self.bold():
-            decorations += 'bold ';
-        if self.italic():
-            decorations += 'italic ';
-        if self.underline():
-            decorations += 'underline ';
-        if self.strikethrough():
-            decorations += 'overstrike ';
-
-        # we use negative font size to change from point font-size to pixel font-size.
-        font_data = (self.font(), -self.size(), decorations);
-
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
-
-        # hypotenuse = true_width / 2;
-        # radians = math.radians(self._angle);
-        #
-        # dx = math.cos(radians) * hypotenuse;
-        # dy = math.sin(radians) * hypotenuse;
-
         # First get some values that we gonna use later
         theta = math.radians(self._angle);
         cosine = math.cos(theta);
@@ -1580,8 +1553,6 @@ class Text(CustomRenderable):
         if self._angle != 0:
             vertices = new_vertices;
 
-        print(vertices);
-
         return vertices;
 
     def visible(self, visible: bool = None) -> bool:
@@ -1597,6 +1568,29 @@ class Text(CustomRenderable):
             self.update();
 
         return self._visible;
+
+    def transform(self, transform: tuple = None) -> tuple:
+        """
+        Retrieve the transform of the text
+        :param transform: Unsupported.
+        :return: a tuple with representing: (width, height, angle)
+        """
+
+        if transform is not None:
+            raise UnsupportedError('This feature has yet to be implemented for Text');
+
+        return self.width(), self.height(), self.rotation();
+
+    def clone(self):
+        """
+        Clone this text!
+        :return: A cloned text object!
+        """
+
+        return Text(self._screen, self._text, self.x(), self.y(), color=self._color, font=self._font, size=self._size,
+                    align=self._align, bold=self._bold, italic=self._italic,
+                    underline=self._underline, strikethrough=self._strikethrough,
+                    rotation=self._angle, visible=self._visible);
 
     # noinspection PyProtectedMember
     def update(self) -> None:
@@ -1648,10 +1642,6 @@ class Text(CustomRenderable):
             self._screen._screen.cv.tag_lower(self._ref, old_ref);
             self._screen._screen.cv.delete(old_ref);
 
-            # if self._visible:
-            #     x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
-            #     self._width = x1 - x0;
-            #     self._height = y1 - y0;
             self._width = true_width;
             self._height = true_height;
 
@@ -1669,10 +1659,7 @@ class Line(Object):
         super().__init__(screen);
         self._screen = screen;
 
-        if len(args) == 0:
-            raise InvalidArgumentError('Incorrect Argumentation: Line requires either two Locations, tuples, or four '
-                                       'numbers (x1, y1, x2, y2).');
-        elif len(args) >= 2:
+        if len(args) >= 2:
             if len(args) >= 4 and [type(arg) is float or type(arg) is int for arg in args[0:4]]:
                 self._pos1 = Location(args[0], args[1]);
                 self._pos2 = Location(args[2], args[3]);
@@ -1681,8 +1668,12 @@ class Line(Object):
                 self._pos1 = Location(args[0][0], args[0][1]);
                 self._pos2 = Location(args[1][0], args[1][1]);
                 excess = args[2:];
+        else:
+            raise InvalidArgumentError(
+                'Incorrect Argumentation: Line requires either two Locations, tuples, or four '
+                'numbers (x1, y1, x2, y2).');
 
-        if len(excess) > 0:
+        if len(excess) > 0:  # noqa
             count = 0;
             for arg in excess:
                 if count == 0:
@@ -1760,14 +1751,12 @@ class Line(Object):
     def move(self, *args, **kwargs) -> None:
         """
         Move both endpoints by the same dx and dy
+
+        Can take either a tuple, Location, or two numbers (dx, dy)
+
         :param dx: the distance x to move
         :param dy: the distance y to move
         :param point: affect only one of the endpoints; options: (1, 2), default=0 (Must be
-        :return: None
-        """
-
-        """
-        Can take either a tuple, Location, or two numbers (dx, dy)
         :return: None
         """
 
@@ -1942,6 +1931,7 @@ class Line(Object):
         Get the length of the line
         :return: the length of the line
         """
+
         return self._length(self.pos1().x(), self.pos2().x(), self.pos1().y(), self.pos2().y());
 
     @staticmethod
@@ -2010,6 +2000,11 @@ class Line(Object):
         :param transform:
         :return:
         """
+
+        if transform is not None:
+            raise UnsupportedError('This feature has yet to be implemented!');
+
+        return self.length(), self.rotation();
 
     def clone(self):
         """
