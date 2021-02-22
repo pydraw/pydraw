@@ -6,18 +6,20 @@ screen.toggle_grid();
 # screen.clear();
 screen.grid(helpers=True);
 
-marker = Oval(screen, screen.width() / 2, screen.height() / 2);
-
-text = Text(screen, 'Test Text', screen.width() / 2, screen.height() / 2, size=22, rotation=0);
-text.move(-text.width() / 2, -text.height() / 2);
-
-origin = Rectangle(screen, 0, 0, 10, 10)
-marker2 = Rectangle(screen, screen.width() - 10, screen.height() - 10, 10, 10);
+poly = Rectangle(screen, 50, 50, 100, 100);
 
 
-def mousedown(button, location):
-    # text.lookat(location);
-    print(text.contains(location))
+def keydown(key):
+    if key == 'r':
+        poly.rotate(1);
+    elif key == 'w':
+        poly.width(poly.width() + 10)
+    elif key == 'h':
+        poly.height(poly.height() + 10)
+    elif key == 'x':
+        poly.x(poly.x() + 10)
+    elif key == 'y':
+        poly.y(poly.y() + 10)
 
 
 screen.listen();
