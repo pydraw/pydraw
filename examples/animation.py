@@ -16,6 +16,7 @@ connection = Line(screen, screen.center(), satellite2.center(), Color('red'))
 
 earth = Image(screen, '../images/earth.png', screen.center().x(), screen.center().y(), 150, 150)
 earth.move(-earth.width() / 2, -earth.height() / 2)
+earth.color(Color('gray'))
 
 status_text = Text(screen, 'Status: Disconnected', 15, 15, color=Color('red'), font='Courier New',
                    size=10)
@@ -54,7 +55,7 @@ fps = 30
 running = True
 while running:
     satellite1.move(satellite1_dx, satellite1_dy)
-    satellite2.move(satellite2_dx, box2_dy)
+    satellite2.move(satellite2_dx, satellite2_dy)
 
     if satellite1.x() <= 0 or satellite1.x() + satellite1.width() >= screen.width():
         satellite1.move(dx=-satellite1_dx)
@@ -66,8 +67,8 @@ while running:
         satellite2.move(dx=-satellite2_dx)
         satellite2_dx = -satellite2_dx
     if satellite2.y() <= 0 or satellite2.y() + satellite2.height() >= screen.height():
-        satellite2.move(dy=-box2_dy)
-        box2_dy = -box2_dy
+        satellite2.move(dy=-satellite2_dy)
+        satellite2_dy = -satellite2_dy
 
     line1.pos2(satellite1.center())
     line2.pos2(satellite1.center())
@@ -85,6 +86,6 @@ while running:
     earth.rotate(-1)
 
     screen.update()
-    screen.sleep(1 / 1000)
+    screen.sleep(1 / fps)
 
 screen.exit()

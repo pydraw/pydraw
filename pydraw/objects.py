@@ -459,7 +459,7 @@ class Renderable(Object):
             :return: the orientation of the passed points
             """
             result = (float(point2.y() - point1.y()) * (point3.x() - point2.x())) - \
-                  (float(point2.x() - point1.x()) * (point3.y() - point2.y()));
+                     (float(point2.x() - point1.x()) * (point3.y() - point2.y()));
 
             if result > 0:
                 return 'clockwise';
@@ -505,7 +505,6 @@ class Renderable(Object):
                 orientation2 = orientation(edge1[0], edge1[1], edge2[1]);
                 orientation3 = orientation(edge2[0], edge2[1], edge1[0]);
                 orientation4 = orientation(edge2[0], edge2[1], edge1[1]);
-
 
                 # If orientations 1 and 2 are different as well as 3 and 4 then they intersect!
                 if orientation1 != orientation2 and orientation3 != orientation4:
@@ -1237,10 +1236,13 @@ class Image(Renderable):
                 image = Image.open(self._image_name).convert('RGBA');
 
                 if self._color is not None and self._color != Color.NONE:
-                    color_layer = Image.new('RGB', image.size,
-                                            (self._color.red(), self._color.green(), self._color.blue()));
-                    mask = Image.new('RGBA', image.size, (0, 0, 0, self._mask));
-                    image = Image.composite(image, color_layer, mask).convert('RGBA');
+                    r, g, b, alpha = image.split()
+                    gray = ImageOps.grayscale(image)
+                    result = ImageOps.colorize(gray, (0, 0, 0, 0),
+                                               (
+                                               self._color.red(), self._color.green(), self._color.blue(), self._mask));
+                    result.putalpha(alpha);
+                    image = result;
 
                 if self._border is not None:
                     image = ImageOps.expand(image, border=10, fill=self._border.rgb())
@@ -1269,10 +1271,7 @@ class Image(Renderable):
         super().update();
 
 
-# == NON RENDERABLES == #
-
-
-class Text(Object):
+class Text(CustomRenderable):
     _anchor = 'nw';  # sw technically means southwest but it means bottom left anchor. (we change to top left in code)
     _aligns = {'left': tk.LEFT, 'center': tk.CENTER, 'right': tk.RIGHT};
 
@@ -1280,7 +1279,10 @@ class Text(Object):
     def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),
                  font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
                  underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        super(Text, self).__init__(screen, x, y);
+        self._screen = screen;
+        self._location = Location(x, y);
+        self._screen._add(self);
+
         self._text = text if text is not None else '';
         self._color = color;
         self._font = font;
@@ -1313,8 +1315,23 @@ class Text(Object):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        self._ref = self._screen._screen.cv.create_text(self.x() - ((self._screen.width() / 2) + 1),
-                                                        (self.y() - (self._screen.height() / 2)),
+        import tkinter.font as tkfont;
+
+        font = tkfont.Font(font=font_data);
+        true_width = font.measure(self._text);
+        true_height = font.metrics('linespace');
+
+        hypotenuse = true_width / 2;
+        radians = math.radians(self._angle);
+
+        dx = math.cos(radians) * hypotenuse;
+        dy = math.sin(radians) * hypotenuse;
+
+        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
+        real_y = (self.y() - (self._screen.height() / 2)) - dy;
+
+        self._ref = self._screen._screen.cv.create_text(real_x,
+                                                        real_y,
                                                         text=self.text(),
                                                         anchor=Text._anchor,
                                                         justify=Text._aligns[self.align()],
@@ -1323,9 +1340,12 @@ class Text(Object):
                                                         state=state,
                                                         angle=-self._angle);
 
-        x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref);
-        self._width = x1 - x0;
-        self._height = y1 - y0;
+        # x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref);
+        # self._width = x1 - x0;
+        # self._height = y1 - y0;
+
+        self._width = true_width;
+        self._height = true_height;
 
         screen._screen.cv.update();
 
@@ -1473,7 +1493,7 @@ class Text(Object):
 
     def rotation(self, rotation: float = None) -> float:
         """
-        Get or set the rotation of the text [Inconsistency: ROTATES AROUND TOP LEFT]
+        Get or set the rotation of the text
         :param rotation: the strikethrough to set to, if any
         :return: the rotation of the text
         """
@@ -1487,7 +1507,7 @@ class Text(Object):
 
     def rotate(self, angle_diff: float = 0) -> None:
         """
-        Rotate the angle of the text by a difference, in degrees [Inconsistency: ROTATES AROUND TOP LEFT]
+        Rotate the angle of the text by a difference, in degrees
         :param angle_diff: the angle difference to rotate by
         :return: Nonea
         """
@@ -1498,13 +1518,71 @@ class Text(Object):
     def lookat(self, obj):
         if isinstance(obj, Object):
             obj = obj.location();
-        elif type(obj) is not Location:
-            raise InvalidArgumentError('Renderable#lookat() must be passed either a renderable or a location!')
+        elif type(obj) is not Location and type(obj) is not tuple:
+            raise InvalidArgumentError('Text#lookat() must be passed either a renderable or a location!')
 
-        theta = math.atan2(obj.y() - self.y(), obj.x() - self.x()) - math.radians(self.rotation());
-        theta = math.degrees(theta);
+        location = Location(obj[0], obj[1]);
+
+        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) - math.radians(self.rotation());
+        theta = math.degrees(theta) + 90;
 
         self.rotate(theta);
+
+    def vertices(self) -> list:
+        import tkinter.font as tkfont;
+
+        # Handle font and decorations
+        decorations = '';
+        if self.bold():
+            decorations += 'bold ';
+        if self.italic():
+            decorations += 'italic ';
+        if self.underline():
+            decorations += 'underline ';
+        if self.strikethrough():
+            decorations += 'overstrike ';
+
+        # we use negative font size to change from point font-size to pixel font-size.
+        font_data = (self.font(), -self.size(), decorations);
+
+        font = tkfont.Font(font=font_data);
+        true_width = font.measure(self._text);
+        true_height = font.metrics('linespace');
+
+        # hypotenuse = true_width / 2;
+        # radians = math.radians(self._angle);
+        #
+        # dx = math.cos(radians) * hypotenuse;
+        # dy = math.sin(radians) * hypotenuse;
+
+        # First get some values that we gonna use later
+        theta = math.radians(self._angle);
+        cosine = math.cos(theta);
+        sine = math.sin(theta);
+
+        centroid_x = self.center().x();
+        centroid_y = self.center().y();
+
+        vertices = [Location(self.x(), self.y()), Location(self.x() + self.width(), self.y()),
+                    Location(self.x() + self.width(), self.y() + self.height()),
+                    Location(self.x(), self.y() + self.height())];
+
+        new_vertices = []
+        for vertex in vertices:
+            # We have to create these separately because they're ironically used in each others calculations xD
+            old_x = vertex.x() - centroid_x;
+            old_y = vertex.y() - centroid_y;
+
+            new_x = (old_x * cosine - old_y * sine) + centroid_x;
+            new_y = (old_x * sine + old_y * cosine) + centroid_y;
+            new_vertices.append(Location(new_x, new_y));
+
+        if self._angle != 0:
+            vertices = new_vertices;
+
+        print(vertices);
+
+        return vertices;
 
     def visible(self, visible: bool = None) -> bool:
         """
@@ -1542,9 +1620,24 @@ class Text(Object):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
+        import tkinter.font as tkfont;
+
+        font = tkfont.Font(font=font_data);
+        true_width = font.measure(self._text);
+        true_height = font.metrics('linespace');
+
+        hypotenuse = true_width / 2;
+        radians = math.radians(self._angle);
+
+        dx = math.cos(radians) * hypotenuse;
+        dy = math.sin(radians) * hypotenuse;
+
+        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
+        real_y = (self.y() - (self._screen.height() / 2)) - dy;
+
         try:
-            self._ref = self._screen._screen.cv.create_text(self.x() - ((self._screen.width() / 2) + 1),
-                                                            (self.y() - (self._screen.height() / 2)),
+            self._ref = self._screen._screen.cv.create_text(real_x,
+                                                            real_y,
                                                             text=self.text(),
                                                             anchor=Text._anchor,
                                                             justify=Text._aligns[self.align()],
@@ -1555,14 +1648,19 @@ class Text(Object):
             self._screen._screen.cv.tag_lower(self._ref, old_ref);
             self._screen._screen.cv.delete(old_ref);
 
-            if self._visible:
-                x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
-                self._width = x1 - x0;
-                self._height = y1 - y0;
+            # if self._visible:
+            #     x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
+            #     self._width = x1 - x0;
+            #     self._height = y1 - y0;
+            self._width = true_width;
+            self._height = true_height;
 
             self._screen._screen.cv.update();
         except tk.TclError:
             pass;
+
+
+# == NON RENDERABLES == #
 
 
 class Line(Object):
@@ -1606,7 +1704,7 @@ class Line(Object):
         self._dashes = dashes;
         self._visible = visible;
 
-        verify(color, Color, thickness, int, dashes, bool, visible, bool);
+        verify(color, Color, thickness, int, dashes, (int, tuple), visible, bool);
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 

@@ -120,16 +120,24 @@ class Screen:
         self._canvas = self._screen.cv;
         self._root = self._canvas.winfo_toplevel();
 
+        self._root.resizable(False, False);  # No resizing!
+
+        self._width = width;
+        self._height = height;
+
         # The only thing on the canvas is itself, so we prevent anything stupid from happening.
         # self._canvas.configure(scrollregion=self._canvas.bbox("all"));
         self._turtle.mode('logo');
-        self._screen.screensize(width, height);
         self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT);
+        self._screen.screensize(width, height);
+        # self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT);
+        # self._canvas.configure(width=self._root.winfo_width(), height=self._root.winfo_height())
+        # self.update();
         # This was not necessary as the canvas will align with the window's dimensions as set in the above line.
 
         self._screen.title(title);
         self._title = title;
-        self._color = Color('white')
+        self._color = Color('white');
 
         self._objects = [];  # Store objects on the screen :)
         self._fullscreen = False;
@@ -429,6 +437,7 @@ class Screen:
         if fullscreen is not None:
             self._fullscreen = fullscreen;
             self._root.attributes("-fullscreen", fullscreen);
+            self.update();
 
         return self._fullscreen;
 

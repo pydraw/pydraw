@@ -52,7 +52,7 @@ fps = 30
 running = True
 while running:
     screen.update()  # We want to update the screen if we make any changes!
-    screen.sleep((1000 / fps) / 1000)  # Limit our updates by a certain time delay, in this case 30fps
+    screen.sleep(1 / fps)  # Limit our updates by a certain time delay, in this case 30fps
                                        # The argument is the delay in milliseconds
 
 screen.exit()  # Must be called at the end of a pydraw program
@@ -74,7 +74,7 @@ fps = 30
 running = True
 while running:
     screen.update()
-    screen.sleep((1000 / fps) / 1000)
+    screen.sleep(1 / fps)
 
 screen.exit()
 ```
@@ -113,7 +113,7 @@ fps = 30
 running = True
 while running:
     screen.update()
-    screen.sleep((1000 / fps) / 1000)
+    screen.sleep(1 / fps)
 
 screen.exit()
 ```

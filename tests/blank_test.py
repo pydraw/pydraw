@@ -6,29 +6,18 @@ screen.toggle_grid();
 # screen.clear();
 screen.grid(helpers=True);
 
-text = Text(screen, 'Barry', 150, 150);
+marker = Oval(screen, screen.width() / 2, screen.height() / 2);
 
-shape1 = Rectangle(screen, 0, 0, 150, 150, Color('black'), Color('red'));
-shape2 = Rectangle(screen, 50, 50, 150, 150, Color('black'), Color('red2'));
-shape2.rotate(7);
-print('Overlaps (1 & 2)', shape1.overlaps(shape2));
-print('Overlaps (2 & 1)', shape2.overlaps(shape1));
+text = Text(screen, 'Test Text', screen.width() / 2, screen.height() / 2, size=22, rotation=0);
+text.move(-text.width() / 2, -text.height() / 2);
 
-# assertFalse(shape3.overlaps(shape1) and shape3.overlaps(shape2));
-
-custom_shape = CustomPolygon(screen,
-                             [(150, 150), (250, 150), (300, 200), (300, 250), (250, 230), (150, 300)],
-                             Color('black'), Color('red'));
-
-image = Image(screen, '../images/cool_barry.jpg', 250, 250, 150, 150);
-# assertTrue(image.overlaps(custom_shape));
-# assertTrue(custom_shape.overlaps(shape2));
+origin = Rectangle(screen, 0, 0, 10, 10)
+marker2 = Rectangle(screen, screen.width() - 10, screen.height() - 10, 10, 10);
 
 
 def mousedown(button, location):
-    print('Overlaps (1 & 2)', shape1.overlaps(shape2));
-    print('Overlaps (2 & 1)', shape2.overlaps(shape1));
-    screen.update();
+    # text.lookat(location);
+    print(text.contains(location))
 
 
 screen.listen();

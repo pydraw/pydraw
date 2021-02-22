@@ -76,5 +76,5 @@ while running:
     count += 1
 
     screen.update()
-    screen.sleep((1000 / fps) / 1000)
+    screen.sleep(1 / fps)
 

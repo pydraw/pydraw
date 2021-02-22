@@ -36,7 +36,10 @@ pos1 = Location(0, 0);
 pos2 = Location(0, 0);
 time_between = 0;
 
-text = Text(screen, 'barry', 0, 0, color=Color('white'), italic=True, bold=True)
+text = Text(screen, 'barry', 0, 0, color=Color('gray'), italic=True, bold=True)
+text2 = Text(screen, 'another_text', 0, 0, color=Color('black'), italic=True, bold=True)
+text2.moveto(0, 15)
+
 print(f'Text Width: {text.width()}, Text Height: {text.height()}')
 text.color(Color(155, 155, 155));
 text.rotation(32);
