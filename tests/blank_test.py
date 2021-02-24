@@ -6,23 +6,34 @@ screen.toggle_grid();
 # screen.clear();
 screen.grid(helpers=True);
 
-poly = Rectangle(screen, 50, 50, 100, 100);
+
+p1 = Polygon(screen, 5, 150, 50, 50, 50)
+poly = Triangle(screen, 50, 50, 50, 50);
+image = Image(screen, '../images/pacman.gif', 100, 50, 50, 50);
+image.load();
+
+# poly.width(500, ratio=True)
 
 
 def keydown(key):
     if key == 'r':
-        poly.rotate(1);
+        p1.rotate(1);
     elif key == 'w':
-        poly.width(poly.width() + 10)
+        p1.width(p1.width() + 10)
     elif key == 'h':
-        poly.height(poly.height() + 10)
+        p1.height(p1.height() + 10)
     elif key == 'x':
-        poly.x(poly.x() + 10)
+        p1.x(p1.x() + 10)
     elif key == 'y':
-        poly.y(poly.y() + 10)
+        p1.y(p1.y() + 10)
+    elif key == 'g':
+        image.next();
 
 
 screen.listen();
 
-while True:
+fps = 30;
+running = True;
+while running:
     screen.update();
+    screen.sleep(1 / fps);

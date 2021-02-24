@@ -4,10 +4,11 @@ Objects in the PyDraw library
 (Author: Noah Coetsee)
 """
 
-import turtle;
+# import turtle;
 import tkinter as tk;
 import math;
 from typing import Union;
+# import asyncio;
 
 # from pydraw.errors import *;  # util gives us our errors for us :)
 from pydraw.util import *;
@@ -33,11 +34,6 @@ class Object:
 
         # noinspection PyProtectedMember
         self._screen._add(self);
-
-        if isinstance(self, Renderable):
-            self._ref = turtle.Turtle();
-            self._ref.hideturtle();
-            self._ref.penup();
 
     def x(self, x: float = None) -> float:
         if x is not None:
@@ -80,52 +76,50 @@ class Object:
 
         return real_x, real_y;
 
+    def front(self) -> None:
+        """
+        Brings the object to the front of the Screen
+        (Imagine moving forward on the Z axis)
+        :return: None
+        """
+
+        self._screen._front(self);
+
+    def back(self) -> None:
+        """
+        Brings the object to the back of the Screen
+        (Imagine moving backward on the Z axis)
+        :return: None
+        """
+
+        self._screen._back(self);
+
     def remove(self):
         self._screen.remove(self);
 
     def update(self) -> None:
         real_x, real_y = self._get_real_location();
 
-        if isinstance(self, Renderable):
-            self._ref.goto(real_x, real_y);
-
 
 class Renderable(Object):
-    """
-    A base class storing most useful methods for 2D Renderable objects.
-    """
-
     def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
                  color: Color = Color('black'),
-                 border: Color = None,
+                 border: Color = Color.NONE,
                  fill: bool = True,
                  rotation: float = 0,
                  visible: bool = True,
                  location: Location = None):
-        super(Renderable, self).__init__(screen, x, y, location);
-
-        verify(color, Color, border, Color, fill, bool, rotation, (float, int), visible, bool, location, Location);
-
+        super().__init__(screen, x, y, location);
         self._width = width;
         self._height = height;
-
-        self._angle = rotation;  # default angle to zero degrees
-
-        self._ref.shape('square');
-        self._ref.shapesize(stretch_wid=height / PIXEL_RATIO, stretch_len=width / PIXEL_RATIO);
-
         self._color = color;
-        self._border = border;
-        self._ref.color(color.__value__());
-
+        self._border = border if border is not None else Color('');
         self._fill = fill;
+        self._angle = rotation;
+        self._rotations = {};
         self._visible = visible;
 
-        if self._visible:
-            self._ref.showturtle();
-        else:
-            self._ref.hideturtle();
-        self.update();
+        self._setup();
 
     def width(self, width: float = None) -> float:
         """
@@ -161,7 +155,21 @@ class Renderable(Object):
         :return: Location object representing center of Renderable
         """
 
-        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
+        # We gonna create a centroid so we can rotate the points around a realistic center
+        # Sorry for those of you that get weird rotations..
+        x_list = [];
+        y_list = [];
+        for vertex in self._vertices:
+            x_list.append(vertex.x());
+            y_list.append(vertex.y());
+
+        # Create a simple centroid (not full centroid)
+        centroid_x = sum(x_list) / len(y_list);
+        centroid_y = sum(y_list) / len(x_list);
+
+        return Location(centroid_x, centroid_y);
+
+        # return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
     def color(self, color: Color = None) -> Color:
         """
@@ -280,15 +288,6 @@ class Renderable(Object):
             self.update();
 
         return self._visible;
-
-    def front(self) -> None:
-        """
-        Brings the shape to the front of the Screen
-        (Imagine moving forward on the Z axis)
-        :return: None
-        """
-
-        self._screen.front(self);
 
     def transform(self, transform: tuple = None) -> tuple:
         """
@@ -529,205 +528,132 @@ class Renderable(Object):
     # noinspection PyProtectedMember
     # noinspection PyUnresolvedReferences
     def _get_vertices(self):
-        shape_data = self._screen._screen._shapes[self._ref.turtle.shapeIndex]._data;
-
-        shape = self._ref._polytrafo(self._ref._getshapepoly(shape_data));
-
-        real_shape = [];
-
-        # Now we loop through and modify the coordinates so that they fit the coordinates of our system.
-        # this is an unnecessary calculation but I'm doing it now to ensure that the algorithm is correct.
+        real_shape = self._vertices;
 
         min_distance = 999999;
         top_left_index = 0;
-        for i, (x2, y2) in enumerate(shape):
-            location = Location(x2 + self._screen.width() / 2, -y2 + self._screen.height() / 2);
-
+        for i, location in enumerate(real_shape):
             distance = math.sqrt((location.x()) ** 2 + (location.y()) ** 2);
             if distance < min_distance:
                 min_distance = distance;
                 top_left_index = i;
-
-            real_shape.append(location);
 
         real_shape = real_shape[top_left_index:] + real_shape[:top_left_index];
         real_shape.reverse();
 
         return real_shape;
 
-    def update(self) -> None:
-        """
-        Update the internal reference of the object.
-        :return: None
-        """
+    def _setup(self):
+        if not hasattr(self, '_shape'):
+            raise AttributeError('An error occured while initializing a Renderable: '
+                                 'Is _shape set? (Advanced Users Only)');
 
-        # noinspection PyBroadException
-        try:
-            super().update();
-            self._ref.shapesize(stretch_wid=self.width() / PIXEL_RATIO, stretch_len=self.height() / PIXEL_RATIO);
-            self._ref.setheading(self._angle);
+        shape = self._shape;  # List of normal vertices.
 
-            if self._visible:
-                self._ref.showturtle();
-            elif not self._visible:
-                self._ref.hideturtle();
+        width = self._width;
+        height = self._height;
 
-            if self._fill is True:
-                if self._border is not None:
-                    self._ref.color(self._border.__value__(), self._color.__value__());
-                else:
-                    self._ref.color(self._color.__value__());
-            elif self._border is not None:
-                # Fill must be passed as an empty string
-                FILL_CONSTANT = '';
-                self._ref.color(FILL_CONSTANT);
-                self._ref.color(self._border.__value__(), FILL_CONSTANT);
-            else:
-                raise NameError('Fill was set to false but no border was passed.');
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
 
-        except:
-            pass;  # debug('Termination likely, but an internal error may have occurred');
+        cx = 0
+        cy = 0
 
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
 
-class Rectangle(Renderable):
-    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True,
-                 location: Location = None):
-        super(Rectangle, self).__init__(screen, x, y, width, height, color, border, fill, rotation, visible, location);
-        self._ref.shape('square');
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
 
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
 
-class Oval(Renderable):
-    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True,
-                 location: Location = None):
-        self._id = 'circle';
-        self._wedges = PIXEL_RATIO;
-        self._slices = [];  # not using this for now
-        super(Oval, self).__init__(screen, x, y, width, height, color, border, fill, rotation, visible, location);
-        self._ref.shape('circle');
+        self._vertices = vertices;
 
-    def wedges(self, wedges: int) -> int:
-        verify(wedges, int);
-        if wedges < 20:
-            raise InvalidArgumentError('Ovals can be at least 20 wedges. If you need less, '
-                                       'just multiply your desired amount by 2 until it is above 20!');
+        self._vertices = self._rotate(self._vertices, self._angle);
 
-        self._update_vertices(self._generate_vertices(PIXEL_RATIO / 2, wedges=wedges));
-        self._wedges = wedges;
-        self.update();
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
 
-        return self._wedges;
-
-    def slices(self) -> list:
-        """
-        Gets the slices of the Oval based on wedges. Note that this generates slices that are not tied to the oval,
-        these are simply slices of the oval based on its wedges. You can use them how you see fit.
-        :return: a tuple (immutable list) of CustomPolygons
-        """
-
-        return self._generate_slices();
-
-    def _generate_slices(self) -> list:
-
-        shape = self.vertices();
-        shape = tuple(shape[:]) + (shape[0],);
-
-        slices = [];
-        for i in range(0, len(shape) - 1):
-            vertex1 = shape[i];
-            vertex2 = self.center();
-            vertex3 = shape[i + 1];
-
-            slc = CustomPolygon(self._screen, [vertex1, vertex2, vertex3], self.color());
-            slices.append(slc);
-        return slices;
-
-    @staticmethod
-    def _generate_vertices(radius, angle_diff: float = 18, wedges: int = None):
-        relative_vertices = []
-
-        if wedges is not None:
-            angle_diff = 360 / wedges;
-
-        for x in range(0, 360, int(angle_diff)):
-            radians = math.radians(x);
-            x = radius * math.cos(radians);
-            y = radius * math.sin(radians);
-            relative_vertices.append((x, y));
-
-        return relative_vertices;
-
-    def _update_vertices(self, shape_vertices):
-        import uuid;
-        self._id = str(uuid.uuid4());
-
-        shape = turtle.Shape('polygon', shape_vertices);
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
 
         # noinspection PyProtectedMember
-        self._screen._screen.register_shape(self._id, shape);
-        self._ref.shape(self._id);
+        self._ref = self._screen._canvas.create_polygon(
+            tk_vertices,
+            fill=self._screen._colorstr(color_state),
+            outline=self._screen._screen._colorstr(self._border.__value__()),
+            state=state
+        );
+        # self.update(); # CustomPolygon(self._screen, vertices);
+
+    def _rotate(self, vertices: list, angle: float, pivot: Location = None) -> list:
+        # We have to update here since we cannot remember previous rotations (update method call won't cut it)!
+        # vertices = self._vertices;
+
+        # First get some values that we gonna use later
+        theta = math.radians(angle);
+        cosine = math.cos(theta);
+        sine = math.sin(theta);
+
+        if pivot is None:
+            centroid_x = self.center().x();
+            centroid_y = self.center().y();
+        else:
+            centroid_x = pivot.x();
+            centroid_y = pivot.y();
+
+        new_vertices = []
+        for vertex in vertices:
+            # We have to create these separately because they're ironically used in each others calculations xD
+            old_x = vertex.x() - centroid_x;
+            old_y = vertex.y() - centroid_y;
+
+            new_x = (old_x * cosine - old_y * sine) + centroid_x;
+            new_y = (old_x * sine + old_y * cosine) + centroid_y;
+            new_vertices.append(Location(new_x, new_y));
+
+        return new_vertices;
 
     def update(self):
-        if self._wedges == PIXEL_RATIO:
-            if self.width() > 200 or self.height() > 200:
-                radius = ((self.width() + self.height()) / 2) / 2;
-                angle = (radius * 9) / 300;
-                shape_vertices = self._generate_vertices(PIXEL_RATIO / 2, angle);
-                self._update_vertices(shape_vertices);
+        old_ref = self._ref;
+        shape = self._shape;  # List of normal vertices.
 
-        super().update();
+        width = self._width;
+        height = self._height;
 
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
 
-class Triangle(Renderable):
-    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True,
-                 location: Location = None):
-        super(Triangle, self).__init__(screen, x, y, width, height, color, border, fill, rotation, visible, location);
-        self._ref.shape('triangle');
+        cx = 0
+        cy = 0
 
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+        self._vertices = vertices;
 
-class Polygon(Renderable):
-    def __init__(self, screen: Screen, num_sides: int, x: float = 0, y: float = 0,
-                 width: float = 10, height: float = 10,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True,
-                 location: Location = None):
-        super(Polygon, self).__init__(screen, x, y, width, height, color, border, fill, rotation, visible, location);
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
 
-        # We need to generate a list of points relative to the center of the polygon
-        # the angle between any two vertices in a regular polygon is 2pi / n (where n is num_sides)
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
 
-        # The "radius" of an imaginary circle that surrounds the shape. Turtle expects the radius of its pixel modifier.
-        radius = PIXEL_RATIO / 2;
-        shape_points = [];
-        for i in range(num_sides):
-            shape_points.append((radius * math.cos(2 * math.pi * i / num_sides),
-                                 radius * math.sin(2 * math.pi * i / num_sides)));
+        self._vertices = self._rotate(self._vertices, self._angle);
 
-        import uuid;
-        self._id = uuid.uuid4();
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
 
-        shape = turtle.Shape('polygon', shape_points);
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
 
         # noinspection PyProtectedMember
-        self._screen._screen.register_shape(str(self._id), shape);
-        self._ref.shape(str(self._id));
+        self._ref = self._screen._canvas.create_polygon(
+            tk_vertices,
+            fill=self._screen._colorstr(color_state),
+            outline=self._screen._screen._colorstr(self._border.__value__()),
+            state=state
+        );
+
+        self._screen._canvas.tag_lower(self._ref, old_ref);
+        self._screen._canvas.delete(old_ref);
 
 
 class CustomRenderable(Renderable):
@@ -756,6 +682,8 @@ class CustomPolygon(CustomRenderable):
         self._fill = fill;
         self._angle = rotation;
         self._visible = visible;
+
+        self._screen._add(self);
 
         if len(vertices) <= 2:
             raise InvalidArgumentError('Must pass at least 3 vertices to CustomPolygon!');
@@ -787,6 +715,8 @@ class CustomPolygon(CustomRenderable):
         self._width = xmax - xmin;
         self._height = ymax - ymin;
 
+        color_state = self._color if self._fill else Color.NONE;
+
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in real_vertices:
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
@@ -798,7 +728,7 @@ class CustomPolygon(CustomRenderable):
 
         self._ref = self._screen._screen.cv.create_polygon(
             tk_vertices,
-            fill=self._screen._colorstr(color),
+            fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
             state=state
         );
@@ -902,7 +832,7 @@ class CustomPolygon(CustomRenderable):
         # Sorry for those of you that get weird rotations..
         x_list = [];
         y_list = [];
-        for vertex in self.vertices():
+        for vertex in self._vertices:
             x_list.append(vertex.x());
             y_list.append(vertex.y());
 
@@ -997,11 +927,13 @@ class CustomPolygon(CustomRenderable):
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
                                 (vertex.y() - (self._screen.height() / 2))));
 
+        color_state = self._color if self._fill else Color.NONE;
+
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
         self._ref = self._screen._screen.cv.create_polygon(
             tk_vertices,
-            fill=self._screen._colorstr(self._color),
+            fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
             state=state
         );
@@ -1010,8 +942,224 @@ class CustomPolygon(CustomRenderable):
         self._screen._screen.cv.delete(old_ref);
 
 
-# While technically this is a normal renderable, I've grouped it with the
-# CustomRenderables due to its special-case dependency on PIP.
+class Rectangle(Renderable):
+    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+
+class Oval(Renderable):
+    _default = ((10, 0), (9.51, 3.09), (8.09, 5.88),
+                (5.88, 8.09), (3.09, 9.51), (0, 10), (-3.09, 9.51),
+                (-5.88, 8.09), (-8.09, 5.88), (-9.51, 3.09), (-10, 0),
+                (-9.51, -3.09), (-8.09, -5.88), (-5.88, -8.09),
+                (-3.09, -9.51), (-0.00, -10.00), (3.09, -9.51),
+                (5.88, -8.09), (8.09, -5.88), (9.51, -3.09));
+
+    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    def wedges(self, wedges: int = None) -> int:
+        verify(wedges, int);
+        if wedges < 20:
+            raise InvalidArgumentError('Ovals can be at least 20 wedges. If you need less, '
+                                       'just multiply your desired amount by 2 until it is above 20!');
+
+        if wedges is not None:
+            self._shape = self._generate_vertices(PIXEL_RATIO / 2, wedges=wedges);
+            self._wedges = wedges;
+            self.update();
+
+        return self._wedges;
+
+    def slices(self) -> list:
+        """
+        Gets the slices of the Oval based on wedges. Note that this generates slices that are not tied to the oval,
+        these are simply slices of the oval based on its wedges. You can use them how you see fit.
+        :return: a tuple (immutable list) of CustomPolygons
+        """
+
+        return self._generate_slices();
+
+    def _generate_slices(self) -> list:
+        shape = self.vertices();
+        shape = tuple(shape[:]) + (shape[0],);
+
+        slices = [];
+        for i in range(0, len(shape) - 1):
+            vertex1 = shape[i];
+            vertex2 = self.center();
+            vertex3 = shape[i + 1];
+
+            slc = CustomPolygon(self._screen, [vertex1, vertex2, vertex3], self.color());
+            slices.append(slc);
+        return slices;
+
+    def _convert_vertices(self):
+        radius = ((self._width + self._height) / 2) / 2;
+        angle = 18 if radius <= 150 else (radius * 9) / 300;
+        shape_vertices = self._generate_vertices(PIXEL_RATIO / 2, angle);
+
+        return shape_vertices;
+
+    @staticmethod
+    def _generate_vertices(radius, angle: float = 18, wedges: int = None):
+        relative_vertices = []
+
+        if wedges is not None:
+            angle = 360 / wedges;
+
+        for x in range(0, 360, int(angle)):
+            radians = math.radians(x);
+            x = radius * math.cos(radians);
+            y = radius * math.sin(radians);
+            relative_vertices.append((x, y));
+
+        return relative_vertices;
+
+
+class Triangle(Renderable):
+    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+
+class Polygon(Renderable):
+    def __init__(self, screen: Screen, num_sides: int, x: float = 0, y: float = 0, width: float = 10,
+                 height: float = 10,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    def _setup(self):
+        if not hasattr(self, '_shape'):
+            raise AttributeError('An error occured while initializing a Renderable: '
+                                 'Is _shape set? (Advanced Users Only)');
+
+        shape = self._shape;  # List of normal vertices.
+
+        a = math.pi * 2 / self._num_sides * (PIXEL_RATIO / 2);
+        n = self._num_sides;
+
+        # Degree converted to radians
+        apothem = a / (2 * math.tan((180 / n) *
+                                    math.pi / 180));
+
+        true_width = PIXEL_RATIO;
+        true_height = apothem * 2;
+
+        width = self._width;
+        height = self._height;
+
+        scale_factor = (width / true_width, height / true_height);
+
+        cx = 0
+        cy = 0
+
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
+
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
+            vertex.move(dy=PIXEL_RATIO - true_height);
+
+        self._vertices = vertices;
+
+        self._vertices = self._rotate(self._vertices, self._angle);
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+
+        # noinspection PyProtectedMember
+        self._ref = self._screen._canvas.create_polygon(
+            tk_vertices,
+            fill=self._screen._colorstr(self._color),
+            outline=self._screen._screen._colorstr(self._border.__value__()),
+            state=state
+        );
+
+    def update(self):
+        old_ref = self._ref;
+        shape = self._shape;  # List of normal vertices.
+
+        width = self._width;
+        height = self._height;
+
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
+
+        cx = 0
+        cy = 0
+
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
+
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
+
+        self._vertices = vertices;
+
+        # noinspection PyAttributeOutsideInit
+        self._vertices = self._rotate(self._vertices, self._angle);
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+
+        # noinspection PyProtectedMember
+        self._ref = self._screen._canvas.create_polygon(
+            tk_vertices,
+            fill=self._screen._colorstr(self._color),
+            outline=self._screen._screen._colorstr(self._border.__value__()),
+            state=state
+        );
+
+        self._screen._canvas.tag_lower(self._ref, old_ref);
+        self._screen._canvas.delete(old_ref);
+
+
 class Image(Renderable):
     """
     Image class. Supports basic formats: PNG, GIF, JPG, PPM, images.
@@ -1027,7 +1175,7 @@ class Image(Renderable):
                  width: float = None,
                  height: float = None,
                  color: Color = None,
-                 border: Color = None,
+                 border: Color = Color.NONE,
                  rotation: float = 0,
                  visible: bool = True,
                  location: Location = None):
@@ -1047,19 +1195,16 @@ class Image(Renderable):
         self._width = self._image.width();
         self._height = self._image.height();
 
+        self._frame = -1;
+        self._frames = -1;
+
         self._mask = 123;
 
         # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
         self._patched = False;
 
-        shape = turtle.Shape('image', self._image);
-
-        # noinspection PyProtectedMember
-        screen._screen.register_shape(self._image_name, shape);
-
-        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=None,
+        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
                          rotation=rotation, visible=visible, location=location);
-        self._ref.shape(self._image_name);
 
         if width is not None:
             self.width(width);
@@ -1200,6 +1345,54 @@ class Image(Renderable):
 
         return vertices;
 
+    def load(self) -> None:
+        """
+        Load animated GIF (reads frames)
+        :return: None
+        """
+
+        from PIL import Image;
+        from PIL import GifImagePlugin;
+
+        image = Image.open(self._image_name);
+        if hasattr(image, 'n_frames'):
+            self._frames = image.n_frames;
+            self._frame = 0;
+        else:
+            raise PydrawError('GIF is not animated, so it cannot be loaded!');
+
+    def next(self) -> None:
+        """
+        Changes frame to the next frame (Can only be used with animated GIFs)
+        :return:
+        """
+        self._frame += 1;
+
+        if self._frame >= self._frames:
+            self._frame = 0;
+        self.update(True);
+
+    def frame(self, frame: int = None) -> int:
+        """
+        Set the current frame.
+        :param frame: the frame-index to set to
+        :return: the current frame
+        """
+
+        if frame is not None:
+            self._frame = frame;
+            self.update(True);
+
+        return self._frame;
+
+    def frames(self):
+        """
+        Returns how many frames there are, returns -1 if not animated, 0 if corrupted file.
+        :return:
+        """
+
+        self._frames;
+
     @staticmethod
     def _monkey_patch_del():
         """
@@ -1220,6 +1413,13 @@ class Image(Renderable):
 
         ImageTk.PhotoImage.__del__ = new_del
 
+    # noinspection PyProtectedMember
+    def _setup(self):
+        real_location = self._screen.canvas_location(self.x(), self.y());
+        self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
+                                                      real_location.y() + self._height / 2, image=self._image);
+
+    # noinspection PyProtectedMember
     def update(self, updated: bool = False):
         if updated:
             try:
@@ -1229,7 +1429,15 @@ class Image(Renderable):
                     self._monkey_patch_del();  # If we do have PIL we need to monkey patch this immediately.
                     self._patched = True;
 
-                image = Image.open(self._image_name).convert('RGBA');
+                image = Image.open(self._image_name);
+
+                if self._frame != -1:
+                    try:
+                        image.seek(self._frame);
+                    except EOFError:
+                        raise PydrawError('No more images in GIF File!');
+
+                image = image.convert('RGBA');
 
                 if self._color is not None and self._color != Color.NONE:
                     r, g, b, alpha = image.split()
@@ -1241,7 +1449,7 @@ class Image(Renderable):
                     result.putalpha(alpha);
                     image = result;
 
-                if self._border is not None:
+                if self._border is not None and self._border is not Color.NONE:
                     image = ImageOps.expand(image, border=10, fill=self._border.rgb())
 
                 # Do resizing last so we can make sure the other manipulations work properly
@@ -1258,14 +1466,274 @@ class Image(Renderable):
                                        'Install Pillow via: \'pip install pillow\'.');
 
         try:
-            shape = turtle.Shape('image', self._image);
+            old_ref = self._ref;
+            real_location = self._screen.canvas_location(self.x(), self.y());
 
-            # noinspection PyProtectedMember
-            self._screen._screen.register_shape(self._image_name, shape);
-            self._ref.shape(self._image_name);
+            self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
+                                                          real_location.y() + self._height / 2, image=self._image);
+
+            self._screen._canvas.tag_lower(self._ref, old_ref);
+            self._screen._canvas.delete(old_ref);
         except tk.TclError:
             pass;
-        super().update();
+
+
+# While technically this is a normal renderable, I've grouped it with the
+# CustomRenderables due to its special-case dependency on PIP.
+# class Image(Renderable):
+#     """
+#     Image class. Supports basic formats: PNG, GIF, JPG, PPM, images.
+#
+#     NOTE: This class supports the basic displaying of images, but also supports much more,
+#     such as image modification (width, height, color, etc) if you have PIL (Pillow) installed!
+#     You can install PIL/Pillow by running: `pip install pillow` in a terminal!
+#     """
+#
+#     TKINTER_TYPES = ['.png', '.gif', '.ppm'];
+#
+#     def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
+#                  width: float = None,
+#                  height: float = None,
+#                  color: Color = None,
+#                  border: Color = None,
+#                  rotation: float = 0,
+#                  visible: bool = True,
+#                  location: Location = None):
+#         self._image_name = image;
+#
+#         if image[len(image) - 4:len(image)] in self.TKINTER_TYPES:
+#             self._image = tk.PhotoImage(name=image, file=image);
+#         else:
+#             try:
+#                 from PIL import Image, ImageTk;
+#                 image = Image.open(self._image_name);
+#                 self._image = ImageTk.PhotoImage(image);
+#             except:
+#                 raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
+#                                        'Install Pillow via: \'pip install pillow\'.');
+#
+#         self._width = self._image.width();
+#         self._height = self._image.height();
+#
+#         self._mask = 123;
+#
+#         # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
+#         self._patched = False;
+#
+#         shape = turtle.Shape('image', self._image);
+#
+#         # noinspection PyProtectedMember
+#         screen._screen.register_shape(self._image_name, shape);
+#
+#         super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=None,
+#                          rotation=rotation, visible=visible, location=location);
+#         self._ref.shape(self._image_name);
+#
+#         if width is not None:
+#             self.width(width);
+#         if height is not None:
+#             self.height(height);
+#
+#         if color is not None:
+#             self.color(color);
+#
+#         if border is not None:
+#             self.border(border);
+#
+#     def width(self, width: float = None) -> float:
+#         """
+#         Get or set the width of the image (REQUIRES: PIL or Pillow)
+#         :param width: the width to set to, if any
+#         :return: None
+#         """
+#
+#         if width is not None:
+#             verify(width, (float, int));
+#             self._width = width;
+#             self.update(True);
+#
+#         return self._width;
+#
+#     def height(self, height: float = None) -> float:
+#         """
+#         Get or set the height of the image
+#         :param height: the height to set to, if any
+#         :return: the height
+#         """
+#
+#         if height is not None:
+#             verify(height, (float, int));
+#             self._height = height;
+#             self.update(True);
+#
+#         return self._height;
+#
+#     def color(self, color: Color = None, alpha: int = 123) -> Color:
+#         """
+#         Retrieves or applies a color-mask to the image
+#         :param color: the color to mask to, if any
+#         :param alpha: The alpha level of the mask, defaults to 123 (half of 255)
+#         :return: the mask-color of the object
+#         """
+#
+#         if color is not None:
+#             verify(color, Color);
+#             self._color = color;
+#             self._mask = alpha;
+#             self.update(True);
+#
+#         return self._color;
+#
+#     def rotation(self, angle: float = None) -> float:
+#         """
+#         Get or set the rotation of the image.
+#         :param angle: the angle to set the rotation to in degrees, if any
+#         :return: the angle of the image's rotation in degrees
+#         """
+#
+#         if angle is not None:
+#             verify(angle, (float, int));
+#             self._angle = angle;
+#             self.update(True);
+#
+#         return self._angle;
+#
+#     # noinspection PyMethodOverriding
+#     def rotate(self, angle_diff: float) -> None:
+#         """
+#         Rotate the angle of the image by a difference, in degrees
+#         :param angle_diff: the angle difference to rotate by
+#         :return: None
+#         """
+#
+#         if angle_diff != 0:
+#             verify(angle_diff, (float, int));
+#             self._angle += angle_diff;
+#             self.update(True);
+#
+#     # noinspection PyMethodOverriding
+#     def border(self, color: Color = None) -> Color:
+#         """
+#         Add or get the border of the image
+#         :param color: the color to set the border too, set to Color.NONE to remove border
+#         :return: The Color of the border
+#         """
+#
+#         if color is not None:
+#             verify(color, Color);
+#             self._border = color;
+#             self.update(True);
+#
+#         return self._border;
+#
+#     def fill(self, fill: bool = None) -> bool:
+#         """
+#         Unsupported: This doesn't make sense for images.
+#         """
+#
+#         raise UnsupportedError('This method is not supported for Images!');
+#
+#     def vertices(self) -> list:
+#         """
+#         Returns the list of vertices for the Renderable.
+#         (The vertices will be returned clockwise, starting from the top-leftmost point)
+#         :return: a list of Locations representing the vertices
+#         """
+#
+#         vertices = [self.location(), Location(self.x() + self.width(), self.y()),
+#                     Location(self.x() + self.width(), self.y() + self.height()),
+#                     Location(self.x(), self.y() + self.height())];
+#
+#         if self._angle != 0:
+#
+#             # First get some values that we gonna use later
+#             theta = math.radians(self._angle);
+#             cosine = math.cos(theta);
+#             sine = math.sin(theta);
+#
+#             center_x = self.center().x();
+#             center_y = self.center().y();
+#
+#             new_vertices = []
+#             for vertex in vertices:
+#                 # We have to create these separately because they're ironically used in each others calculations xD
+#                 old_x = vertex.x() - center_x;
+#                 old_y = vertex.y() - center_y;
+#
+#                 new_x = (old_x * cosine - old_y * sine) + center_x;
+#                 new_y = (old_x * sine + old_y * cosine) + center_y;
+#                 new_vertices.append(Location(new_x, new_y));
+#
+#             vertices = new_vertices;
+#
+#         return vertices;
+#
+#     @staticmethod
+#     def _monkey_patch_del():
+#         """
+#         We monkey patch the del function for PIL so it doesn't do stupid things.
+#         :return:
+#         """
+#         from PIL import ImageTk;
+#
+#         # monkey patch TKinter from this dumb bug they don't catch in TK.PhotoImage
+#         old_del = ImageTk.PhotoImage.__del__;
+#
+#         def new_del(self):
+#             try:
+#                 old_del(self)
+#             except (AttributeError, RecursionError):
+#                 pass;  # Yeah, we don't care.
+#             pass;
+#
+#         ImageTk.PhotoImage.__del__ = new_del
+#
+#     def update(self, updated: bool = False):
+#         if updated:
+#             try:
+#                 from PIL import Image, ImageTk, ImageOps;
+#
+#                 if not self._patched:
+#                     self._monkey_patch_del();  # If we do have PIL we need to monkey patch this immediately.
+#                     self._patched = True;
+#
+#                 image = Image.open(self._image_name).convert('RGBA');
+#
+#                 if self._color is not None and self._color != Color.NONE:
+#                     r, g, b, alpha = image.split()
+#                     gray = ImageOps.grayscale(image)
+#                     result = ImageOps.colorize(gray, (0, 0, 0, 0),
+#                                                (
+#                                                    self._color.red(), self._color.green(), self._color.blue(),
+#                                                    self._mask));
+#                     result.putalpha(alpha);
+#                     image = result;
+#
+#                 if self._border is not None:
+#                     image = ImageOps.expand(image, border=10, fill=self._border.rgb())
+#
+#                 # Do resizing last so we can make sure the other manipulations work properly
+#                 image = image.resize((self.width(), self.height()), Image.ANTIALIAS);
+#
+#                 if self._angle != 0:
+#                     image = image.rotate(-self._angle, resample=Image.BILINEAR, expand=1, fillcolor=None)
+#
+#                 self._image = ImageTk.PhotoImage(image=image);
+#             except (RuntimeError, AttributeError):
+#                 pass;  # We are catching some stupid errors from Tkinter involving images and program exiting.
+#             except:
+#                 raise UnsupportedError('As PIL is not installed, you cannot modify images! '
+#                                        'Install Pillow via: \'pip install pillow\'.');
+#
+#         try:
+#             shape = turtle.Shape('image', self._image);
+#
+#             # noinspection PyProtectedMember
+#             self._screen._screen.register_shape(self._image_name, shape);
+#             self._ref.shape(self._image_name);
+#         except tk.TclError:
+#             pass;
+#         super().update();
 
 
 class Text(CustomRenderable):
@@ -1342,7 +1810,7 @@ class Text(CustomRenderable):
         # self._height = y1 - y0;
 
         self._width = true_width;
-        self._height = true_height;
+        self._height = true_height * (self._text.count('\n') + 1);
 
         screen._screen.cv.update();
 
@@ -1643,7 +2111,7 @@ class Text(CustomRenderable):
             self._screen._screen.cv.delete(old_ref);
 
             self._width = true_width;
-            self._height = true_height;
+            self._height = true_height * (self._text.count('\n') + 1);
 
             self._screen._screen.cv.update();
         except tk.TclError:
