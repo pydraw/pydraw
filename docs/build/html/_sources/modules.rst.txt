@@ -1,4 +1,4 @@
-pydraw
+Documentation
 ======
 
 .. toctree::
