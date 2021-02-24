@@ -5,7 +5,7 @@ import time;
 
 from pydraw import Color;
 from pydraw import Location;
-from pydraw.errors import *;
+from pydraw.util import *;
 
 INPUT_TYPES = [
     'mousedown',
@@ -120,7 +120,7 @@ class Screen:
         self._canvas = self._screen.cv;
         self._root = self._canvas.winfo_toplevel();
 
-        self._root.resizable(False, False);  # No resizing!
+
 
         self._width = width;
         self._height = height;
@@ -134,6 +134,8 @@ class Screen:
         # self._canvas.configure(width=self._root.winfo_width(), height=self._root.winfo_height())
         # self.update();
         # This was not necessary as the canvas will align with the window's dimensions as set in the above line.
+
+        self._root.resizable(False, False);  # No resizing!
 
         self._screen.title(title);
         self._title = title;
@@ -430,6 +432,8 @@ class Screen:
         """
         Get or set the fullscreen state of the application. Note that this will not resize your shapes, nor
         will it REPOSITION them. It is highly recommended that you call this method before creating any shapes!
+
+        !!! EXPERIMENTAL !!!
         :param fullscreen: the new fullscreen state, if any
         :return: the current fullscreen state of the Screen
         """
@@ -440,6 +444,16 @@ class Screen:
             self.update();
 
         return self._fullscreen;
+
+    def _front(self, obj) -> None:
+
+        self._canvas.tag_raise(obj._ref);
+
+    def _back(self, obj) -> None:
+        from pydraw import Object;
+
+        verify(obj, Object);
+        self._canvas.tag_lower(obj._ref);
 
     def _add(self, obj) -> None:
         """
@@ -452,19 +466,12 @@ class Screen:
 
     # noinspection PyProtectedMember
     def remove(self, obj):
-        from pydraw import Renderable, CustomRenderable;
-        if isinstance(obj, Renderable) and not isinstance(obj, CustomRenderable):
-            obj._ref.reset();
-            obj._ref.ht();
+        self._screen.cv.delete(obj._ref);
+        if obj in self._objects:
             self._objects.remove(obj);
-            del obj;
-        else:
-            self._screen.cv.delete(obj._ref);
-            if obj in self._objects:
-                self._objects.remove(obj);
-            elif obj not in self._gridlines and obj not in self._helpers:
-                raise ValueError(f'Object: {obj} is not registered with the screen? Did you call the constructor?');
-            del obj;
+        elif obj not in self._gridlines and obj not in self._helpers:
+            raise ValueError(f'Object: {obj} is not registered with the screen? Did you call the constructor?');
+        del obj;
 
     def objects(self) -> tuple:
         """
@@ -476,11 +483,7 @@ class Screen:
 
     # noinspection PyProtectedMember
     def front(self, obj):
-        from pydraw import Renderable, CustomRenderable;
-        if isinstance(obj, Renderable) and not isinstance(obj, CustomRenderable):
-            obj._ref.forward(0);
-        else:
-            self._canvas.tag_raise(obj._ref);
+        self._canvas.tag_raise(obj._ref);
 
     def clear(self) -> None:
         """
@@ -512,7 +515,8 @@ class Screen:
         :return: None
         """
         try:
-            self._screen.update();
+            # self._screen.update();
+            self._canvas.update();
         except (turtle.Terminator, tk.TclError, AttributeError):
             # If we experience the termination exception, we will print the termination of the program
             # and exit the python program.
@@ -725,6 +729,9 @@ class Screen:
         :return: a location comprised of the passed x and y components
         """
         return Location(x + (self.width() / 2), -y + (self.height() / 2));
+
+    def canvas_location(self, x, y) -> Location:
+        return Location(x - self.width() / 2, y - self.height() / 2);
 
     # -- Internals -- #
     def _onrelease(self, fun, btn, add=None):

@@ -52,7 +52,8 @@ waffle = Polygon(screen, 6, screen.width() - (screen.width() / 3), 100, 50, 50, 
 waffle.border(Color('red'));
 waffle.border(Color.NONE);
 crazy_waffle = CustomPolygon(screen, [(50, 350), (100, 350), (100, 400), (75, 450), (50, 400)], color=Color('green'));
-crazy_waffle.color(Color('#fff222'))
+crazy_waffle.color(Color('#00ff00'))
+crazy_waffle.fill(False);
 maui = Line(screen, 50, 50, 150, 150, Color('purple'), 2);
 moana = maui.clone();
 moana.rotation(45);
@@ -86,7 +87,7 @@ print(f'Color RGB: {test_color.red()}, {test_color.green()}, {test_color.blue()}
 def mousedown(button, location):
     global state;
     print('Mousedown detected', button, location);
-    crazy_waffle.rotate(5 if state else -5);
+    crazy_waffle.rotate(5);
     crazy_waffle.move(10, -10);
     barry.lookat(mrspace);
     text.lookat(barry);

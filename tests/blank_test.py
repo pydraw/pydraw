@@ -6,21 +6,34 @@ screen.toggle_grid();
 # screen.clear();
 screen.grid(helpers=True);
 
-marker = Oval(screen, screen.width() / 2, screen.height() / 2);
 
-text = Text(screen, 'Test Text', screen.width() / 2, screen.height() / 2, size=22, rotation=0);
-text.move(-text.width() / 2, -text.height() / 2);
+p1 = Polygon(screen, 5, 150, 50, 50, 50)
+poly = Triangle(screen, 50, 50, 50, 50);
+image = Image(screen, '../images/pacman.gif', 100, 50, 50, 50);
+image.load();
 
-origin = Rectangle(screen, 0, 0, 10, 10)
-marker2 = Rectangle(screen, screen.width() - 10, screen.height() - 10, 10, 10);
+# poly.width(500, ratio=True)
 
 
-def mousedown(button, location):
-    # text.lookat(location);
-    print(text.contains(location))
+def keydown(key):
+    if key == 'r':
+        p1.rotate(1);
+    elif key == 'w':
+        p1.width(p1.width() + 10)
+    elif key == 'h':
+        p1.height(p1.height() + 10)
+    elif key == 'x':
+        p1.x(p1.x() + 10)
+    elif key == 'y':
+        p1.y(p1.y() + 10)
+    elif key == 'g':
+        image.next();
 
 
 screen.listen();
 
-while True:
+fps = 30;
+running = True;
+while running:
     screen.update();
+    screen.sleep(1 / fps);

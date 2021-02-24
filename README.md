@@ -130,7 +130,6 @@ box.location()  # We can get the Location like this!
 
 box.move(-5, 100)  # move the box by -5 on the x-axis, 100 on the y.
 box.moveto(screen.width() / 2, screen.height() / 2)  # move to near the center of the screen
-                                                     # THEORY!: What do we need to do to p
 
 box.width(box.height())  # set the box's width to its height
                          # again, it's important to notice the methods are dual-purpose
