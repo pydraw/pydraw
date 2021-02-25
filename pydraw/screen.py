@@ -120,8 +120,6 @@ class Screen:
         self._canvas = self._screen.cv;
         self._root = self._canvas.winfo_toplevel();
 
-
-
         self._width = width;
         self._height = height;
 
@@ -155,9 +153,10 @@ class Screen:
         self._helperstate = 0;
 
         # By default we want to make sure that all objects are drawn instantly.
-        self._screen.tracer(False);
+        self._screen.tracer(0);
         self._screen.update();
 
+        # import atexit;
         # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler);
         # atexit.register(self._exit_handler)
 
@@ -481,10 +480,6 @@ class Screen:
 
         return tuple(self._objects);
 
-    # noinspection PyProtectedMember
-    def front(self, obj):
-        self._canvas.tag_raise(obj._ref);
-
     def clear(self) -> None:
         """
         Clears the screen.
@@ -541,7 +536,6 @@ class Screen:
         """
 
         self._screen.clear();
-        self.stop();
         self._root.destroy();
         exit(0);
 

@@ -644,16 +644,19 @@ class Renderable(Object):
         state = tk.NORMAL if self._visible else tk.HIDDEN;
         color_state = self._color if self._fill else Color.NONE;
 
-        # noinspection PyProtectedMember
-        self._ref = self._screen._canvas.create_polygon(
-            tk_vertices,
-            fill=self._screen._colorstr(color_state),
-            outline=self._screen._screen._colorstr(self._border.__value__()),
-            state=state
-        );
+        try:
+            # noinspection PyProtectedMember
+            self._ref = self._screen._canvas.create_polygon(
+                tk_vertices,
+                fill=self._screen._colorstr(color_state),
+                outline=self._screen._screen._colorstr(self._border.__value__()),
+                state=state
+            );
 
-        self._screen._canvas.tag_lower(self._ref, old_ref);
-        self._screen._canvas.delete(old_ref);
+            self._screen._canvas.tag_lower(self._ref, old_ref);
+            self._screen._canvas.delete(old_ref);
+        except:
+            pass;
 
 
 class CustomRenderable(Renderable):
@@ -1148,16 +1151,19 @@ class Polygon(Renderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        # noinspection PyProtectedMember
-        self._ref = self._screen._canvas.create_polygon(
-            tk_vertices,
-            fill=self._screen._colorstr(self._color),
-            outline=self._screen._screen._colorstr(self._border.__value__()),
-            state=state
-        );
+        try:
+            # noinspection PyProtectedMember
+            self._ref = self._screen._canvas.create_polygon(
+                tk_vertices,
+                fill=self._screen._colorstr(self._color),
+                outline=self._screen._screen._colorstr(self._border.__value__()),
+                state=state
+            );
 
-        self._screen._canvas.tag_lower(self._ref, old_ref);
-        self._screen._canvas.delete(old_ref);
+            self._screen._canvas.tag_lower(self._ref, old_ref);
+            self._screen._canvas.delete(old_ref);
+        except:
+            pass;
 
 
 class Image(Renderable):
@@ -1180,8 +1186,9 @@ class Image(Renderable):
                  visible: bool = True,
                  location: Location = None):
         self._image_name = image;
+        filetype = image[len(image) - 4:len(image)];
 
-        if image[len(image) - 4:len(image)] in self.TKINTER_TYPES:
+        if filetype in self.TKINTER_TYPES:
             self._image = tk.PhotoImage(name=image, file=image);
         else:
             try:
@@ -1328,8 +1335,8 @@ class Image(Renderable):
             cosine = math.cos(theta);
             sine = math.sin(theta);
 
-            center_x = self.center().x();
-            center_y = self.center().y();
+            center_x = self.x() + self.width() / 2;
+            center_y = self.y() + self.width() / 2;
 
             new_vertices = []
             for vertex in vertices:
@@ -2082,22 +2089,22 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
-
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
-
-        hypotenuse = true_width / 2;
-        radians = math.radians(self._angle);
-
-        dx = math.cos(radians) * hypotenuse;
-        dy = math.sin(radians) * hypotenuse;
-
-        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
-        real_y = (self.y() - (self._screen.height() / 2)) - dy;
-
         try:
+            import tkinter.font as tkfont;
+
+            font = tkfont.Font(font=font_data);
+            true_width = font.measure(self._text);
+            true_height = font.metrics('linespace');
+
+            hypotenuse = true_width / 2;
+            radians = math.radians(self._angle);
+
+            dx = math.cos(radians) * hypotenuse;
+            dy = math.sin(radians) * hypotenuse;
+
+            real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
+            real_y = (self.y() - (self._screen.height() / 2)) - dy;
+
             self._ref = self._screen._screen.cv.create_text(real_x,
                                                             real_y,
                                                             text=self.text(),
@@ -2114,7 +2121,7 @@ class Text(CustomRenderable):
             self._height = true_height * (self._text.count('\n') + 1);
 
             self._screen._screen.cv.update();
-        except tk.TclError:
+        except (tk.TclError, AttributeError):
             pass;
 
 
