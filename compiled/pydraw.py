@@ -685,8 +685,6 @@ class Screen:
         self._canvas = self._screen.cv;
         self._root = self._canvas.winfo_toplevel();
 
-
-
         self._width = width;
         self._height = height;
 
@@ -720,9 +718,10 @@ class Screen:
         self._helperstate = 0;
 
         # By default we want to make sure that all objects are drawn instantly.
-        self._screen.tracer(False);
+        self._screen.tracer(0);
         self._screen.update();
 
+        # import atexit;
         # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler);
         # atexit.register(self._exit_handler)
 
@@ -1046,10 +1045,6 @@ class Screen:
 
         return tuple(self._objects);
 
-    # noinspection PyProtectedMember
-    def front(self, obj):
-        self._canvas.tag_raise(obj._ref);
-
     def clear(self) -> None:
         """
         Clears the screen.
@@ -1106,7 +1101,6 @@ class Screen:
         """
 
         self._screen.clear();
-        self.stop();
         self._root.destroy();
         exit(0);
 
@@ -1988,16 +1982,19 @@ class Renderable(Object):
         state = tk.NORMAL if self._visible else tk.HIDDEN;
         color_state = self._color if self._fill else Color.NONE;
 
-        # noinspection PyProtectedMember
-        self._ref = self._screen._canvas.create_polygon(
-            tk_vertices,
-            fill=self._screen._colorstr(color_state),
-            outline=self._screen._screen._colorstr(self._border.__value__()),
-            state=state
-        );
+        try:
+            # noinspection PyProtectedMember
+            self._ref = self._screen._canvas.create_polygon(
+                tk_vertices,
+                fill=self._screen._colorstr(color_state),
+                outline=self._screen._screen._colorstr(self._border.__value__()),
+                state=state
+            );
 
-        self._screen._canvas.tag_lower(self._ref, old_ref);
-        self._screen._canvas.delete(old_ref);
+            self._screen._canvas.tag_lower(self._ref, old_ref);
+            self._screen._canvas.delete(old_ref);
+        except:
+            pass;
 
 
 class CustomRenderable(Renderable):
@@ -2492,16 +2489,19 @@ class Polygon(Renderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        # noinspection PyProtectedMember
-        self._ref = self._screen._canvas.create_polygon(
-            tk_vertices,
-            fill=self._screen._colorstr(self._color),
-            outline=self._screen._screen._colorstr(self._border.__value__()),
-            state=state
-        );
+        try:
+            # noinspection PyProtectedMember
+            self._ref = self._screen._canvas.create_polygon(
+                tk_vertices,
+                fill=self._screen._colorstr(self._color),
+                outline=self._screen._screen._colorstr(self._border.__value__()),
+                state=state
+            );
 
-        self._screen._canvas.tag_lower(self._ref, old_ref);
-        self._screen._canvas.delete(old_ref);
+            self._screen._canvas.tag_lower(self._ref, old_ref);
+            self._screen._canvas.delete(old_ref);
+        except:
+            pass;
 
 
 class Image(Renderable):
@@ -2524,8 +2524,9 @@ class Image(Renderable):
                  visible: bool = True,
                  location: Location = None):
         self._image_name = image;
+        filetype = image[len(image) - 4:len(image)];
 
-        if image[len(image) - 4:len(image)] in self.TKINTER_TYPES:
+        if filetype in self.TKINTER_TYPES:
             self._image = tk.PhotoImage(name=image, file=image);
         else:
             try:
@@ -2672,8 +2673,8 @@ class Image(Renderable):
             cosine = math.cos(theta);
             sine = math.sin(theta);
 
-            center_x = self.center().x();
-            center_y = self.center().y();
+            center_x = self.x() + self.width() / 2;
+            center_y = self.y() + self.width() / 2;
 
             new_vertices = []
             for vertex in vertices:
@@ -3426,22 +3427,22 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
-
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
-
-        hypotenuse = true_width / 2;
-        radians = math.radians(self._angle);
-
-        dx = math.cos(radians) * hypotenuse;
-        dy = math.sin(radians) * hypotenuse;
-
-        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
-        real_y = (self.y() - (self._screen.height() / 2)) - dy;
-
         try:
+            import tkinter.font as tkfont;
+
+            font = tkfont.Font(font=font_data);
+            true_width = font.measure(self._text);
+            true_height = font.metrics('linespace');
+
+            hypotenuse = true_width / 2;
+            radians = math.radians(self._angle);
+
+            dx = math.cos(radians) * hypotenuse;
+            dy = math.sin(radians) * hypotenuse;
+
+            real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
+            real_y = (self.y() - (self._screen.height() / 2)) - dy;
+
             self._ref = self._screen._screen.cv.create_text(real_x,
                                                             real_y,
                                                             text=self.text(),
@@ -3458,7 +3459,7 @@ class Text(CustomRenderable):
             self._height = true_height * (self._text.count('\n') + 1);
 
             self._screen._screen.cv.update();
-        except tk.TclError:
+        except (tk.TclError, AttributeError):
             pass;
 
 
@@ -3568,7 +3569,7 @@ class Line(Object):
 
         :param dx: the distance x to move
         :param dy: the distance y to move
-        :param point: affect only one of the endpoints; options: (1, 2), default=0 (Must be
+        :param point: affect only one of the endpoints; options: (1, 2), default=0 (Must be 1 or 2)
         :return: None
         """
 
@@ -3604,7 +3605,8 @@ class Line(Object):
             elif point != 0:
                 raise InvalidArgumentError('You must pass either 1 or 2 in as a point, or 0 for both points!');
         else:
-            self.move(diff[0], diff[1]);
+            self._pos1.move(diff[0], diff[1]);
+            self._pos2.move(diff[0], diff[1]);
 
         self.update();
 
@@ -3682,12 +3684,22 @@ class Line(Object):
         # slope = (self.pos2().y() - self.pos1().y()) / (self.pos2.x() - self.pos1.x());
         length = self.length();
 
-        ray_length = self._length(self.pos1().x(), location.x(), self.pos1().y(), location.y());
+        if point == 2:
+            ray_length = self._length(self.pos1().x(), location.x(), self.pos1().y(), location.y());
 
-        # hypotenuse = (ray_length - length);  # extraneous length (we need to cut this)
+            # hypotenuse = (ray_length - length);  # extraneous length (we need to cut this)
 
-        theta = math.atan2(self.pos1().y() - location.y(), self.pos1().x() - location.x()) \
-                - math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x());
+            theta = math.atan2(self.pos1().y() - location.y(), self.pos1().x() - location.x()) \
+                    - math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x());
+        elif point == 1:
+            ray_length = self._length(self.pos2().x(), location.x(), self.pos2().y(), location.y());
+
+            # hypotenuse = (ray_length - length);  # extraneous length (we need to cut this)
+
+            theta = math.atan2(self.pos2().y() - location.y(), self.pos2().x() - location.x()) \
+                    - math.atan2(self.pos2().y() - self.pos1().y(), self.pos2().x() - self.pos1().x());
+        else:
+            raise InvalidArgumentError('Point is not 1 or 2! (2 by default)');
 
         self.rotate(math.degrees(theta));
 

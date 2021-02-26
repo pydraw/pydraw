@@ -2231,7 +2231,7 @@ class Line(Object):
 
         :param dx: the distance x to move
         :param dy: the distance y to move
-        :param point: affect only one of the endpoints; options: (1, 2), default=0 (Must be
+        :param point: affect only one of the endpoints; options: (1, 2), default=0 (Must be 1 or 2)
         :return: None
         """
 
@@ -2267,7 +2267,8 @@ class Line(Object):
             elif point != 0:
                 raise InvalidArgumentError('You must pass either 1 or 2 in as a point, or 0 for both points!');
         else:
-            self.move(diff[0], diff[1]);
+            self._pos1.move(diff[0], diff[1]);
+            self._pos2.move(diff[0], diff[1]);
 
         self.update();
 
@@ -2345,12 +2346,22 @@ class Line(Object):
         # slope = (self.pos2().y() - self.pos1().y()) / (self.pos2.x() - self.pos1.x());
         length = self.length();
 
-        ray_length = self._length(self.pos1().x(), location.x(), self.pos1().y(), location.y());
+        if point == 2:
+            ray_length = self._length(self.pos1().x(), location.x(), self.pos1().y(), location.y());
 
-        # hypotenuse = (ray_length - length);  # extraneous length (we need to cut this)
+            # hypotenuse = (ray_length - length);  # extraneous length (we need to cut this)
 
-        theta = math.atan2(self.pos1().y() - location.y(), self.pos1().x() - location.x()) \
-                - math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x());
+            theta = math.atan2(self.pos1().y() - location.y(), self.pos1().x() - location.x()) \
+                    - math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x());
+        elif point == 1:
+            ray_length = self._length(self.pos2().x(), location.x(), self.pos2().y(), location.y());
+
+            # hypotenuse = (ray_length - length);  # extraneous length (we need to cut this)
+
+            theta = math.atan2(self.pos2().y() - location.y(), self.pos2().x() - location.x()) \
+                    - math.atan2(self.pos2().y() - self.pos1().y(), self.pos2().x() - self.pos1().x());
+        else:
+            raise InvalidArgumentError('Point is not 1 or 2! (2 by default)');
 
         self.rotate(math.degrees(theta));
 
