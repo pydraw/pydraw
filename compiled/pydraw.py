@@ -3157,8 +3157,6 @@ class Text(CustomRenderable):
         self._width = true_width;
         self._height = true_height * (self._text.count('\n') + 1);
 
-        screen._screen.cv.update();
-
     def text(self, text: str = None) -> str:
         """
         Get or set the text. Use '\n' to separate lines.
@@ -3457,8 +3455,6 @@ class Text(CustomRenderable):
 
             self._width = true_width;
             self._height = true_height * (self._text.count('\n') + 1);
-
-            self._screen._screen.cv.update();
         except (tk.TclError, AttributeError):
             pass;
 
