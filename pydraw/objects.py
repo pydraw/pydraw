@@ -83,6 +83,7 @@ class Object:
         :return: None
         """
 
+        # noinspection PyProtectedMember
         self._screen._front(self);
 
     def back(self) -> None:
@@ -92,13 +93,35 @@ class Object:
         :return: None
         """
 
+        # noinspection PyProtectedMember
         self._screen._back(self);
 
-    def remove(self):
+    def remove(self) -> None:
         self._screen.remove(self);
 
+    # # noinspection PyProtectedMember
+    # def add(self) -> None:
+    #     """
+    #     Should only be used to add an object that has been removed (via .remove() or Screen.clear()
+    #     :return: None
+    #     """
+    #     if self in self._screen.objects():
+    #         raise PydrawError('Error adding object: Object alraedy in Screen.objects()');
+    #
+    #     self._setup();
+    #     self._screen._add(self);
+
+    def _setup(self):
+        """
+        To be overriden.
+        """
+        pass;
+
     def update(self) -> None:
-        real_x, real_y = self._get_real_location();
+        """
+        To be overriden.
+        """
+        pass;
 
 
 class Renderable(Object):

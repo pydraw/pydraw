@@ -465,11 +465,12 @@ class Screen:
 
     # noinspection PyProtectedMember
     def remove(self, obj):
-        self._screen.cv.delete(obj._ref);
         if obj in self._objects:
             self._objects.remove(obj);
+            print('removed: ' + str(type(obj)));
         elif obj not in self._gridlines and obj not in self._helpers:
             raise ValueError(f'Object: {obj} is not registered with the screen? Did you call the constructor?');
+        self._screen.cv.delete(obj._ref);
         del obj;
 
     def objects(self) -> tuple:
@@ -487,12 +488,14 @@ class Screen:
         """
 
         try:
-            self._screen.clear();
+            for i in range(len(self._objects) - 1, -1, -1):
+                self._objects[i].remove();
+            # self._screen.clear();
             if self._gridstate:
                 self._redraw_grid();  # Redraw the grid if it was active.
             self.color(self._color);  # Redraw the color of the screen.
         except (tk.TclError, AttributeError):
-            pass;  # We silently stop TclErrors from appearing to users.
+            pass;
 
     @staticmethod
     def sleep(delay: float) -> None:
