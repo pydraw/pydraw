@@ -137,9 +137,9 @@ class Renderable(Object):
         self._height = height;
         self._color = color;
         self._border = border if border is not None else Color('');
+        self._borderwidth = 1;
         self._fill = fill;
         self._angle = rotation;
-        self._rotations = {};
         self._visible = visible;
 
         self._setup();
@@ -194,19 +194,7 @@ class Renderable(Object):
 
         # return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
-    def color(self, color: Color = None) -> Color:
-        """
-        Get or set the color of the object
-        :param color: the color to set to, if any
-        :return: the color of the object
-        """
 
-        if color is not None:
-            verify(color, Color);
-            self._color = color;
-            self.update();
-
-        return self._color;
 
     def rotation(self, angle: float = None) -> float:
         """
@@ -245,7 +233,42 @@ class Renderable(Object):
 
         self.rotate(theta);
 
-    def border(self, color: Color = None, fill: bool = None) -> Color:
+    def forward(self, distance: float) -> None:
+        """
+        Move the Renderable forward by distance at its current heading (rotation/angle)
+        :param distance: the distance to move forward (hypotenuse)
+        :return: None
+        """
+
+        dx = distance * math.sin(math.radians(self._angle));
+        dy = distance * -math.cos(math.radians(self._angle));
+
+        self.move(dx, dy);
+
+    def backward(self, distance: float) -> None:
+        """
+        Move the Renderable backward by distance at its current heading (rotation/angle)
+        :param distance: the distance to move backward (hypotenuse)
+        :return: None
+        """
+
+        self.forward(-distance);
+
+    def color(self, color: Color = None) -> Color:
+        """
+        Get or set the color of the object
+        :param color: the color to set to, if any
+        :return: the color of the object
+        """
+
+        if color is not None:
+            verify(color, Color);
+            self._color = color;
+            self.update();
+
+        return self._color;
+
+    def border(self, color: Color = None, width: float = 1, fill: bool = None) -> Color:
         """
         Add or get the border of the object
         :param color: the color to set the border too, set to Color.NONE to remove border
@@ -262,6 +285,10 @@ class Renderable(Object):
         if fill is not None:
             verify(fill, bool);
             self._fill = fill;
+            update = True;
+        if width is not None:
+            verify(width, (float, int));
+            self._borderwidth = width;
             update = True;
 
         if update:
@@ -285,7 +312,7 @@ class Renderable(Object):
 
     def distance(self, obj) -> float:
         """
-        Returns the distance between two objs or locations in pixels
+        Returns the distance between two objs or locations in pixels (center to center)
         :param obj: the Renderable/location to check distance between
         :return: the distance between this obj and the passed Renderable/Location.
         """
@@ -605,6 +632,7 @@ class Renderable(Object):
             tk_vertices,
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
+            width=self._borderwidth,
             state=state
         );
         # self.update(); # CustomPolygon(self._screen, vertices);
@@ -673,6 +701,7 @@ class Renderable(Object):
                 tk_vertices,
                 fill=self._screen._colorstr(color_state),
                 outline=self._screen._screen._colorstr(self._border.__value__()),
+                width=self._borderwidth,
                 state=state
             );
 
@@ -684,7 +713,7 @@ class Renderable(Object):
 
 class CustomRenderable(Renderable):
     """
-    A wrapper class to distintify classes that wrap turtle and those that are built on tkinter.
+    A wrapper class to distintify classes that extend Renderable but have some custom functionality.
     """
     pass;
 
@@ -705,6 +734,7 @@ class CustomPolygon(CustomRenderable):
         self._screen = screen;
         self._color = color;
         self._border = border if border is not None else Color('');
+        self._borderwidth = 1;
         self._fill = fill;
         self._angle = rotation;
         self._visible = visible;
@@ -756,6 +786,7 @@ class CustomPolygon(CustomRenderable):
             tk_vertices,
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
+            width=self._borderwidth,
             state=state
         );
 
@@ -961,6 +992,7 @@ class CustomPolygon(CustomRenderable):
             tk_vertices,
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
+            width=self._borderwidth,
             state=state
         );
 
@@ -1140,6 +1172,7 @@ class Polygon(Renderable):
             tk_vertices,
             fill=self._screen._colorstr(self._color),
             outline=self._screen._screen._colorstr(self._border.__value__()),
+            width=self._borderwidth,
             state=state
         );
 
@@ -1147,10 +1180,20 @@ class Polygon(Renderable):
         old_ref = self._ref;
         shape = self._shape;  # List of normal vertices.
 
+        a = math.pi * 2 / self._num_sides * (PIXEL_RATIO / 2);
+        n = self._num_sides;
+
+        # Degree converted to radians
+        apothem = a / (2 * math.tan((180 / n) *
+                                    math.pi / 180));
+
+        true_width = PIXEL_RATIO;
+        true_height = apothem * 2;
+
         width = self._width;
         height = self._height;
 
-        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
+        scale_factor = (width / true_width, height / true_height);
 
         cx = 0
         cy = 0
@@ -1161,14 +1204,14 @@ class Polygon(Renderable):
             vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
 
             vertex.move(self.x() + width / 2, self.y() + height / 2);
+            vertex.move(dy=PIXEL_RATIO - true_height);
 
         self._vertices = vertices;
 
-        # noinspection PyAttributeOutsideInit
         self._vertices = self._rotate(self._vertices, self._angle);
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
-        for vertex in vertices:
+        for vertex in self._vertices:
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
                                 (vertex.y() - (self._screen.height() / 2))));
 
@@ -1180,6 +1223,7 @@ class Polygon(Renderable):
                 tk_vertices,
                 fill=self._screen._colorstr(self._color),
                 outline=self._screen._screen._colorstr(self._border.__value__()),
+                width=self._borderwidth,
                 state=state
             );
 
@@ -1506,264 +1550,6 @@ class Image(Renderable):
             self._screen._canvas.delete(old_ref);
         except tk.TclError:
             pass;
-
-
-# While technically this is a normal renderable, I've grouped it with the
-# CustomRenderables due to its special-case dependency on PIP.
-# class Image(Renderable):
-#     """
-#     Image class. Supports basic formats: PNG, GIF, JPG, PPM, images.
-#
-#     NOTE: This class supports the basic displaying of images, but also supports much more,
-#     such as image modification (width, height, color, etc) if you have PIL (Pillow) installed!
-#     You can install PIL/Pillow by running: `pip install pillow` in a terminal!
-#     """
-#
-#     TKINTER_TYPES = ['.png', '.gif', '.ppm'];
-#
-#     def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
-#                  width: float = None,
-#                  height: float = None,
-#                  color: Color = None,
-#                  border: Color = None,
-#                  rotation: float = 0,
-#                  visible: bool = True,
-#                  location: Location = None):
-#         self._image_name = image;
-#
-#         if image[len(image) - 4:len(image)] in self.TKINTER_TYPES:
-#             self._image = tk.PhotoImage(name=image, file=image);
-#         else:
-#             try:
-#                 from PIL import Image, ImageTk;
-#                 image = Image.open(self._image_name);
-#                 self._image = ImageTk.PhotoImage(image);
-#             except:
-#                 raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
-#                                        'Install Pillow via: \'pip install pillow\'.');
-#
-#         self._width = self._image.width();
-#         self._height = self._image.height();
-#
-#         self._mask = 123;
-#
-#         # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
-#         self._patched = False;
-#
-#         shape = turtle.Shape('image', self._image);
-#
-#         # noinspection PyProtectedMember
-#         screen._screen.register_shape(self._image_name, shape);
-#
-#         super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=None,
-#                          rotation=rotation, visible=visible, location=location);
-#         self._ref.shape(self._image_name);
-#
-#         if width is not None:
-#             self.width(width);
-#         if height is not None:
-#             self.height(height);
-#
-#         if color is not None:
-#             self.color(color);
-#
-#         if border is not None:
-#             self.border(border);
-#
-#     def width(self, width: float = None) -> float:
-#         """
-#         Get or set the width of the image (REQUIRES: PIL or Pillow)
-#         :param width: the width to set to, if any
-#         :return: None
-#         """
-#
-#         if width is not None:
-#             verify(width, (float, int));
-#             self._width = width;
-#             self.update(True);
-#
-#         return self._width;
-#
-#     def height(self, height: float = None) -> float:
-#         """
-#         Get or set the height of the image
-#         :param height: the height to set to, if any
-#         :return: the height
-#         """
-#
-#         if height is not None:
-#             verify(height, (float, int));
-#             self._height = height;
-#             self.update(True);
-#
-#         return self._height;
-#
-#     def color(self, color: Color = None, alpha: int = 123) -> Color:
-#         """
-#         Retrieves or applies a color-mask to the image
-#         :param color: the color to mask to, if any
-#         :param alpha: The alpha level of the mask, defaults to 123 (half of 255)
-#         :return: the mask-color of the object
-#         """
-#
-#         if color is not None:
-#             verify(color, Color);
-#             self._color = color;
-#             self._mask = alpha;
-#             self.update(True);
-#
-#         return self._color;
-#
-#     def rotation(self, angle: float = None) -> float:
-#         """
-#         Get or set the rotation of the image.
-#         :param angle: the angle to set the rotation to in degrees, if any
-#         :return: the angle of the image's rotation in degrees
-#         """
-#
-#         if angle is not None:
-#             verify(angle, (float, int));
-#             self._angle = angle;
-#             self.update(True);
-#
-#         return self._angle;
-#
-#     # noinspection PyMethodOverriding
-#     def rotate(self, angle_diff: float) -> None:
-#         """
-#         Rotate the angle of the image by a difference, in degrees
-#         :param angle_diff: the angle difference to rotate by
-#         :return: None
-#         """
-#
-#         if angle_diff != 0:
-#             verify(angle_diff, (float, int));
-#             self._angle += angle_diff;
-#             self.update(True);
-#
-#     # noinspection PyMethodOverriding
-#     def border(self, color: Color = None) -> Color:
-#         """
-#         Add or get the border of the image
-#         :param color: the color to set the border too, set to Color.NONE to remove border
-#         :return: The Color of the border
-#         """
-#
-#         if color is not None:
-#             verify(color, Color);
-#             self._border = color;
-#             self.update(True);
-#
-#         return self._border;
-#
-#     def fill(self, fill: bool = None) -> bool:
-#         """
-#         Unsupported: This doesn't make sense for images.
-#         """
-#
-#         raise UnsupportedError('This method is not supported for Images!');
-#
-#     def vertices(self) -> list:
-#         """
-#         Returns the list of vertices for the Renderable.
-#         (The vertices will be returned clockwise, starting from the top-leftmost point)
-#         :return: a list of Locations representing the vertices
-#         """
-#
-#         vertices = [self.location(), Location(self.x() + self.width(), self.y()),
-#                     Location(self.x() + self.width(), self.y() + self.height()),
-#                     Location(self.x(), self.y() + self.height())];
-#
-#         if self._angle != 0:
-#
-#             # First get some values that we gonna use later
-#             theta = math.radians(self._angle);
-#             cosine = math.cos(theta);
-#             sine = math.sin(theta);
-#
-#             center_x = self.center().x();
-#             center_y = self.center().y();
-#
-#             new_vertices = []
-#             for vertex in vertices:
-#                 # We have to create these separately because they're ironically used in each others calculations xD
-#                 old_x = vertex.x() - center_x;
-#                 old_y = vertex.y() - center_y;
-#
-#                 new_x = (old_x * cosine - old_y * sine) + center_x;
-#                 new_y = (old_x * sine + old_y * cosine) + center_y;
-#                 new_vertices.append(Location(new_x, new_y));
-#
-#             vertices = new_vertices;
-#
-#         return vertices;
-#
-#     @staticmethod
-#     def _monkey_patch_del():
-#         """
-#         We monkey patch the del function for PIL so it doesn't do stupid things.
-#         :return:
-#         """
-#         from PIL import ImageTk;
-#
-#         # monkey patch TKinter from this dumb bug they don't catch in TK.PhotoImage
-#         old_del = ImageTk.PhotoImage.__del__;
-#
-#         def new_del(self):
-#             try:
-#                 old_del(self)
-#             except (AttributeError, RecursionError):
-#                 pass;  # Yeah, we don't care.
-#             pass;
-#
-#         ImageTk.PhotoImage.__del__ = new_del
-#
-#     def update(self, updated: bool = False):
-#         if updated:
-#             try:
-#                 from PIL import Image, ImageTk, ImageOps;
-#
-#                 if not self._patched:
-#                     self._monkey_patch_del();  # If we do have PIL we need to monkey patch this immediately.
-#                     self._patched = True;
-#
-#                 image = Image.open(self._image_name).convert('RGBA');
-#
-#                 if self._color is not None and self._color != Color.NONE:
-#                     r, g, b, alpha = image.split()
-#                     gray = ImageOps.grayscale(image)
-#                     result = ImageOps.colorize(gray, (0, 0, 0, 0),
-#                                                (
-#                                                    self._color.red(), self._color.green(), self._color.blue(),
-#                                                    self._mask));
-#                     result.putalpha(alpha);
-#                     image = result;
-#
-#                 if self._border is not None:
-#                     image = ImageOps.expand(image, border=10, fill=self._border.rgb())
-#
-#                 # Do resizing last so we can make sure the other manipulations work properly
-#                 image = image.resize((self.width(), self.height()), Image.ANTIALIAS);
-#
-#                 if self._angle != 0:
-#                     image = image.rotate(-self._angle, resample=Image.BILINEAR, expand=1, fillcolor=None)
-#
-#                 self._image = ImageTk.PhotoImage(image=image);
-#             except (RuntimeError, AttributeError):
-#                 pass;  # We are catching some stupid errors from Tkinter involving images and program exiting.
-#             except:
-#                 raise UnsupportedError('As PIL is not installed, you cannot modify images! '
-#                                        'Install Pillow via: \'pip install pillow\'.');
-#
-#         try:
-#             shape = turtle.Shape('image', self._image);
-#
-#             # noinspection PyProtectedMember
-#             self._screen._screen.register_shape(self._image_name, shape);
-#             self._ref.shape(self._image_name);
-#         except tk.TclError:
-#             pass;
-#         super().update();
 
 
 class Text(CustomRenderable):

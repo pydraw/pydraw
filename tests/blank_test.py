@@ -13,9 +13,11 @@ image = Image(screen, '../images/pacman.gif', 100, 50, 50, 50);
 image.load();
 
 # poly.width(500, ratio=True)
-
+count = 5
 
 def keydown(key):
+    global count;
+
     if key == 'r':
         p1.rotate(1);
     elif key == 'w':
@@ -28,6 +30,12 @@ def keydown(key):
         p1.y(p1.y() + 10)
     elif key == 'g':
         image.next();
+    elif key == 'n':
+        poly.forward(3);
+    elif key == 'b':
+        # poly.backward(3);
+        poly.border(Color('red'), width=count)
+        count += 3;
 
 
 screen.listen();
