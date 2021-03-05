@@ -155,6 +155,8 @@ class Color:
                 rgb = turtle.getcanvas().winfo_rgb(color.name());
             except tk.TclError:
                 raise PydrawError('Color-string does not exist: ', color.name());
+            except turtle.Terminator:
+                return 255, 255, 255;  # Just return black if Program is shutting down.
         elif color.hex() is not None:
             hexval = color.hex().replace('#', '');
 

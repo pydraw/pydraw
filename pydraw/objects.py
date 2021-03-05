@@ -194,8 +194,6 @@ class Renderable(Object):
 
         # return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
-
-
     def rotation(self, angle: float = None) -> float:
         """
         Get or set the rotation of the object.
@@ -220,17 +218,32 @@ class Renderable(Object):
         verify(angle_diff, (float, int));
         self.rotation(self._angle + angle_diff);
 
-    def lookat(self, obj):
+    def angleto(self, obj) -> float:
+        """
+        Retrieve the angle between this object and another (based on 0 degrees at 12 o'clock)
+        :param obj: the Object/Location to get the angle to.
+        :return: the angle in degrees as a float
+        """
+
         if isinstance(obj, Object):
             obj = obj.location();
         elif type(obj) is not Location and type(obj) is not tuple:
-            raise InvalidArgumentError('Renderable#lookat() must be passed either a renderable or a location!')
+            raise InvalidArgumentError('Renderable#lookat() must be passed either a renderable or a location!');
 
         location = Location(obj[0], obj[1]);
-
         theta = math.atan2(location.y() - self.y(), location.x() - self.x()) - math.radians(self.rotation());
         theta = math.degrees(theta);
 
+        return theta;
+
+    def lookat(self, obj) -> None:
+        """
+        Look at another object (Objects or Locations)
+        :param obj: the Object/Location to look at.
+        :return: None
+        """
+
+        theta = self.angleto(obj);
         self.rotate(theta);
 
     def forward(self, distance: float) -> None:
@@ -392,6 +405,7 @@ class Renderable(Object):
         count = 0;
 
         if len(args) == 1:
+            verify(args, (tuple, Location));
             if type(args[0]) is Location:
                 x = args[0].x();
                 y = args[0].y();
@@ -399,6 +413,7 @@ class Renderable(Object):
                 x = args[0][0];
                 y = args[0][1];
         elif len(args) == 2:
+            verify(args[0], (float, int), args[1], (float, int));
             if type(args[0]) is not float and type(args[0]) is not int \
                     and type(args[1]) is not float and type(args[1]) is not int:
                 raise InvalidArgumentError('Passed arguments must be numbers (x, y), '
@@ -1255,6 +1270,10 @@ class Image(Renderable):
         self._image_name = image;
         filetype = image[len(image) - 4:len(image)];
 
+        import os;
+        if not os.path.isfile(image):
+            raise InvalidArgumentError(f'Image does not exist or is directory: {image}');
+
         if filetype in self.TKINTER_TYPES:
             self._image = tk.PhotoImage(name=image, file=image);
         else:
@@ -1290,6 +1309,9 @@ class Image(Renderable):
 
         if border is not None:
             self.border(border);
+
+    def _setup(self):
+        pass;
 
     def width(self, width: float = None) -> float:
         """
@@ -1527,15 +1549,15 @@ class Image(Renderable):
                     image = ImageOps.expand(image, border=10, fill=self._border.rgb())
 
                 # Do resizing last so we can make sure the other manipulations work properly
-                image = image.resize((self.width(), self.height()), Image.ANTIALIAS);
+                image = image.resize((int(self.width()), int(self.height())), Image.ANTIALIAS);
 
                 if self._angle != 0:
                     image = image.rotate(-self._angle, resample=Image.BILINEAR, expand=1, fillcolor=None)
 
                 self._image = ImageTk.PhotoImage(image=image);
-            except (RuntimeError, AttributeError):
+            except (RuntimeError, AttributeError) as e:
                 pass;  # We are catching some stupid errors from Tkinter involving images and program exiting.
-            except:
+            except ImportError:
                 raise UnsupportedError('As PIL is not installed, you cannot modify images! '
                                        'Install Pillow via: \'pip install pillow\'.');
 
@@ -1543,8 +1565,11 @@ class Image(Renderable):
             old_ref = self._ref;
             real_location = self._screen.canvas_location(self.x(), self.y());
 
+            state = tk.NORMAL if self._visible else tk.HIDDEN;
+
             self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
-                                                          real_location.y() + self._height / 2, image=self._image);
+                                                          real_location.y() + self._height / 2, image=self._image,
+                                                          state=state);
 
             self._screen._canvas.tag_lower(self._ref, old_ref);
             self._screen._canvas.delete(old_ref);
@@ -2325,6 +2350,6 @@ class Line(Object):
             self._screen._screen.cv.tag_lower(self._ref, old_ref);
             self._screen._screen.cv.delete(old_ref);
 
-            self._screen._screen.cv.update();
+            # self._screen._screen.cv.update();
         except tk.TclError:
             pass;  # Just catch TclErrors and throw them out.
