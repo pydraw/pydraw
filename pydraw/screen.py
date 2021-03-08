@@ -451,7 +451,8 @@ class Screen:
     def _back(self, obj) -> None:
         from pydraw import Object;
 
-        verify(obj, Object);
+        if not isinstance(obj, Object):
+            raise InvalidArgumentError('Expected an Object...')
         self._canvas.tag_lower(obj._ref);
 
     def _add(self, obj) -> None:
@@ -756,12 +757,9 @@ class Screen:
 
         # noinspection PyBroadException
         def eventfun(event):
-            try:
-                x, y = (self._screen.cv.canvasx(event.x) / self._screen.xscale,
-                        -self._screen.cv.canvasy(event.y) / self._screen.yscale)
-                fun(x, y)
-            except Exception:
-                pass
+            x, y = (self._screen.cv.canvasx(event.x) / self._screen.xscale,
+                    -self._screen.cv.canvasy(event.y) / self._screen.yscale)
+            fun(x, y)
 
         self._screen.cv.bind("<Button%s-Motion>" % btn, eventfun, add);
 

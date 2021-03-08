@@ -1834,6 +1834,14 @@ class Text(CustomRenderable):
 
         self.rotate(theta);
 
+    def center(self) -> Location:
+        """
+        Get the Center of the Text's points
+        :return: the Centroid/Center of the Text
+        """
+        self._vertices = self.vertices();  # TODO: Fix .center() with Text ( .vertices() calls center() here )
+        return super().center();
+
     def vertices(self) -> list:
         # First get some values that we gonna use later
         theta = math.radians(self._angle);
