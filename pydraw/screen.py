@@ -297,6 +297,25 @@ class Screen:
         return self._mouse;
 
     # Direct Manipulation
+    def alert(self, text: str, title: str = 'Alert', accept_text: str = 'Ok', cancel_text: str = 'Cancel') -> bool:
+        """
+        Displays a dialog-box alert, and returns
+        :param text: The text to display in the body of the dialog
+        :param title: The title of the dialog-box
+        :param accept_text: The text displayed on the accept button, defaults to 'Ok'
+        :param cancel_text: The text displayed on the cancel button, defaults to 'Cancel'
+        :return: True if accept was pressed, False if cancel was pressed
+        """
+        from tkinter.simpledialog import SimpleDialog
+
+        alert = SimpleDialog(self._root,
+                             text=text,
+                             buttons=[accept_text, cancel_text],
+                             default=0,
+                             cancel=1,
+                             title=title)
+        return alert.go()
+
     def prompt(self, text: str, title: str = 'Prompt') -> str:
         """
         Prompts the user for keyboard input
@@ -331,7 +350,7 @@ class Screen:
 
         for row in range(int(cellsize[1]), int(self.height()), int(cellsize[1])):
             line = Line(self, Location(0, row), Location(self.width(), row),
-                                        color=Color('lightgray'));
+                        color=Color('lightgray'));
             self._gridlines.append(line);
             self._objects.remove(line);  # Don't want this in our objects list :)
 
@@ -343,7 +362,7 @@ class Screen:
 
         for col in range(int(cellsize[0]), int(self.width()), int(cellsize[0])):
             line = Line(self, Location(col, 0), Location(col, self.height()),
-                                        color=Color('lightgray'));
+                        color=Color('lightgray'));
             self._gridlines.append(line);
             self._objects.remove(line);  # Don't want this in our objects list :)
 

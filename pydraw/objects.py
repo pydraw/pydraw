@@ -172,11 +172,16 @@ class Renderable(Object):
 
         return self._height;
 
-    def center(self) -> Location:
+    def center(self, move_to: Location = None) -> Location:
         """
         Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
         :return: Location object representing center of Renderable
         """
+
+        if move_to is not None:
+            verify(move_to, Location);
+            self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -894,7 +899,7 @@ class CustomPolygon(CustomRenderable):
 
         return self._angle;
 
-    def center(self) -> Location:
+    def center(self, moveto: Location = None) -> Location:
         """
         Returns the centroid for the CustomPolygon
         :return: centroid in the form of a Location
@@ -912,7 +917,16 @@ class CustomPolygon(CustomRenderable):
         centroid_x = sum(x_list) / len(y_list);
         centroid_y = sum(y_list) / len(x_list);
 
-        return Location(centroid_x, centroid_y);
+        diff_x = 0
+        diff_y = 0
+
+        if moveto is not None:
+            verify(moveto, Location);
+            diff_x = moveto.x() - centroid_x
+            diff_y = moveto.y() - centroid_y
+            self.move(diff_x, diff_y);
+
+        return Location(centroid_x + diff_x, centroid_y + diff_y);
 
     def vertices(self) -> list:
         return self._current_vertices.copy();
@@ -1191,6 +1205,7 @@ class Polygon(Renderable):
             state=state
         );
 
+    # noinspection PyProtectedMember
     def update(self):
         old_ref = self._ref;
         shape = self._shape;  # List of normal vertices.
@@ -1834,15 +1849,23 @@ class Text(CustomRenderable):
 
         self.rotate(theta);
 
-    def center(self) -> Location:
+    def center(self, moveto: Location = None) -> Location:
         """
         Get the Center of the Text's points
+        :param moveto: If defined, will move the Line to be centered on the passed Location
         :return: the Centroid/Center of the Text
         """
-        self._vertices = self.vertices();  # TODO: Fix .center() with Text ( .vertices() calls center() here )
-        return super().center();
+        if moveto is not None:
+            self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
+
+        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2)
 
     def vertices(self) -> list:
+        """
+        Get the vertices of a Rectangle superposed in the same transform of the Text
+        :return: a list of Locations
+        """
+
         # First get some values that we gonna use later
         theta = math.radians(self._angle);
         cosine = math.cos(theta);
@@ -2338,6 +2361,105 @@ class Line(Object):
 
         return Line(self._screen, self._pos1, self._pos2, color=self._color, thickness=self._thickness,
                     dashes=self._dashes, visible=self._visible);
+
+    def intersects(self, obj) -> bool:
+        """
+        Check if a line intersects with another line or Renderable
+        :param obj: Line, Renderable, or List/Tuple
+        :return: Whether or not the line intersects with the object
+        """
+
+        shape1 = (self.pos1(), self.pos2());
+
+        if type(obj) == Line:
+            shape2 = (obj.pos1(), obj.pos2());
+        elif type(obj) == Renderable:
+            shape2 = obj.vertices();
+        elif type(obj) == list or type(obj) == tuple:
+            shape2 = obj;
+        else:
+            raise InvalidArgumentError('Line.intersects() accepts only: Lines, Renderables, Lists or Tuples');
+
+        if len(shape2) < 2:
+            raise InvalidArgumentError('Passed object did not have more than 1 vertice!');
+
+        # Orientation method that will determine if it is a triangle (and in what direction [cc or ccw]) or a line.
+        def orientation(point1: Location, point2: Location, point3: Location) -> str:
+            """
+            Internal method that will determine the orientation of three points. They can be a clockwise triangle,
+            counterclockwise triangle, or a co-linear line segment.
+            :param point1: the first point of the main line segment
+            :param point2: the second point of the main line segment
+            :param point3: the third point to check from another line segment
+            :return: the orientation of the passed points
+            """
+            result = (float(point2.y() - point1.y()) * (point3.x() - point2.x())) - \
+                     (float(point2.x() - point1.x()) * (point3.y() - point2.y()));
+
+            if result > 0:
+                return 'clockwise';
+            elif result < 0:
+                return 'counter-clockwise';
+            else:
+                return 'co-linear';
+
+        def point_on_segment(point1: Location, point2: Location, point3: Location) -> bool:
+            """
+            Returns if point3 lies on the segment formed by point1 and point2.
+            """
+
+            return max(point1.x(), point3.x()) >= point2.x() >= min(point1.x(), point3.x()) \
+                   and max(point1.y(), point3.y()) >= point2.y() >= min(point1.y(), point3.y());
+
+        # Okay to begin actually detecting orientations, we want to loop through some edges. But only ones that are
+        # relevant. In order to do this we will first have to turn the list of vertices into a list of edges.
+        # Then we will look through the lists of edges and find the ones closest to each other.
+
+        shape1_edges = [];
+        shape2_edges = [];
+
+        shape1 = tuple(shape1[:]) + (shape1[0],);
+        shape2 = tuple(shape2[:]) + (shape2[0],);
+
+        shape1_point1 = shape1[0];
+        for i in range(1, len(shape1)):
+            shape1_point2 = shape1[i % len(shape1)];  # 1, 2, 3, 3 % 5
+            shape1_edges.append((shape1_point1, shape1_point2));
+            shape1_point1 = shape1_point2;
+
+        shape2_point1 = shape2[0];
+        for i in range(1, len(shape2)):
+            shape2_point2 = shape2[i % len(shape2)];
+            shape2_edges.append((shape2_point1, shape2_point2));
+            shape2_point1 = shape2_point2;
+
+        # Now we are going to test the four orientations that the segments form
+        for edge1 in shape1_edges:
+            for edge2 in shape2_edges:
+                orientation1 = orientation(edge1[0], edge1[1], edge2[0]);
+                orientation2 = orientation(edge1[0], edge1[1], edge2[1]);
+                orientation3 = orientation(edge2[0], edge2[1], edge1[0]);
+                orientation4 = orientation(edge2[0], edge2[1], edge1[1]);
+
+                # If orientations 1 and 2 are different as well as 3 and 4 then they intersect!
+                if orientation1 != orientation2 and orientation3 != orientation4:
+                    return True;
+
+                # There's some special cases we should check where a point from one segment is on the other segment
+                if orientation1 == 'co-linear' and point_on_segment(edge1[0], edge2[0], edge1[1]):
+                    return True;
+
+                if orientation2 == 'co-linear' and point_on_segment(edge1[0], edge2[1], edge1[1]):
+                    return True;
+
+                if orientation3 == 'co-linear' and point_on_segment(edge2[0], edge1[0], edge2[1]):
+                    return True;
+
+                if orientation4 == 'co-linear' and point_on_segment(edge2[0], edge1[1], edge2[1]):
+                    return True;
+
+        # If none of the above conditions were ever met we just return False. Hopefully we are correct xD.
+        return False;
 
     # noinspection PyProtectedMember
     def update(self):
