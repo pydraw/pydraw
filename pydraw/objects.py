@@ -430,8 +430,9 @@ class Renderable(Object):
 
         # If the point isn't remotely near us, we don't need to perform any calculations.
         if not isinstance(self, CustomRenderable) and self._angle == 0:
-            if not (self.x() <= x <= (self.x() + self.width()) and self.y() <= y <= (self.y() + self.height())):
-                return False;
+            if self.y() > 0 and self.x() > 0:
+                if not (self.x() <= x <= (self.x() + self.width()) and self.y() <= y <= (self.y() + self.height())):
+                    return False;
 
         # the contains algorithm uses the line-intersects algorithm to determine if a point is within a polygon.
         # we are going to cast a ray from our point to the positive x. (left to right)
@@ -599,6 +600,7 @@ class Renderable(Object):
     # noinspection PyUnresolvedReferences
     def _get_vertices(self):
         real_shape = self._vertices;
+        real_shape.reverse();
 
         min_distance = 999999;
         top_left_index = 0;
@@ -609,7 +611,6 @@ class Renderable(Object):
                 top_left_index = i;
 
         real_shape = real_shape[top_left_index:] + real_shape[:top_left_index];
-        real_shape.reverse();
 
         return real_shape;
 
@@ -1036,7 +1037,7 @@ class Rectangle(Renderable):
                  fill: bool = True,
                  rotation: float = 0,
                  visible: bool = True):
-        vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
         self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 

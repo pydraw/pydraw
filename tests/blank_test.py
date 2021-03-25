@@ -12,6 +12,8 @@ poly = Triangle(screen, 50, 50, 50, 50);
 image = Image(screen, '../images/pacman.gif', 100, 50, 50, 50);
 image.load();
 
+rect = Rectangle(screen, 250, 250, 100, -50, Color('BLUE'))
+
 # poly.width(500, ratio=True)
 count = 5
 
@@ -37,6 +39,10 @@ def keydown(key):
         poly.border(Color('red'), width=count)
         count += 3;
 
+
+def mousedown(button, location):
+    print(f'Verties: {rect.vertices()}');
+    print(f'Rect Contains: {rect.contains(location)}');
 
 screen.listen();
 

@@ -5,7 +5,7 @@ from move import Move, MoveGenerator
 from ai import AIPlayer, EnginePlayer
 
 screen = Screen(800, 600, "Chess")
-# screen.fullscreen(True)
+screen.fullscreen(True)
 screen.color(Color('#303030'))
 
 board = Board()
@@ -15,8 +15,6 @@ renderer.render(board, draw_squares=True)
 eval_text = Text(screen, 'Eval: 0', 10, 10, color=Color('white'))
 
 generator = MoveGenerator()
-
-screen.alert('Test\ntest\ntest')
 
 ai = AIPlayer(screen)
 
