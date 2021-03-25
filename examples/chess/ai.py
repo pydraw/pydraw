@@ -200,43 +200,43 @@ class AIPlayer:
         sorted_moves = sorted(moves, key=lambda m: move_scores[m], reverse=True)
         return sorted_moves
 
-
-class EnginePlayer:
-    """
-    An AIPlayer that uses a real chess engine to create a more challenging opponent
-    """
-
-    def __init__(self, depth: int = 12, difficulty: int = 10):
-        self.depth = depth
-        self.engine = Engine('engine/engine.exe', depth=self.depth)
-        self.engine.setoption('Skill Level', difficulty)
-
-    def make_move(self, board: Board):
-        """
-        Make a move
-        """
-
-        moves = []
-        for move in board.moves:
-            moves.append(self.uci(move))
-            print(move)
-        self.engine.setposition(moves)
-
-        print(moves)
-        best_uci = self.engine.bestmove()['bestmove']
-        print('Best Move:', best_uci)
-        best_move = Move(Square[best_uci[:2].upper()], Square[best_uci[2:].upper()])
-
-        generator = MoveGenerator()
-        generated_moves = generator.generate_moves(board)
-        if best_move in generated_moves:
-            best_move = generated_moves[generated_moves.index(best_move)]
-
-        mate_check = generator.is_check(board, best_move)
-        board.make_move(best_move)
-
-        return mate_check
-
-    @staticmethod
-    def uci(move: Move) -> str:
-        return f'{move.from_square.name.lower()}{move.to_square.name.lower()}'
+#
+# class EnginePlayer:
+#     """
+#     An AIPlayer that uses a real chess engine to create a more challenging opponent
+#     """
+#
+#     def __init__(self, depth: int = 12, difficulty: int = 10):
+#         self.depth = depth
+#         self.engine = Engine('engine/engine.exe', depth=self.depth)
+#         self.engine.setoption('Skill Level', difficulty)
+#
+#     def make_move(self, board: Board):
+#         """
+#         Make a move
+#         """
+#
+#         moves = []
+#         for move in board.moves:
+#             moves.append(self.uci(move))
+#             print(move)
+#         self.engine.setposition(moves)
+#
+#         print(moves)
+#         best_uci = self.engine.bestmove()['bestmove']
+#         print('Best Move:', best_uci)
+#         best_move = Move(Square[best_uci[:2].upper()], Square[best_uci[2:].upper()])
+#
+#         generator = MoveGenerator()
+#         generated_moves = generator.generate_moves(board)
+#         if best_move in generated_moves:
+#             best_move = generated_moves[generated_moves.index(best_move)]
+#
+#         mate_check = generator.is_check(board, best_move)
+#         board.make_move(best_move)
+#
+#         return mate_check
+#
+#     @staticmethod
+#     def uci(move: Move) -> str:
+#         return f'{move.from_square.name.lower()}{move.to_square.name.lower()}'
