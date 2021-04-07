@@ -1052,12 +1052,16 @@ class Screen:
 
     # noinspection PyProtectedMember
     def remove(self, obj):
-        if obj in self._objects:
-            self._objects.remove(obj);
-        elif obj not in self._gridlines and obj not in self._helpers:
-            raise ValueError(f'Object: {obj} is not registered with the screen? Did you call the constructor?');
-        self._screen.cv.delete(obj._ref);
-        del obj;
+        # self._screen.cv.delete(obj._ref);
+        try:
+            self._canvas.delete(obj._ref)
+            if obj in self._objects:
+                self._objects.remove(obj);
+            else:
+                # print('possible error here')
+                pass;
+        except tk.TclError:
+            pass;
 
     def objects(self) -> tuple:
         """
@@ -1594,7 +1598,9 @@ class Renderable(Object):
             raise InvalidArgumentError('Renderable#lookat() must be passed either a renderable or a location!');
 
         location = Location(obj[0], obj[1]);
-        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) - math.radians(self.rotation());
+        # theta = -math.atan2(location.x() - self.x(), location.y() - self.y()) - math.radians(self.rotation());
+        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) \
+                - math.radians(self.rotation()) + math.pi / 2;
         theta = math.degrees(theta);
 
         return theta;
