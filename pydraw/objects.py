@@ -236,7 +236,9 @@ class Renderable(Object):
             raise InvalidArgumentError('Renderable#lookat() must be passed either a renderable or a location!');
 
         location = Location(obj[0], obj[1]);
-        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) - math.radians(self.rotation());
+        # theta = -math.atan2(location.x() - self.x(), location.y() - self.y()) - math.radians(self.rotation());
+        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) \
+                - math.radians(self.rotation()) + math.pi / 2;
         theta = math.degrees(theta);
 
         return theta;
