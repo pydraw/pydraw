@@ -6,6 +6,7 @@ import time;
 from pydraw import Color;
 from pydraw import Location;
 from pydraw.util import *;
+from pydraw import Scene;
 
 INPUT_TYPES = [
     'mousedown',
@@ -198,7 +199,7 @@ class Screen:
 
         self._screen.bgpic(pic);
 
-    def resize(self, width, height) -> None:
+    def resize(self, width: int, height: int) -> None:
         """
         Resize the screen to new dimensions
         :param width: the width to resize to
@@ -518,6 +519,42 @@ class Screen:
             self.color(self._color);  # Redraw the color of the screen.
         except (tk.TclError, AttributeError):
             pass;
+
+    def scene(self, scene: Scene) -> None:
+        """
+        Apply a new scene to the screen!
+
+        Note that this will override ALL previously registered input handlers.
+        :param scene: The Scene to apply!
+        :return: None
+        """
+
+        self.reset();
+        scene.activate(self);
+
+        # Defines all input methods from the Scene.
+        for (name, function) in inspect.getmembers(scene, inspect.isfunction):
+            if name.lower() not in INPUT_TYPES:
+                continue;
+
+            self.registry[name.lower()] = function;
+
+    def reset(self) -> None:
+        """
+        Resets the screen, removing all objects and input methods.
+        :return: None
+        """
+
+        self.toggle_grid(False);
+        self._gridlines.clear();
+
+        for obj in self._helpers:
+            obj.remove();
+        self._helpers.clear();
+        self._helperstate = False;
+
+        self.clear();
+        self.registry.clear();
 
     @staticmethod
     def sleep(delay: float) -> None:

@@ -14,6 +14,9 @@ image.load();
 
 rect = Rectangle(screen, 250, 250, 100, -50, Color('BLUE'))
 
+
+text = Text(screen, 'Some Text', 300, 300)
+
 # poly.width(500, ratio=True)
 count = 5
 
@@ -38,6 +41,9 @@ def keydown(key):
         # poly.backward(3);
         poly.border(Color('red'), width=count)
         count += 3;
+    elif key == 'c':
+        print(text.center())
+        print(image.center())
 
 
 def mousedown(button, location):

@@ -33,6 +33,13 @@ with open(output_file, 'w') as output:
         header_txt = header.read();
         header_txt += '\n';
 
+        version = 'x.x.x';
+        with open('setup.py', 'r') as setup:
+            for line in setup:
+                if line.strip().startswith('version'):
+                    version = line.split('"')[1]
+
+        header_txt = header_txt.replace('{version}', version);
         output.write(header_txt);
 
     for input_file in input_files:

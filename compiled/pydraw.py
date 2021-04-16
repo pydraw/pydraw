@@ -1,5 +1,5 @@
 """
-pyDraw v{version}
+pyDraw v1.4
 
 This library is a graphics-interface library designed to make graphics in Python
 easier and more simple. It was designed to be easy to teach/learn and to utilize
@@ -454,7 +454,7 @@ class Location:
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is diff or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is diff:
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
                 diff = (args[0][0], args[0][1]);
             elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
                 diff = (args[0], args[1]);
@@ -573,6 +573,7 @@ import time;
 # from pydraw import Color;
 # from pydraw import Location;
 # from pydraw.util import *;
+# from pydraw import Scene;
 
 INPUT_TYPES = [
     'mousedown',
@@ -765,7 +766,7 @@ class Screen:
 
         self._screen.bgpic(pic);
 
-    def resize(self, width, height) -> None:
+    def resize(self, width: int, height: int) -> None:
         """
         Resize the screen to new dimensions
         :param width: the width to resize to
@@ -1086,6 +1087,42 @@ class Screen:
         except (tk.TclError, AttributeError):
             pass;
 
+    def scene(self, scene: Scene) -> None:
+        """
+        Apply a new scene to the screen!
+
+        Note that this will override ALL previously registered input handlers.
+        :param scene: The Scene to apply!
+        :return: None
+        """
+
+        self.reset();
+        scene.activate(self);
+
+        # Defines all input methods from the Scene.
+        for (name, function) in inspect.getmembers(scene, inspect.isfunction):
+            if name.lower() not in INPUT_TYPES:
+                continue;
+
+            self.registry[name.lower()] = function;
+
+    def reset(self) -> None:
+        """
+        Resets the screen, removing all objects and input methods.
+        :return: None
+        """
+
+        self.toggle_grid(False);
+        self._gridlines.clear();
+
+        for obj in self._helpers:
+            obj.remove();
+        self._helpers.clear();
+        self._helperstate = False;
+
+        self.clear();
+        self.registry.clear();
+
     @staticmethod
     def sleep(delay: float) -> None:
         """
@@ -1360,6 +1397,97 @@ class Screen:
         pass;
 
 
+# from pydraw import Screen, Location;
+
+
+class Scene:
+    """
+    An abstraction of the Screen, designed to store the Screen in a certain state while retaining registered input
+    handlers and the positions and attributes of objects registered to it.
+
+    You can use Scenes to create multi-screen games or to manage different levels easily. It works exactly like a screen
+    but will not render anything until it is "applied" to a Screen via `Screen.scene(some_scene)`
+    """
+
+    def __init__(self):
+        self._screen = None;
+
+    def screen(self):
+        """
+        Retrieve the screen that the scene is tied to
+        :return: a Screen
+        """
+        return self._screen;
+
+    def init(self) -> None:
+        """
+        Run as the initializer for the scene
+        :return: None
+        """
+
+    def run(self) -> None:
+        """
+        Run the scene (the loop should go here)
+        :return: None
+        """
+
+    def mousedown(self, button: int, location: Location) -> None:
+        """
+        Mouse event, called when a mouse button is pressed down.
+        :param button: the button pressed (0-2)
+        :param location: the location that was clicked
+        :return: None
+        """
+
+    def mouseup(self, button: int, location: Location) -> None:
+        """
+        Mouse event, called when a mouse button is released.
+        :param button: the button released (0-2)
+        :param location: the location that was clicked
+        :return: None
+        """
+
+    def mousedrag(self, button: int, location: Location) -> None:
+        """
+        Mouse event, called when the mouse moves after a mousedown event (without a mouseup event)
+        :param button: the button being held (0-2)
+        :param location: the Location the mouse has moved to
+        :return: None
+        """
+
+    def mousemove(self, location: Location) -> None:
+        """
+        Mouse event called when the mouse moves over the Screen
+        :param location: the Location the mouse moved to
+        :return: None
+        """
+
+    def keydown(self, key: Screen.Key) -> None:
+        """
+        Key event called when a key is pressed
+        :param key: the Key that was pressed
+        :return: None
+        """
+
+    def keyup(self, key: Screen.Key) -> None:
+        """
+        Key event called when a key is released
+        :param key: the Key that was released
+        :return: None
+        """
+
+    def activate(self, screen: Screen) -> None:
+        """
+        Activates the Scene with a Screen (called internally)
+        :param screen: the Screen to display the Scene on
+        :return: None
+        """
+
+        self._screen = screen;
+        self.init();
+        self.run();
+
+
 """
 Objects in the PyDraw library
 
@@ -1549,6 +1677,7 @@ class Renderable(Object):
         # Sorry for those of you that get weird rotations..
         x_list = [];
         y_list = [];
+
         for vertex in self._vertices:
             x_list.append(vertex.x());
             y_list.append(vertex.y());
@@ -2648,7 +2777,11 @@ class Image(Renderable):
                  visible: bool = True,
                  location: Location = None):
         self._image_name = image;
-        filetype = image[len(image) - 4:len(image)];
+        split = image.split('.');
+        if len(split) <= 1:
+            raise PydrawError('File must have extension filetype:', self._image_name);
+
+        filetype = split[len(split) - 1]
 
         import os;
         if not os.path.isfile(image):
@@ -2678,6 +2811,7 @@ class Image(Renderable):
 
         super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
                          rotation=rotation, visible=visible, location=location);
+        self._setup()
 
         if width is not None:
             self.width(width);
@@ -2691,7 +2825,8 @@ class Image(Renderable):
             self.border(border);
 
     def _setup(self):
-        pass;
+        # Pre-register the vertices so we don't have issues with .center()
+        self._vertices = self.vertices();
 
     def width(self, width: float = None) -> float:
         """
@@ -2764,6 +2899,13 @@ class Image(Renderable):
             self._angle += angle_diff;
             self.update(True);
 
+    def center(self, moveto: Location = None) -> Location:
+        if moveto is not None:
+            verify(moveto, Location);
+            self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
+
+        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
+
     # noinspection PyMethodOverriding
     def border(self, color: Color = None) -> Color:
         """
@@ -2820,6 +2962,9 @@ class Image(Renderable):
             vertices = new_vertices;
 
         return vertices;
+
+    def flip(self, axis: str = 'y'):
+        pass;
 
     def load(self) -> None:
         """
@@ -3220,6 +3365,7 @@ class Text(CustomRenderable):
         :param moveto: If defined, will move the Line to be centered on the passed Location
         :return: the Centroid/Center of the Text
         """
+
         if moveto is not None:
             self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
 

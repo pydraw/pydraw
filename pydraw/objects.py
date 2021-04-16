@@ -187,6 +187,7 @@ class Renderable(Object):
         # Sorry for those of you that get weird rotations..
         x_list = [];
         y_list = [];
+
         for vertex in self._vertices:
             x_list.append(vertex.x());
             y_list.append(vertex.y());
@@ -1286,7 +1287,11 @@ class Image(Renderable):
                  visible: bool = True,
                  location: Location = None):
         self._image_name = image;
-        filetype = image[len(image) - 4:len(image)];
+        split = image.split('.');
+        if len(split) <= 1:
+            raise PydrawError('File must have extension filetype:', self._image_name);
+
+        filetype = split[len(split) - 1]
 
         import os;
         if not os.path.isfile(image):
@@ -1316,6 +1321,7 @@ class Image(Renderable):
 
         super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
                          rotation=rotation, visible=visible, location=location);
+        self._setup()
 
         if width is not None:
             self.width(width);
@@ -1329,7 +1335,8 @@ class Image(Renderable):
             self.border(border);
 
     def _setup(self):
-        pass;
+        # Pre-register the vertices so we don't have issues with .center()
+        self._vertices = self.vertices();
 
     def width(self, width: float = None) -> float:
         """
@@ -1402,6 +1409,13 @@ class Image(Renderable):
             self._angle += angle_diff;
             self.update(True);
 
+    def center(self, moveto: Location = None) -> Location:
+        if moveto is not None:
+            verify(moveto, Location);
+            self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
+
+        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
+
     # noinspection PyMethodOverriding
     def border(self, color: Color = None) -> Color:
         """
@@ -1458,6 +1472,9 @@ class Image(Renderable):
             vertices = new_vertices;
 
         return vertices;
+
+    def flip(self, axis: str = 'y'):
+        pass;
 
     def load(self) -> None:
         """
@@ -1858,6 +1875,7 @@ class Text(CustomRenderable):
         :param moveto: If defined, will move the Line to be centered on the passed Location
         :return: the Centroid/Center of the Text
         """
+
         if moveto is not None:
             self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
 
