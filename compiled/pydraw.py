@@ -1,5 +1,5 @@
 """
-pyDraw v1.4
+pyDraw v1.4.1
 
 This library is a graphics-interface library designed to make graphics in Python
 easier and more simple. It was designed to be easy to teach/learn and to utilize
@@ -573,7 +573,6 @@ import time;
 # from pydraw import Color;
 # from pydraw import Location;
 # from pydraw.util import *;
-# from pydraw import Scene;
 
 INPUT_TYPES = [
     'mousedown',
@@ -1087,7 +1086,7 @@ class Screen:
         except (tk.TclError, AttributeError):
             pass;
 
-    def scene(self, scene: Scene) -> None:
+    def scene(self, scene) -> None:
         """
         Apply a new scene to the screen!
 

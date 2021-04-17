@@ -6,7 +6,6 @@ import time;
 from pydraw import Color;
 from pydraw import Location;
 from pydraw.util import *;
-from pydraw import Scene;
 
 INPUT_TYPES = [
     'mousedown',
@@ -520,7 +519,7 @@ class Screen:
         except (tk.TclError, AttributeError):
             pass;
 
-    def scene(self, scene: Scene) -> None:
+    def scene(self, scene) -> None:
         """
         Apply a new scene to the screen!
 
