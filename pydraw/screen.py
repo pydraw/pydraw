@@ -114,7 +114,9 @@ class Screen:
     the window that is created. Sort of like a canvas.
     """
 
-    def __init__(self, width=800, height=600, title="pydraw"):
+    def __init__(self, width: int = 800, height: int = 600, title: str = "pydraw"):
+        verify(width, int, height, int, title, str);
+
         self._screen = turtle.Screen();
         self._turtle = turtle;
         self._canvas = self._screen.cv;
@@ -172,6 +174,7 @@ class Screen:
         """
 
         if title is not None:
+            verify(title, str);
             self._title = title;
             self._screen.title(title);
 
@@ -185,6 +188,7 @@ class Screen:
         """
 
         if color is not None:
+            verify(color, Color);
             self._color = color;
             self._screen.bgcolor(color.__value__());
         return self._color;
@@ -196,6 +200,7 @@ class Screen:
         :return: None
         """
 
+        verify(pic, str);
         self._screen.bgpic(pic);
 
     def resize(self, width: int, height: int) -> None:
@@ -206,6 +211,7 @@ class Screen:
         :return: None
         """
 
+        verify(width, int, height, int);
         # noinspection PyBroadException
         try:
             self._screen.screensize(width, height);
@@ -253,6 +259,7 @@ class Screen:
         """
         Gets the center of the screen.
         """
+
         return Location(self.width() / 2, self.height() / 2);
 
     # noinspection PyMethodMayBeStatic
@@ -308,6 +315,8 @@ class Screen:
         """
         from tkinter.simpledialog import SimpleDialog
 
+        verify(text, str, title, str, accept_text, str, cancel_text, str);
+
         alert = SimpleDialog(self._root,
                              text=text,
                              buttons=[accept_text, cancel_text],
@@ -324,6 +333,8 @@ class Screen:
         :return: None
         """
 
+        verify(text, str, title, str);
+
         text = self._screen.textinput(title, text);
 
         self._screen.listen();  # keep us nice and listening :)
@@ -331,6 +342,8 @@ class Screen:
 
     def grid(self, rows: int = None, cols: int = None, cellsize: tuple = (50, 50), helpers: bool = True):
         from pydraw import Line, Text;
+
+        verify(rows, int, cols, int, cellsize, tuple, helpers, bool);
 
         if len(self._gridlines) > 0:
             [line.remove() for line in self._gridlines];
@@ -424,6 +437,14 @@ class Screen:
         :return: the name of the file.
         """
 
+        if filename is None:
+            filename = 'pydraw' + str(time.time() % 10000);
+
+        verify(filename, str);
+
+        if not filename.endswith('.png'):
+            filename += '.png';
+
         # noinspection PyBroadException
         try:
             from PIL import ImageGrab;
@@ -433,12 +454,6 @@ class Screen:
             y1 = self._root.winfo_rooty() + self._canvas.winfo_y() + BORDER_CONSTANT;
             x2 = x1 + self.width() - BORDER_CONSTANT;
             y2 = y1 + self.height() - BORDER_CONSTANT;
-
-            if filename is None:
-                filename = 'pydraw' + str(time.time() % 10000);
-
-            if not filename.endswith('.png'):
-                filename += '.png';
 
             ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename);
             return filename;
@@ -457,6 +472,7 @@ class Screen:
         """
 
         if fullscreen is not None:
+            verify(fullscreen, bool);
             self._fullscreen = fullscreen;
             self._root.attributes("-fullscreen", fullscreen);
             self.update();
@@ -464,6 +480,10 @@ class Screen:
         return self._fullscreen;
 
     def _front(self, obj) -> None:
+        from pydraw import Object;
+
+        if not isinstance(obj, Object):
+            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.');
 
         self._canvas.tag_raise(obj._ref);
 
@@ -471,7 +491,8 @@ class Screen:
         from pydraw import Object;
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError('Expected an Object...')
+            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.');
+
         self._canvas.tag_lower(obj._ref);
 
     def _add(self, obj) -> None:
@@ -482,6 +503,18 @@ class Screen:
         """
 
         self._objects.append(obj);
+
+    def add(self, obj) -> None:
+        """
+        Add an object back to the Screen after having removed it (with Object.remove() or Screen.remove(object)
+        :param obj: the Object to add back.
+        :return: None
+        """
+
+        if obj in self._objects:
+            raise PydrawError(f'Cannot re-add object that is already in the object cache! {obj}: {type(obj)}');
+
+        self._add(obj);
 
     # noinspection PyProtectedMember
     def remove(self, obj):
@@ -503,6 +536,18 @@ class Screen:
         """
 
         return tuple(self._objects);
+
+    def contains(self, obj) -> bool:
+        """
+        Returns whether or not the passed object exists on the Screen (is in the objects cache)
+        :param obj: the Object to check
+        :return: a boolean
+        """
+
+        return obj in self._objects;
+
+    def __contains__(self, item):
+        return self.contains(item);
 
     def clear(self) -> None:
         """
@@ -528,7 +573,7 @@ class Screen:
         :return: None
         """
 
-        self.reset();
+        self.reset();  # Clears screen and destroys all registered input handlers.
         scene.activate(self);
 
         # Defines all input methods from the Scene.

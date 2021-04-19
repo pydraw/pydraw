@@ -117,6 +117,14 @@ class Object:
         """
         pass;
 
+    # noinspection PyProtectedMember
+    def _check(self) -> None:
+        if self._screen is None or not self._screen.contains(self):
+            if self in self._screen._gridlines or self in self._screen._helpers:
+                return;
+
+            raise PydrawError('Cannot update or draw object that is not on the Screen!');
+
     def update(self) -> None:
         """
         To be overriden.
@@ -690,6 +698,8 @@ class Renderable(Object):
         return new_vertices;
 
     def update(self):
+        self._check();
+
         old_ref = self._ref;
         shape = self._shape;  # List of normal vertices.
 
@@ -974,6 +984,8 @@ class CustomPolygon(CustomRenderable):
         return new_vertices;
 
     def update(self):
+        self._check();
+
         old_ref = self._ref;
 
         xmin = self._vertices[0][0];
@@ -1211,6 +1223,8 @@ class Polygon(Renderable):
 
     # noinspection PyProtectedMember
     def update(self):
+        self._check();
+
         old_ref = self._ref;
         shape = self._shape;  # List of normal vertices.
 
@@ -1556,6 +1570,8 @@ class Image(Renderable):
 
     # noinspection PyProtectedMember
     def update(self, updated: bool = False):
+        self._check();
+
         if updated:
             try:
                 from PIL import Image, ImageTk, ImageOps;
@@ -1965,6 +1981,7 @@ class Text(CustomRenderable):
 
     # noinspection PyProtectedMember
     def update(self) -> None:
+        self._check();
         # super().update(); | JUST FOR RENDERABLES - DO NOT USE
         # we are going to delete and re-add text to the screen. You cannot alter a text object.
         old_ref = self._ref;
@@ -2496,6 +2513,8 @@ class Line(Object):
 
     # noinspection PyProtectedMember
     def update(self):
+        self._check();
+
         try:
             old_ref = self._ref;
 

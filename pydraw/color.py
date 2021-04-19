@@ -5,7 +5,7 @@ from pydraw.errors import *;
 
 class Color:
     """
-    An immutable class that contains a color values, usually by name or RGB
+    An immutable class that contains a color values, usually by name or RGB.
     """
 
     NONE = None;
