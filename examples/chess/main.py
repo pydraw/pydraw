@@ -2,7 +2,7 @@ from pydraw import *
 from board import Board, Evaluation
 from renderer import Renderer
 from move import Move, MoveGenerator
-from ai import AIPlayer, EnginePlayer
+from ai import AIPlayer
 
 screen = Screen(800, 600, "Chess")
 screen.fullscreen(True)

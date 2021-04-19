@@ -1287,6 +1287,9 @@ class Image(Renderable):
                  visible: bool = True,
                  location: Location = None):
         self._image_name = image;
+        self._original = None;
+
+        # Filetype Checking
         split = image.split('.');
         if len(split) <= 1:
             raise PydrawError('File must have extension filetype:', self._image_name);
@@ -1303,6 +1306,8 @@ class Image(Renderable):
             try:
                 from PIL import Image, ImageTk;
                 image = Image.open(self._image_name);
+                self._original = image;  # We save the originally loaded image for easy modification
+
                 self._image = ImageTk.PhotoImage(image);
             except:
                 raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
@@ -1334,9 +1339,14 @@ class Image(Renderable):
         if border is not None:
             self.border(border);
 
+    # noinspection PyProtectedMember
     def _setup(self):
         # Pre-register the vertices so we don't have issues with .center()
         self._vertices = self.vertices();
+
+        real_location = self._screen.canvas_location(self.x(), self.y());
+        self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
+                                                      real_location.y() + self._height / 2, image=self._image);
 
     def width(self, width: float = None) -> float:
         """
@@ -1545,12 +1555,6 @@ class Image(Renderable):
         ImageTk.PhotoImage.__del__ = new_del
 
     # noinspection PyProtectedMember
-    def _setup(self):
-        real_location = self._screen.canvas_location(self.x(), self.y());
-        self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
-                                                      real_location.y() + self._height / 2, image=self._image);
-
-    # noinspection PyProtectedMember
     def update(self, updated: bool = False):
         if updated:
             try:
@@ -1560,15 +1564,23 @@ class Image(Renderable):
                     self._monkey_patch_del();  # If we do have PIL we need to monkey patch this immediately.
                     self._patched = True;
 
-                image = Image.open(self._image_name);
+                # Optimized (only read file once, caching everything else)
+                # TODO: In the future, caching images by filename could increase efficiency, but have serious pitfalls.
+                # ^ Perhaps if we hash the image we could then compare against future hashes to check if the file
+                # has been modified or not. (Noah)
+                if self._original is not None:
+                    image = self._original.copy();
+                else:
+                    image = Image.open(self._image_name);
+                    self._original = image.copy();
 
                 if self._frame != -1:
                     try:
                         image.seek(self._frame);
                     except EOFError:
-                        raise PydrawError('No more images in GIF File!');
+                        raise PydrawError(f'No more frames in GIF: {self._image_name}!');
 
-                image = image.convert('RGBA');
+                image = image.convert('RGBA');  # Convert so we can color-filter the image
 
                 if self._color is not None and self._color != Color.NONE:
                     r, g, b, alpha = image.split()
