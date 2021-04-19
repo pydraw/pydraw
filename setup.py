@@ -5,7 +5,7 @@ with open("README_stripped.md", "r") as fh:
 
 setuptools.setup(
     name="pydraw",
-    version="1.4.1",
+    version="1.5a0",
     author="Noah Coetsee",
     author_email="noah@noahcoetsee.me",
     description="A package designed to make graphics with Python simple and easy!",
