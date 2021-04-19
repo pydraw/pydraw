@@ -14,6 +14,7 @@ image.load();
 
 rect = Rectangle(screen, 250, 250, 100, -50, Color('BLUE'))
 
+rect.move(5)
 
 text = Text(screen, 'Some Text', 300, 300)
 

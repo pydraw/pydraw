@@ -12,6 +12,9 @@ class Location:
                 location = (args[0][0], args[0][1]);
             elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
                 location = (args[0], args[1]);
+            else:
+                raise InvalidArgumentError('Location constructor takes a tuple/location '
+                                           'or two numbers (x, y)!');
         elif len(kwargs) == 0:
             raise InvalidArgumentError('Location constructor takes a tuple/location '
                                        'or two numbers (x, y)!');
@@ -48,6 +51,9 @@ class Location:
                 diff = (args[0][0], args[0][1]);
             elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
                 diff = (args[0], args[1]);
+            else:
+                raise InvalidArgumentError('move() takes a tuple/Location '
+                                           'or two numbers (dx, dy)!');
         elif len(kwargs) == 0:
             raise InvalidArgumentError('move() takes a tuple/Location '
                                        'or two numbers (dx, dy)!');
@@ -86,6 +92,9 @@ class Location:
                 location = (args[0][0], args[0][1]);
             elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
                 location = (args[0], args[1]);
+            else:
+                raise InvalidArgumentError('move() takes a tuple/Location '
+                                           'or two numbers (dx, dy)!');
         elif len(kwargs) == 0:
             raise InvalidArgumentError('moveto() takes a tuple/location '
                                        'or two numbers (dx, dy)!');

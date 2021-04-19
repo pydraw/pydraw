@@ -7,7 +7,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   
-  <title>pydraw package &mdash; pydraw 1.3.0 documentation</title>
+  <title>pydraw package &mdash; pydraw 1.4.1 documentation</title>
   
 
   
@@ -91,8 +91,8 @@
 <li class="toctree-l3"><a class="reference internal" href="#module-pydraw.color">pydraw.color module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#module-pydraw.errors">pydraw.errors module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#module-pydraw.location">pydraw.location module</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#pydraw-objects-module">pydraw.objects module</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#pydraw-screen-module">pydraw.screen module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-pydraw.objects">pydraw.objects module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-pydraw.screen">pydraw.screen module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#module-pydraw.util">pydraw.util module</a></li>
 </ul>
 </li>
@@ -167,8 +167,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="pydraw-package">
-<h1>pydraw package<a class="headerlink" href="#pydraw-package" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="module-pydraw">
+<span id="pydraw-package"></span><h1>pydraw package<a class="headerlink" href="#module-pydraw" title="Permalink to this headline">¶</a></h1>
 <div class="section" id="submodules">
 <h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
 </div>
@@ -310,11 +310,1105 @@
 </dd></dl>
 
 </div>
-<div class="section" id="pydraw-objects-module">
-<h2>pydraw.objects module<a class="headerlink" href="#pydraw-objects-module" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-pydraw.objects">
+<span id="pydraw-objects-module"></span><h2>pydraw.objects module<a class="headerlink" href="#module-pydraw.objects" title="Permalink to this headline">¶</a></h2>
+<p>Objects in the PyDraw library</p>
+<p>(Author: Noah Coetsee)</p>
+<dl class="py class">
+<dt id="pydraw.objects.CustomPolygon">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">CustomPolygon</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">screen</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.screen.Screen" title="pydraw.screen.Screen">pydraw.screen.Screen</a></span></em>, <em class="sig-param"><span class="n">vertices</span><span class="p">:</span> <span class="n">list</span></em>, <em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a></span> <span class="o">=</span> <span class="default_value">black</span></em>, <em class="sig-param"><span class="n">border</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fill</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em>, <em class="sig-param"><span class="n">rotation</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.CustomPolygon" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.CustomRenderable" title="pydraw.objects.CustomRenderable"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.CustomRenderable</span></code></a></p>
+<p>An Irregular Polygon that is passed a list of vertices that can be rotated and translated!</p>
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.center">
+<code class="sig-name descname">center</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">moveto</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.objects.CustomPolygon.center" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the centroid for the CustomPolygon
+:return: centroid in the form of a Location</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.clone">
+<code class="sig-name descname">clone</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.CustomPolygon.clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clone this CustomPolygon!
+:return: a CustomPolygon</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.height">
+<code class="sig-name descname">height</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">height</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.CustomPolygon.height" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the height of the Polygon
+:param height: Unsupported.
+:return: the height of the object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.move">
+<code class="sig-name descname">move</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.CustomPolygon.move" title="Permalink to this definition">¶</a></dt>
+<dd><p>Can take either a tuple, Location, or two numbers (dx, dy)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.moveto">
+<code class="sig-name descname">moveto</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.CustomPolygon.moveto" title="Permalink to this definition">¶</a></dt>
+<dd><p>Move to a new location; takes a Location, tuple, or two numbers (x, y)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.rotate">
+<code class="sig-name descname">rotate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle_diff</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.CustomPolygon.rotate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rotate the angle of the object by a difference, in degrees
+:param angle_diff: the angle difference to rotate by
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.rotation">
+<code class="sig-name descname">rotation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.CustomPolygon.rotation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the rotation of the object.
+:param angle: the angle to set the rotation to in degrees, if any
+:return: the angle of the object’s rotation in degrees</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">transform</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tuple<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; tuple<a class="headerlink" href="#pydraw.objects.CustomPolygon.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the transform of the Renderable.
+Transforms represent the width, height, and rotation of Renderables.</p>
+<p>You can retrieve a Transform from a Renderable with this method and set the transform the same way.
+:param transform: the transform to set to, if any.
+:return: the transform</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.CustomPolygon.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>To be overriden.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.vertices">
+<code class="sig-name descname">vertices</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; list<a class="headerlink" href="#pydraw.objects.CustomPolygon.vertices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the list of vertices for the Renderable.
+(The vertices will be returned clockwise, starting from the top-leftmost point)
+:return: a list of Locations representing the vertices</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.CustomPolygon.width">
+<code class="sig-name descname">width</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.CustomPolygon.width" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the width of the CustomPolygon
+:param width: Unsupported.
+:return: the width of the object</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.CustomRenderable">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">CustomRenderable</code><span class="sig-paren">(</span><em class="sig-param">screen: pydraw.screen.Screen</em>, <em class="sig-param">x: float = 0</em>, <em class="sig-param">y: float = 0</em>, <em class="sig-param">width: float = 10</em>, <em class="sig-param">height: float = 10</em>, <em class="sig-param">color: pydraw.color.Color = black</em>, <em class="sig-param">border: pydraw.color.Color =</em>, <em class="sig-param">fill: bool = True</em>, <em class="sig-param">rotation: float = 0</em>, <em class="sig-param">visible: bool = True</em>, <em class="sig-param">location: Optional[pydraw.location.Location] = None</em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.CustomRenderable" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.Renderable" title="pydraw.objects.Renderable"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.Renderable</span></code></a></p>
+<p>A wrapper class to distintify classes that extend Renderable but have some custom functionality.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Image">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Image</code><span class="sig-paren">(</span><em class="sig-param">screen: pydraw.screen.Screen</em>, <em class="sig-param">image: str</em>, <em class="sig-param">x: float = 0</em>, <em class="sig-param">y: float = 0</em>, <em class="sig-param">width: Optional[float] = None</em>, <em class="sig-param">height: Optional[float] = None</em>, <em class="sig-param">color: Optional[pydraw.color.Color] = None</em>, <em class="sig-param">border: pydraw.color.Color =</em>, <em class="sig-param">rotation: float = 0</em>, <em class="sig-param">visible: bool = True</em>, <em class="sig-param">location: Optional[pydraw.location.Location] = None</em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.Renderable" title="pydraw.objects.Renderable"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.Renderable</span></code></a></p>
+<p>Image class. Supports basic formats: PNG, GIF, JPG, PPM, images.</p>
+<p>NOTE: This class supports the basic displaying of images, but also supports much more,
+such as image modification (width, height, color, etc) if you have PIL (Pillow) installed!
+You can install PIL/Pillow by running: <cite>pip install pillow</cite> in a terminal!</p>
+<dl class="py attribute">
+<dt id="pydraw.objects.Image.TKINTER_TYPES">
+<code class="sig-name descname">TKINTER_TYPES</code><em class="property"> = ['.png', '.gif', '.ppm']</em><a class="headerlink" href="#pydraw.objects.Image.TKINTER_TYPES" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.border">
+<code class="sig-name descname">border</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><a class="headerlink" href="#pydraw.objects.Image.border" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add or get the border of the image
+:param color: the color to set the border too, set to Color.NONE to remove border
+:return: The Color of the border</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.center">
+<code class="sig-name descname">center</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">moveto</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.objects.Image.center" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the location of the center
+:param move_to: if defined, Move the center to a new Location (Easily center objects!)
+:return: Location object representing center of Renderable</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.color">
+<code class="sig-name descname">color</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">alpha</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">123</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><a class="headerlink" href="#pydraw.objects.Image.color" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves or applies a color-mask to the image
+:param color: the color to mask to, if any
+:param alpha: The alpha level of the mask, defaults to 123 (half of 255)
+:return: the mask-color of the object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.fill">
+<code class="sig-name descname">fill</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">fill</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Image.fill" title="Permalink to this definition">¶</a></dt>
+<dd><p>Unsupported: This doesn’t make sense for images.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.flip">
+<code class="sig-name descname">flip</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">axis</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'y'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Image.flip" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.frame">
+<code class="sig-name descname">frame</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">frame</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#pydraw.objects.Image.frame" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the current frame.
+:param frame: the frame-index to set to
+:return: the current frame</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.frames">
+<code class="sig-name descname">frames</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Image.frames" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns how many frames there are, returns -1 if not animated, 0 if corrupted file.
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.height">
+<code class="sig-name descname">height</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">height</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Image.height" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the height of the image
+:param height: the height to set to, if any
+:return: the height</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.load">
+<code class="sig-name descname">load</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Image.load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load animated GIF (reads frames)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.next">
+<code class="sig-name descname">next</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Image.next" title="Permalink to this definition">¶</a></dt>
+<dd><p>Changes frame to the next frame (Can only be used with animated GIFs)
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.rotate">
+<code class="sig-name descname">rotate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle_diff</span><span class="p">:</span> <span class="n">float</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Image.rotate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rotate the angle of the image by a difference, in degrees
+:param angle_diff: the angle difference to rotate by
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.rotation">
+<code class="sig-name descname">rotation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Image.rotation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the rotation of the image.
+:param angle: the angle to set the rotation to in degrees, if any
+:return: the angle of the image’s rotation in degrees</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">updated</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Image.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>To be overriden.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.vertices">
+<code class="sig-name descname">vertices</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; list<a class="headerlink" href="#pydraw.objects.Image.vertices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the list of vertices for the Renderable.
+(The vertices will be returned clockwise, starting from the top-leftmost point)
+:return: a list of Locations representing the vertices</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Image.width">
+<code class="sig-name descname">width</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Image.width" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the width of the image (REQUIRES: PIL or Pillow)
+:param width: the width to set to, if any
+:return: None</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Line">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Line</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">screen</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.screen.Screen" title="pydraw.screen.Screen">pydraw.screen.Screen</a></span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a></span> <span class="o">=</span> <span class="default_value">black</span></em>, <em class="sig-param"><span class="n">thickness</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em>, <em class="sig-param"><span class="n">dashes</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Line" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.Object" title="pydraw.objects.Object"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.Object</span></code></a></p>
+<dl class="py method">
+<dt id="pydraw.objects.Line.clone">
+<code class="sig-name descname">clone</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Line.clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clone a new line!
+:return: A clone of this line</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.color">
+<code class="sig-name descname">color</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><a class="headerlink" href="#pydraw.objects.Line.color" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the color of the line
+:param color: the color to set to, if any
+:return: the color of the line</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.dashes">
+<code class="sig-name descname">dashes</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">dashes</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; Union<span class="p">[</span>int<span class="p">, </span>tuple<span class="p">]</span><a class="headerlink" href="#pydraw.objects.Line.dashes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrive or enable/disable the dashes for the line
+:param dashes: the visibility to set to, if any
+:return: the toggle-state of dashes</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.intersects">
+<code class="sig-name descname">intersects</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obj</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Line.intersects" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if a line intersects with another line or Renderable
+:param obj: Line, Renderable, or List/Tuple
+:return: Whether or not the line intersects with the object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.length">
+<code class="sig-name descname">length</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Line.length" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the length of the line
+:return: the length of the line</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.location">
+<code class="sig-name descname">location</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; tuple<a class="headerlink" href="#pydraw.objects.Line.location" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the locations of both the endpoints
+:return: the locations of both the endpoints</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.lookat">
+<code class="sig-name descname">lookat</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Line.lookat" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make the line look at the given point by moving the second point.
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.move">
+<code class="sig-name descname">move</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Line.move" title="Permalink to this definition">¶</a></dt>
+<dd><p>Move both endpoints by the same dx and dy</p>
+<p>Can take either a tuple, Location, or two numbers (dx, dy)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dx</strong> – the distance x to move</p></li>
+<li><p><strong>dy</strong> – the distance y to move</p></li>
+<li><p><strong>point</strong> – affect only one of the endpoints; options: (1, 2), default=0 (Must be 1 or 2)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.moveto">
+<code class="sig-name descname">moveto</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Line.moveto" title="Permalink to this definition">¶</a></dt>
+<dd><p>Move both of the endpoints to new locations.
+:param args: Either two locations, tuples, or four numbers (x1, y1, x2, y2).
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.pos1">
+<code class="sig-name descname">pos1</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.objects.Line.pos1" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the position of the first endpoint.
+:param args: Either a location or two numbers (x, y) may be passed here.
+:return: the position of the first endpoint.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.pos2">
+<code class="sig-name descname">pos2</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.objects.Line.pos2" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the position of the second endpoint.
+:param args: Either a location or two numbers (x, y) may be passed here.
+:return: the position of the second endpoint.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.rotate">
+<code class="sig-name descname">rotate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle_diff</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">point</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">1</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Line.rotate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rotate the line around one of the vertices (1 by default)
+:param angle_diff: the angle to rotate by
+:param point: the point to serve as the origin.
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.rotation">
+<code class="sig-name descname">rotation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Line.rotation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the rotation of the line (works via pos2().
+:param angle: the angle in degrees to rotate by, if any
+:return: the angle of the line</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.thickness">
+<code class="sig-name descname">thickness</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">thickness</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#pydraw.objects.Line.thickness" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the thickness of the line
+:param thickness: the thickness to set to, if any
+:return: the thickness of the line</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">transform</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tuple<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Line.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Copy the line’s length and angle!
+:param transform:
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Line.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>To be overriden.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Line.visible">
+<code class="sig-name descname">visible</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Line.visible" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the visibility of the line
+:param visible: the visibility to set to, if any
+:return: the visibility of the line</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Object">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Object</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">screen</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.screen.Screen" title="pydraw.screen.Screen">pydraw.screen.Screen</a></span></em>, <em class="sig-param"><span class="n">x</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">y</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">location</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Object" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A base object containing a location and screen. This ensures coordinates are
+done with the root at the top left corner, and not at the center.</p>
+<dl class="py method">
+<dt id="pydraw.objects.Object.back">
+<code class="sig-name descname">back</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Object.back" title="Permalink to this definition">¶</a></dt>
+<dd><p>Brings the object to the back of the Screen
+(Imagine moving backward on the Z axis)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Object.front">
+<code class="sig-name descname">front</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Object.front" title="Permalink to this definition">¶</a></dt>
+<dd><p>Brings the object to the front of the Screen
+(Imagine moving forward on the Z axis)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Object.location">
+<code class="sig-name descname">location</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.objects.Object.location" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Object.move">
+<code class="sig-name descname">move</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Object.move" title="Permalink to this definition">¶</a></dt>
+<dd><p>Can take either a tuple, Location, or two numbers (dx, dy)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Object.moveto">
+<code class="sig-name descname">moveto</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Object.moveto" title="Permalink to this definition">¶</a></dt>
+<dd><p>Move to a new location; takes a Location, tuple, or two numbers (x, y)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Object.remove">
+<code class="sig-name descname">remove</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Object.remove" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Object.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Object.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>To be overriden.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Object.x">
+<code class="sig-name descname">x</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Object.x" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Object.y">
+<code class="sig-name descname">y</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">y</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Object.y" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Oval">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Oval</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">screen</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.screen.Screen" title="pydraw.screen.Screen">pydraw.screen.Screen</a></span></em>, <em class="sig-param"><span class="n">x</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">y</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">10</span></em>, <em class="sig-param"><span class="n">height</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">10</span></em>, <em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a></span> <span class="o">=</span> <span class="default_value">black</span></em>, <em class="sig-param"><span class="n">border</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fill</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em>, <em class="sig-param"><span class="n">rotation</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Oval" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.Renderable" title="pydraw.objects.Renderable"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.Renderable</span></code></a></p>
+<dl class="py method">
+<dt id="pydraw.objects.Oval.slices">
+<code class="sig-name descname">slices</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; list<a class="headerlink" href="#pydraw.objects.Oval.slices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets the slices of the Oval based on wedges. Note that this generates slices that are not tied to the oval,
+these are simply slices of the oval based on its wedges. You can use them how you see fit.
+:return: a tuple (immutable list) of CustomPolygons</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Oval.wedges">
+<code class="sig-name descname">wedges</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">wedges</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#pydraw.objects.Oval.wedges" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Polygon">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Polygon</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">screen</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.screen.Screen" title="pydraw.screen.Screen">pydraw.screen.Screen</a></span></em>, <em class="sig-param"><span class="n">num_sides</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">x</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">y</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">10</span></em>, <em class="sig-param"><span class="n">height</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">10</span></em>, <em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a></span> <span class="o">=</span> <span class="default_value">black</span></em>, <em class="sig-param"><span class="n">border</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fill</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em>, <em class="sig-param"><span class="n">rotation</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Polygon" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.Renderable" title="pydraw.objects.Renderable"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.Renderable</span></code></a></p>
+<dl class="py method">
+<dt id="pydraw.objects.Polygon.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Polygon.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>To be overriden.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Rectangle">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Rectangle</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">screen</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.screen.Screen" title="pydraw.screen.Screen">pydraw.screen.Screen</a></span></em>, <em class="sig-param"><span class="n">x</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">y</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">10</span></em>, <em class="sig-param"><span class="n">height</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">10</span></em>, <em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a></span> <span class="o">=</span> <span class="default_value">black</span></em>, <em class="sig-param"><span class="n">border</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fill</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em>, <em class="sig-param"><span class="n">rotation</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Rectangle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.Renderable" title="pydraw.objects.Renderable"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.Renderable</span></code></a></p>
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Renderable">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Renderable</code><span class="sig-paren">(</span><em class="sig-param">screen: pydraw.screen.Screen</em>, <em class="sig-param">x: float = 0</em>, <em class="sig-param">y: float = 0</em>, <em class="sig-param">width: float = 10</em>, <em class="sig-param">height: float = 10</em>, <em class="sig-param">color: pydraw.color.Color = black</em>, <em class="sig-param">border: pydraw.color.Color =</em>, <em class="sig-param">fill: bool = True</em>, <em class="sig-param">rotation: float = 0</em>, <em class="sig-param">visible: bool = True</em>, <em class="sig-param">location: Optional[pydraw.location.Location] = None</em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Renderable" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.Object" title="pydraw.objects.Object"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.Object</span></code></a></p>
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.angleto">
+<code class="sig-name descname">angleto</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obj</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Renderable.angleto" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve the angle between this object and another (based on 0 degrees at 12 o’clock)
+:param obj: the Object/Location to get the angle to.
+:return: the angle in degrees as a float</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.backward">
+<code class="sig-name descname">backward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">distance</span><span class="p">:</span> <span class="n">float</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Renderable.backward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Move the Renderable backward by distance at its current heading (rotation/angle)
+:param distance: the distance to move backward (hypotenuse)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.border">
+<code class="sig-name descname">border</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">1</span></em>, <em class="sig-param"><span class="n">fill</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><a class="headerlink" href="#pydraw.objects.Renderable.border" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add or get the border of the object
+:param color: the color to set the border too, set to Color.NONE to remove border
+:param fill: whether or not to fill the polygon.
+:return: The Color of the border</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.center">
+<code class="sig-name descname">center</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">move_to</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.objects.Renderable.center" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the location of the center
+:param move_to: if defined, Move the center to a new Location (Easily center objects!)
+:return: Location object representing center of Renderable</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.clone">
+<code class="sig-name descname">clone</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Renderable.clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clone this renderable!
+:return: a Renderable</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.color">
+<code class="sig-name descname">color</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><a class="headerlink" href="#pydraw.objects.Renderable.color" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the color of the object
+:param color: the color to set to, if any
+:return: the color of the object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.contains">
+<code class="sig-name descname">contains</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Renderable.contains" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns whether or not a point is contained within the object.
+:param args: You may pass in either two numbers, a Location, or a tuple containing and x and y point.
+:return: a boolean value representing whether or not the point is within the bounds of the object.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.distance">
+<code class="sig-name descname">distance</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obj</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Renderable.distance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the distance between two objs or locations in pixels (center to center)
+:param obj: the Renderable/location to check distance between
+:return: the distance between this obj and the passed Renderable/Location.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.fill">
+<code class="sig-name descname">fill</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">fill</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Renderable.fill" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns or sets the current fill boolean
+:param fill: a new fill value, whether or not to fill the polygon
+:return: the fill value</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">distance</span><span class="p">:</span> <span class="n">float</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Renderable.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Move the Renderable forward by distance at its current heading (rotation/angle)
+:param distance: the distance to move forward (hypotenuse)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.height">
+<code class="sig-name descname">height</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">height</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Renderable.height" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the height of the object
+:param height: the height to set to in pixels, if any
+:return: the height of the object</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.lookat">
+<code class="sig-name descname">lookat</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obj</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Renderable.lookat" title="Permalink to this definition">¶</a></dt>
+<dd><p>Look at another object (Objects or Locations)
+:param obj: the Object/Location to look at.
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.overlaps">
+<code class="sig-name descname">overlaps</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">renderable</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Renderable.overlaps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns if this object is overlapping with the passed object.
+:param renderable: another Renderable instance.
+:return: true if they are overlapping, false if not.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.rotate">
+<code class="sig-name descname">rotate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle_diff</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Renderable.rotate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rotate the angle of the object by a difference, in degrees
+:param angle_diff: the angle difference to rotate by
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.rotation">
+<code class="sig-name descname">rotation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Renderable.rotation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the rotation of the object.
+:param angle: the angle to set the rotation to in degrees, if any
+:return: the angle of the object’s rotation in degrees</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">transform</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tuple<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; tuple<a class="headerlink" href="#pydraw.objects.Renderable.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the transform of the Renderable.
+Transforms represent the width, height, and rotation of Renderables.</p>
+<p>You can retrieve a Transform from a Renderable with this method and set the transform the same way.
+:param transform: the transform to set to, if any.
+:return: the transform</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Renderable.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>To be overriden.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.vertices">
+<code class="sig-name descname">vertices</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; list<a class="headerlink" href="#pydraw.objects.Renderable.vertices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the list of vertices for the Renderable.
+(The vertices will be returned clockwise, starting from the top-leftmost point)
+:return: a list of Locations representing the vertices</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.visible">
+<code class="sig-name descname">visible</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Renderable.visible" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the visibility of the renderable.
+:param visible: the new visibility value, if any
+:return: the visibility value</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Renderable.width">
+<code class="sig-name descname">width</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Renderable.width" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the width of the object.
+:param width: the width to set to in pixels, if any
+:return: the width of the object</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Text">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Text</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">screen</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.screen.Screen" title="pydraw.screen.Screen">pydraw.screen.Screen</a></span></em>, <em class="sig-param"><span class="n">text</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">x</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">y</span><span class="p">:</span> <span class="n">float</span></em>, <em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a></span> <span class="o">=</span> <span class="default_value">black</span></em>, <em class="sig-param"><span class="n">font</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'Arial'</span></em>, <em class="sig-param"><span class="n">size</span><span class="p">:</span> <span class="n">int</span> <span class="o">=</span> <span class="default_value">16</span></em>, <em class="sig-param"><span class="n">align</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'left'</span></em>, <em class="sig-param"><span class="n">bold</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">italic</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">underline</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">strikethrough</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">rotation</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Text" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.CustomRenderable" title="pydraw.objects.CustomRenderable"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.CustomRenderable</span></code></a></p>
+<dl class="py method">
+<dt id="pydraw.objects.Text.align">
+<code class="sig-name descname">align</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">align</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#pydraw.objects.Text.align" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the alignment of the text, if a new value is passed it must be ‘left’, ‘center’, or ‘right’.
+:param align: the alignment to set to, if any
+:return: the alignment of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.bold">
+<code class="sig-name descname">bold</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">bold</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Text.bold" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the bold status of the text
+:param bold: the bold status to set to, if any
+:return: the bold status of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.center">
+<code class="sig-name descname">center</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">moveto</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.objects.Text.center" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the Center of the Text’s points
+:param moveto: If defined, will move the Line to be centered on the passed Location
+:return: the Centroid/Center of the Text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.clone">
+<code class="sig-name descname">clone</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Text.clone" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clone this text!
+:return: A cloned text object!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.color">
+<code class="sig-name descname">color</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><a class="headerlink" href="#pydraw.objects.Text.color" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the color of the text
+:param color: the color to set to, if any
+:return: the color of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.font">
+<code class="sig-name descname">font</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">font</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#pydraw.objects.Text.font" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the font of the text
+:param font: the font to set to, if any
+:return: the font of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.height">
+<code class="sig-name descname">height</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Text.height" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the height of the text, (cannot be modified, although technically the font-size is the text’s height)
+:return: the height of the text.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.italic">
+<code class="sig-name descname">italic</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">italic</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Text.italic" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the italic status of the text
+:param italic: the italic status to set to, if any
+:return: the italic status of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.lookat">
+<code class="sig-name descname">lookat</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obj</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Text.lookat" title="Permalink to this definition">¶</a></dt>
+<dd><p>Look at another object (Objects or Locations)
+:param obj: the Object/Location to look at.
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.rotate">
+<code class="sig-name descname">rotate</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">angle_diff</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Text.rotate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Rotate the angle of the text by a difference, in degrees
+:param angle_diff: the angle difference to rotate by
+:return: Nonea</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.rotation">
+<code class="sig-name descname">rotation</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">rotation</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>float<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Text.rotation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the rotation of the text
+:param rotation: the strikethrough to set to, if any
+:return: the rotation of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.size">
+<code class="sig-name descname">size</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">size</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#pydraw.objects.Text.size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the size of the text
+:param size: the size to set to, if any
+:return: the size of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.strikethrough">
+<code class="sig-name descname">strikethrough</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">strikethrough</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Text.strikethrough" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the strikethrough status of the text
+:param strikethrough: the strikethrough status to set to, if any
+:return: the strikethrough status of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.text">
+<code class="sig-name descname">text</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">text</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#pydraw.objects.Text.text" title="Permalink to this definition">¶</a></dt>
+<dd><blockquote>
+<div><p>Get or set the text. Use ‘</p>
+</div></blockquote>
+<dl class="simple">
+<dt>‘ to separate lines.</dt><dd><dl class="field-list simple">
+<dt class="field-odd">param text</dt>
+<dd class="field-odd"><p>text to set to (str), if any</p>
+</dd>
+<dt class="field-even">return</dt>
+<dd class="field-even"><p>the text</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.transform">
+<code class="sig-name descname">transform</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">transform</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>tuple<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; tuple<a class="headerlink" href="#pydraw.objects.Text.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve the transform of the text
+:param transform: Unsupported.
+:return: a tuple with representing: (width, height, angle)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.underline">
+<code class="sig-name descname">underline</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">underline</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Text.underline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the underline status of the text
+:param underline: the underline status to set to, if any
+:return: the underline status of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.objects.Text.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>To be overriden.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.vertices">
+<code class="sig-name descname">vertices</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; list<a class="headerlink" href="#pydraw.objects.Text.vertices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the vertices of a Rectangle superposed in the same transform of the Text
+:return: a list of Locations</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.visible">
+<code class="sig-name descname">visible</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.objects.Text.visible" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the visibility of the text
+:param visible: the visibility to set to, if any
+:return: the visibility of the text</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.objects.Text.width">
+<code class="sig-name descname">width</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; float<a class="headerlink" href="#pydraw.objects.Text.width" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the width of the text (cannot be modified)
+:return the width of the text</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="pydraw.objects.Triangle">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.objects.</code><code class="sig-name descname">Triangle</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">screen</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.screen.Screen" title="pydraw.screen.Screen">pydraw.screen.Screen</a></span></em>, <em class="sig-param"><span class="n">x</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">y</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">10</span></em>, <em class="sig-param"><span class="n">height</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">10</span></em>, <em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n"><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a></span> <span class="o">=</span> <span class="default_value">black</span></em>, <em class="sig-param"><span class="n">border</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">fill</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em>, <em class="sig-param"><span class="n">rotation</span><span class="p">:</span> <span class="n">float</span> <span class="o">=</span> <span class="default_value">0</span></em>, <em class="sig-param"><span class="n">visible</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.objects.Triangle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pydraw.objects.Renderable" title="pydraw.objects.Renderable"><code class="xref py py-class docutils literal notranslate"><span class="pre">pydraw.objects.Renderable</span></code></a></p>
+</dd></dl>
+
 </div>
-<div class="section" id="pydraw-screen-module">
-<h2>pydraw.screen module<a class="headerlink" href="#pydraw-screen-module" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-pydraw.screen">
+<span id="pydraw-screen-module"></span><h2>pydraw.screen module<a class="headerlink" href="#module-pydraw.screen" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="pydraw.screen.Screen">
+<em class="property">class </em><code class="sig-prename descclassname">pydraw.screen.</code><code class="sig-name descname">Screen</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">width</span><span class="o">=</span><span class="default_value">800</span></em>, <em class="sig-param"><span class="n">height</span><span class="o">=</span><span class="default_value">600</span></em>, <em class="sig-param"><span class="n">title</span><span class="o">=</span><span class="default_value">'pydraw'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.screen.Screen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A class containing methods and values that can be manipulated in order to affect
+the window that is created. Sort of like a canvas.</p>
+<dl class="py class">
+<dt id="pydraw.screen.Screen.Key">
+<em class="property">class </em><code class="sig-name descname">Key</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">key</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.screen.Screen.Key" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt id="pydraw.screen.Screen.Key.key">
+<code class="sig-name descname">key</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#pydraw.screen.Screen.Key.key" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the string for the key.
+:return: the key in ascii</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.alert">
+<code class="sig-name descname">alert</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">text</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'Alert'</span></em>, <em class="sig-param"><span class="n">accept_text</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'Ok'</span></em>, <em class="sig-param"><span class="n">cancel_text</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'Cancel'</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.screen.Screen.alert" title="Permalink to this definition">¶</a></dt>
+<dd><p>Displays a dialog-box alert, and returns
+:param text: The text to display in the body of the dialog
+:param title: The title of the dialog-box
+:param accept_text: The text displayed on the accept button, defaults to ‘Ok’
+:param cancel_text: The text displayed on the cancel button, defaults to ‘Cancel’
+:return: True if accept was pressed, False if cancel was pressed</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.bottom_left">
+<code class="sig-name descname">bottom_left</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.screen.Screen.bottom_left" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the bottom left corner of the screen
+:return: Location</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.bottom_right">
+<code class="sig-name descname">bottom_right</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.screen.Screen.bottom_right" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the bottom right corner of the screen
+:return: Location</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.canvas_location">
+<code class="sig-name descname">canvas_location</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">y</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.screen.Screen.canvas_location" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.center">
+<code class="sig-name descname">center</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.screen.Screen.center" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets the center of the screen.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.clear">
+<code class="sig-name descname">clear</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clears the screen.
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.color">
+<code class="sig-name descname">color</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">color</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span><a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.color.Color" title="pydraw.color.Color">pydraw.color.Color</a><a class="headerlink" href="#pydraw.screen.Screen.color" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the background color of the screen.
+:param color: the color to set the background to
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.create_location">
+<code class="sig-name descname">create_location</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">x</span></em>, <em class="sig-param"><span class="n">y</span></em><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.screen.Screen.create_location" title="Permalink to this definition">¶</a></dt>
+<dd><p>Is passed turtle-based coordinates and converts them into normal coordinates
+:param x: the x component
+:param y: the y component
+:return: a location comprised of the passed x and y components</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.exit">
+<code class="sig-name descname">exit</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.exit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Called at the end of pydraw programs as an event for succesful program execution and termination.
+For something similar to turtle.done() see Screen.stop()
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.fullscreen">
+<code class="sig-name descname">fullscreen</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">fullscreen</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>bool<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; bool<a class="headerlink" href="#pydraw.screen.Screen.fullscreen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the fullscreen state of the application. Note that this will not resize your shapes, nor
+will it REPOSITION them. It is highly recommended that you call this method before creating any shapes!</p>
+<p>!!! EXPERIMENTAL !!!
+:param fullscreen: the new fullscreen state, if any
+:return: the current fullscreen state of the Screen</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.grab">
+<code class="sig-name descname">grab</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filename</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#pydraw.screen.Screen.grab" title="Permalink to this definition">¶</a></dt>
+<dd><p>Grabs a screenshot of the image and saves it to the directory with the specified filename!
+Note that if no filename is specified the file will be given a name based on the epoch time.
+:param filename: the name of the file to save the screenshot to.
+:return: the name of the file.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.grid">
+<code class="sig-name descname">grid</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">rows</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">cols</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">cellsize</span><span class="p">:</span> <span class="n">tuple</span> <span class="o">=</span> <span class="default_value">(50, 50)</span></em>, <em class="sig-param"><span class="n">helpers</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">True</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.screen.Screen.grid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.gridlines">
+<code class="sig-name descname">gridlines</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; tuple<a class="headerlink" href="#pydraw.screen.Screen.gridlines" title="Permalink to this definition">¶</a></dt>
+<dd><p>Allows you to retrieve the lines of the grid, but note that you cannot modify them!
+:return: a tuple (immutable list) of the gridlines.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.height">
+<code class="sig-name descname">height</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#pydraw.screen.Screen.height" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the height of the CANVAS within the screen. Important.
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.listen">
+<code class="sig-name descname">listen</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.listen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reads the file for input functions and registers them as callbacks!
+The input-type is determined by the name of the function.</p>
+<dl class="simple">
+<dt>Allowed Names:</dt><dd><ul class="simple">
+<li><p>mousedown</p></li>
+<li><p>mouseup</p></li>
+<li><p>mousedrag</p></li>
+<li><p>keydown</p></li>
+<li><p>keyup</p></li>
+<li><p>keypress (deprecated)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.mouse">
+<code class="sig-name descname">mouse</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.screen.Screen.mouse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the current mouse-position
+:return: the mouse-position in the form of a Location</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.objects">
+<code class="sig-name descname">objects</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; tuple<a class="headerlink" href="#pydraw.screen.Screen.objects" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves all objects on the Screen!
+:return: A tuple (immutable list) of Objects (you will want to check types for certain methods!)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.picture">
+<code class="sig-name descname">picture</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pic</span><span class="p">:</span> <span class="n">str</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.picture" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the background picture of the screen.
+:param pic: the path to said picture from the file
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.prompt">
+<code class="sig-name descname">prompt</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">text</span><span class="p">:</span> <span class="n">str</span></em>, <em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'Prompt'</span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#pydraw.screen.Screen.prompt" title="Permalink to this definition">¶</a></dt>
+<dd><p>Prompts the user for keyboard input
+:param: text the text to prompt the user with
+:param: title the title of the dialog box
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.remove">
+<code class="sig-name descname">remove</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">obj</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.screen.Screen.remove" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.reset">
+<code class="sig-name descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Resets the screen, removing all objects and input methods.
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.resize">
+<code class="sig-name descname">resize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">width</span><span class="p">:</span> <span class="n">int</span></em>, <em class="sig-param"><span class="n">height</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.resize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Resize the screen to new dimensions
+:param width: the width to resize to
+:param height: the height to resize to
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.scene">
+<code class="sig-name descname">scene</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">scene</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.scene" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply a new scene to the screen!</p>
+<p>Note that this will override ALL previously registered input handlers.
+:param scene: The Scene to apply!
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.size">
+<code class="sig-name descname">size</code><span class="sig-paren">(</span><em class="sig-param">) -&gt; (&lt;class 'int'&gt;</em>, <em class="sig-param">&lt;class 'int'&gt;</em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.screen.Screen.size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the size of the WINDOW (please note this is not the canvas, and those attributes should be
+retrieved using the width() and height() methods respectively)
+:return: a tuple containing the width and height of the WINDOW</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.sleep">
+<em class="property">static </em><code class="sig-name descname">sleep</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">delay</span><span class="p">:</span> <span class="n">float</span></em><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.sleep" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cause the program to sleep by calling time.sleep(delay)
+:param delay: the delay in seconds to sleep by
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.stop">
+<code class="sig-name descname">stop</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.stop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Holds the screen and all objects and prevents the window from closing.
+(Best used in place of a while loop if the program is simply drawing shapes with no change over time)
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.title">
+<code class="sig-name descname">title</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">title</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>str<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; str<a class="headerlink" href="#pydraw.screen.Screen.title" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get or set the title of the screen.
+:param title: the title to set to, if any
+:return: the title</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.toggle_grid">
+<code class="sig-name descname">toggle_grid</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">value</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#pydraw.screen.Screen.toggle_grid" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.top_left">
+<code class="sig-name descname">top_left</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.screen.Screen.top_left" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the top left corner of the screen
+:return: Location</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.top_right">
+<code class="sig-name descname">top_right</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; <a class="reference internal" href="#pydraw.location.Location" title="pydraw.location.Location">pydraw.location.Location</a><a class="headerlink" href="#pydraw.screen.Screen.top_right" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the top right corner of the screen
+:return: Location</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.update">
+<code class="sig-name descname">update</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; None<a class="headerlink" href="#pydraw.screen.Screen.update" title="Permalink to this definition">¶</a></dt>
+<dd><p>Updates the screen.
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="pydraw.screen.Screen.width">
+<code class="sig-name descname">width</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &#x2192; int<a class="headerlink" href="#pydraw.screen.Screen.width" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the width of the CANVAS within the screen. Important.
+:return: an integer representing the width of the canvas</p>
+</dd></dl>
+
+</dd></dl>
+
 </div>
 <div class="section" id="module-pydraw.util">
 <span id="pydraw-util-module"></span><h2>pydraw.util module<a class="headerlink" href="#module-pydraw.util" title="Permalink to this headline">¶</a></h2>
