@@ -20,7 +20,7 @@ class Scene:
         """
         return self._screen;
 
-    def init(self) -> None:
+    def start(self) -> None:
         """
         Run as the initializer for the scene
         :return: None
@@ -85,5 +85,5 @@ class Scene:
         """
 
         self._screen = screen;
-        self.init();
+        self.start();
         self.run();

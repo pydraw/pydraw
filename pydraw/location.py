@@ -1,4 +1,5 @@
 from pydraw.errors import *;
+import math;
 
 
 class Location:
@@ -126,6 +127,15 @@ class Location:
 
         return self._y;
 
+    def distance(self, location) -> float:
+        """
+        Returns the distance between this location and another
+        :param location: the Location to get the distance to
+        :return: a float
+        """
+
+        return math.sqrt((location.x() - self.x()) ** 2 + (location.y() - self.y()) ** 2);
+
     def __str__(self):
         return f'(X: {self._x}, Y: {self._y})';
 
@@ -162,3 +172,6 @@ class Location:
             return False;
 
         return self.x() == other[0] and self.y() == other[1];
+
+    def __hash__(self):
+        return hash(self._x) ^ hash(self._y);

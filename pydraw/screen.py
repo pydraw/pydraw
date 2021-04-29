@@ -114,6 +114,8 @@ class Screen:
     the window that is created. Sort of like a canvas.
     """
 
+    _TERMINATING = False
+
     def __init__(self, width: int = 800, height: int = 600, title: str = "pydraw"):
         verify(width, int, height, int, title, str);
 
@@ -158,11 +160,19 @@ class Screen:
         self._screen.tracer(0);
         self._screen.update();
 
+        self._scene = None;  # We store our current Scene.
+
         # import atexit;
         # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler);
         # atexit.register(self._exit_handler)
 
         # --- #
+
+        def onclose():
+            Screen._TERMINATING = True
+            self._root.destroy();
+
+        self._root.protocol("WM_DELETE_WINDOW", onclose);
 
         self.registry = {};  # The input function registry (stores input callbacks)
 
@@ -558,13 +568,13 @@ class Screen:
         try:
             for i in range(len(self._objects) - 1, -1, -1):
                 self._objects[i].remove();
-            if self._gridstate:
-                self._redraw_grid();  # Redraw the grid if it was active.
+            # if self._gridstate:
+            #     self._redraw_grid();  # Redraw the grid if it was active.
             self.color(self._color);  # Redraw the color of the screen.
         except (tk.TclError, AttributeError):
             pass;
 
-    def scene(self, scene) -> None:
+    def scene(self, scene=None):
         """
         Apply a new scene to the screen!
 
@@ -572,16 +582,28 @@ class Screen:
         :param scene: The Scene to apply!
         :return: None
         """
+        from pydraw import Scene;
+
+        if not isinstance(scene, Scene):
+            raise InvalidArgumentError('You must pass a an object that extends Scene!');
+
+        if scene is None:
+            return self._scene;
+
+        if self._scene is not None:
+            del self._scene;
 
         self.reset();  # Clears screen and destroys all registered input handlers.
-        scene.activate(self);
 
         # Defines all input methods from the Scene.
-        for (name, function) in inspect.getmembers(scene, inspect.isfunction):
+        for (name, function) in inspect.getmembers(scene, predicate=inspect.ismethod):
             if name.lower() not in INPUT_TYPES:
                 continue;
 
             self.registry[name.lower()] = function;
+
+        self._scene = scene;
+        scene.activate(self);
 
     def reset(self) -> None:
         """
@@ -591,6 +613,8 @@ class Screen:
 
         self.toggle_grid(False);
         self._gridlines.clear();
+        for line in self._gridlines:
+            line.remove();
 
         for obj in self._helpers:
             obj.remove();

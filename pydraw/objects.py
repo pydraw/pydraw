@@ -119,7 +119,10 @@ class Object:
 
     # noinspection PyProtectedMember
     def _check(self) -> None:
-        if self._screen is None or not self._screen.contains(self):
+        if self._screen is None or Screen._TERMINATING:
+            return;  # We don't wanna mess with how stupid tk and turtle are.
+
+        if not self._screen.contains(self):
             if self in self._screen._gridlines or self in self._screen._helpers:
                 return;
 
@@ -493,22 +496,44 @@ class Renderable(Object):
         if not isinstance(renderable, Renderable):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
 
-        min_ax = self.x();
-        max_ax = self.x() + self.width();
+        # Only optimize if the angle is not zero.
+        if self._angle == 0:
+            min_ax = self.x();
+            max_ax = self.x() + self.width();
 
-        min_bx = renderable.x();
-        max_bx = renderable.x() + renderable.width();
+            min_bx = renderable.x();
+            max_bx = renderable.x() + renderable.width();
 
-        min_ay = self.y();
-        max_ay = self.y() + self.height();
+            min_ay = self.y();
+            max_ay = self.y() + self.height();
 
-        min_by = renderable.y();
-        max_by = renderable.y() + renderable.height();
+            min_by = renderable.y();
+            max_by = renderable.y() + renderable.height();
 
-        a_left_b = max_ax < min_bx;
-        a_right_b = min_ax > max_bx;
-        a_above_b = min_ay > max_by;
-        a_below_b = max_ay < min_by;
+            a_left_b = max_ax < min_bx;
+            a_right_b = min_ax > max_bx;
+            a_above_b = min_ay > max_by;
+            a_below_b = max_ay < min_by;
+        else:
+            hypotenuse = math.sqrt(self.width() ** 2 + self.height() ** 2);
+            other_hypotenuse = math.sqrt(renderable.width() ** 2 + renderable.height() ** 2);
+
+            min_ax = self.x();
+            max_ax = self.x() + hypotenuse;
+
+            min_bx = renderable.x();
+            max_bx = renderable.x() + other_hypotenuse;
+
+            min_ay = self.y();
+            max_ay = self.y() + hypotenuse;
+
+            min_by = renderable.y();
+            max_by = renderable.y() + other_hypotenuse;
+
+            a_left_b = max_ax < min_bx;
+            a_right_b = min_ax > max_bx;
+            a_above_b = min_ay > max_by;
+            a_below_b = max_ay < min_by;
 
         # Do a base check to make sure they are even remotely near each other.
         if a_left_b or a_right_b or a_above_b or a_below_b:

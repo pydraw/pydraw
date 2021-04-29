@@ -1,5 +1,5 @@
 """
-pyDraw v1.4.1
+pyDraw v1.5
 
 This library is a graphics-interface library designed to make graphics in Python
 easier and more simple. It was designed to be easy to teach/learn and to utilize
@@ -77,7 +77,7 @@ import tkinter as tk;
 
 class Color:
     """
-    An immutable class that contains a color values, usually by name or RGB
+    An immutable class that contains a color values, usually by name or RGB.
     """
 
     NONE = None;
@@ -409,6 +409,7 @@ COLORS = [Color('snow'), Color('ghost white'), Color('white smoke'), Color('gain
 
 
 # from pydraw.errors import *;
+import math;
 
 
 class Location:
@@ -422,6 +423,9 @@ class Location:
                 location = (args[0][0], args[0][1]);
             elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
                 location = (args[0], args[1]);
+            else:
+                raise InvalidArgumentError('Location constructor takes a tuple/location '
+                                           'or two numbers (x, y)!');
         elif len(kwargs) == 0:
             raise InvalidArgumentError('Location constructor takes a tuple/location '
                                        'or two numbers (x, y)!');
@@ -458,6 +462,9 @@ class Location:
                 diff = (args[0][0], args[0][1]);
             elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
                 diff = (args[0], args[1]);
+            else:
+                raise InvalidArgumentError('move() takes a tuple/Location '
+                                           'or two numbers (dx, dy)!');
         elif len(kwargs) == 0:
             raise InvalidArgumentError('move() takes a tuple/Location '
                                        'or two numbers (dx, dy)!');
@@ -496,6 +503,9 @@ class Location:
                 location = (args[0][0], args[0][1]);
             elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
                 location = (args[0], args[1]);
+            else:
+                raise InvalidArgumentError('move() takes a tuple/Location '
+                                           'or two numbers (dx, dy)!');
         elif len(kwargs) == 0:
             raise InvalidArgumentError('moveto() takes a tuple/location '
                                        'or two numbers (dx, dy)!');
@@ -526,6 +536,15 @@ class Location:
             self._y = new_y;
 
         return self._y;
+
+    def distance(self, location) -> float:
+        """
+        Returns the distance between this location and another
+        :param location: the Location to get the distance to
+        :return: a float
+        """
+
+        return math.sqrt((location.x() - self.x()) ** 2 + (location.y() - self.y()) ** 2);
 
     def __str__(self):
         return f'(X: {self._x}, Y: {self._y})';
@@ -563,6 +582,9 @@ class Location:
             return False;
 
         return self.x() == other[0] and self.y() == other[1];
+
+    def __hash__(self):
+        return hash(self._x) ^ hash(self._y);
 
 
 import turtle;
@@ -681,7 +703,11 @@ class Screen:
     the window that is created. Sort of like a canvas.
     """
 
-    def __init__(self, width=800, height=600, title="pydraw"):
+    _TERMINATING = False
+
+    def __init__(self, width: int = 800, height: int = 600, title: str = "pydraw"):
+        verify(width, int, height, int, title, str);
+
         self._screen = turtle.Screen();
         self._turtle = turtle;
         self._canvas = self._screen.cv;
@@ -723,11 +749,19 @@ class Screen:
         self._screen.tracer(0);
         self._screen.update();
 
+        self._scene = None;  # We store our current Scene.
+
         # import atexit;
         # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler);
         # atexit.register(self._exit_handler)
 
         # --- #
+
+        def onclose():
+            Screen._TERMINATING = True
+            self._root.destroy();
+
+        self._root.protocol("WM_DELETE_WINDOW", onclose);
 
         self.registry = {};  # The input function registry (stores input callbacks)
 
@@ -739,6 +773,7 @@ class Screen:
         """
 
         if title is not None:
+            verify(title, str);
             self._title = title;
             self._screen.title(title);
 
@@ -752,6 +787,7 @@ class Screen:
         """
 
         if color is not None:
+            verify(color, Color);
             self._color = color;
             self._screen.bgcolor(color.__value__());
         return self._color;
@@ -763,6 +799,7 @@ class Screen:
         :return: None
         """
 
+        verify(pic, str);
         self._screen.bgpic(pic);
 
     def resize(self, width: int, height: int) -> None:
@@ -773,6 +810,7 @@ class Screen:
         :return: None
         """
 
+        verify(width, int, height, int);
         # noinspection PyBroadException
         try:
             self._screen.screensize(width, height);
@@ -820,6 +858,7 @@ class Screen:
         """
         Gets the center of the screen.
         """
+
         return Location(self.width() / 2, self.height() / 2);
 
     # noinspection PyMethodMayBeStatic
@@ -875,6 +914,8 @@ class Screen:
         """
         from tkinter.simpledialog import SimpleDialog
 
+        verify(text, str, title, str, accept_text, str, cancel_text, str);
+
         alert = SimpleDialog(self._root,
                              text=text,
                              buttons=[accept_text, cancel_text],
@@ -891,6 +932,8 @@ class Screen:
         :return: None
         """
 
+        verify(text, str, title, str);
+
         text = self._screen.textinput(title, text);
 
         self._screen.listen();  # keep us nice and listening :)
@@ -898,6 +941,8 @@ class Screen:
 
     def grid(self, rows: int = None, cols: int = None, cellsize: tuple = (50, 50), helpers: bool = True):
         # from pydraw import Line, Text;
+
+        verify(rows, int, cols, int, cellsize, tuple, helpers, bool);
 
         if len(self._gridlines) > 0:
             [line.remove() for line in self._gridlines];
@@ -991,6 +1036,14 @@ class Screen:
         :return: the name of the file.
         """
 
+        if filename is None:
+            filename = 'pydraw' + str(time.time() % 10000);
+
+        verify(filename, str);
+
+        if not filename.endswith('.png'):
+            filename += '.png';
+
         # noinspection PyBroadException
         try:
             from PIL import ImageGrab;
@@ -1000,12 +1053,6 @@ class Screen:
             y1 = self._root.winfo_rooty() + self._canvas.winfo_y() + BORDER_CONSTANT;
             x2 = x1 + self.width() - BORDER_CONSTANT;
             y2 = y1 + self.height() - BORDER_CONSTANT;
-
-            if filename is None:
-                filename = 'pydraw' + str(time.time() % 10000);
-
-            if not filename.endswith('.png'):
-                filename += '.png';
 
             ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename);
             return filename;
@@ -1024,6 +1071,7 @@ class Screen:
         """
 
         if fullscreen is not None:
+            verify(fullscreen, bool);
             self._fullscreen = fullscreen;
             self._root.attributes("-fullscreen", fullscreen);
             self.update();
@@ -1031,6 +1079,10 @@ class Screen:
         return self._fullscreen;
 
     def _front(self, obj) -> None:
+        # from pydraw import Object;
+
+        if not isinstance(obj, Object):
+            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.');
 
         self._canvas.tag_raise(obj._ref);
 
@@ -1038,7 +1090,8 @@ class Screen:
         # from pydraw import Object;
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError('Expected an Object...')
+            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.');
+
         self._canvas.tag_lower(obj._ref);
 
     def _add(self, obj) -> None:
@@ -1049,6 +1102,18 @@ class Screen:
         """
 
         self._objects.append(obj);
+
+    def add(self, obj) -> None:
+        """
+        Add an object back to the Screen after having removed it (with Object.remove() or Screen.remove(object)
+        :param obj: the Object to add back.
+        :return: None
+        """
+
+        if obj in self._objects:
+            raise PydrawError(f'Cannot re-add object that is already in the object cache! {obj}: {type(obj)}');
+
+        self._add(obj);
 
     # noinspection PyProtectedMember
     def remove(self, obj):
@@ -1071,6 +1136,18 @@ class Screen:
 
         return tuple(self._objects);
 
+    def contains(self, obj) -> bool:
+        """
+        Returns whether or not the passed object exists on the Screen (is in the objects cache)
+        :param obj: the Object to check
+        :return: a boolean
+        """
+
+        return obj in self._objects;
+
+    def __contains__(self, item):
+        return self.contains(item);
+
     def clear(self) -> None:
         """
         Clears the screen.
@@ -1080,13 +1157,13 @@ class Screen:
         try:
             for i in range(len(self._objects) - 1, -1, -1):
                 self._objects[i].remove();
-            if self._gridstate:
-                self._redraw_grid();  # Redraw the grid if it was active.
+            # if self._gridstate:
+            #     self._redraw_grid();  # Redraw the grid if it was active.
             self.color(self._color);  # Redraw the color of the screen.
         except (tk.TclError, AttributeError):
             pass;
 
-    def scene(self, scene) -> None:
+    def scene(self, scene=None):
         """
         Apply a new scene to the screen!
 
@@ -1094,16 +1171,28 @@ class Screen:
         :param scene: The Scene to apply!
         :return: None
         """
+        # from pydraw import Scene;
 
-        self.reset();
-        scene.activate(self);
+        if not isinstance(scene, Scene):
+            raise InvalidArgumentError('You must pass a an object that extends Scene!');
+
+        if scene is None:
+            return self._scene;
+
+        if self._scene is not None:
+            del self._scene;
+
+        self.reset();  # Clears screen and destroys all registered input handlers.
 
         # Defines all input methods from the Scene.
-        for (name, function) in inspect.getmembers(scene, inspect.isfunction):
+        for (name, function) in inspect.getmembers(scene, predicate=inspect.ismethod):
             if name.lower() not in INPUT_TYPES:
                 continue;
 
             self.registry[name.lower()] = function;
+
+        self._scene = scene;
+        scene.activate(self);
 
     def reset(self) -> None:
         """
@@ -1113,6 +1202,8 @@ class Screen:
 
         self.toggle_grid(False);
         self._gridlines.clear();
+        for line in self._gridlines:
+            line.remove();
 
         for obj in self._helpers:
             obj.remove();
@@ -1418,7 +1509,7 @@ class Scene:
         """
         return self._screen;
 
-    def init(self) -> None:
+    def start(self) -> None:
         """
         Run as the initializer for the scene
         :return: None
@@ -1483,7 +1574,7 @@ class Scene:
         """
 
         self._screen = screen;
-        self.init();
+        self.start();
         self.run();
 
 
@@ -1605,6 +1696,17 @@ class Object:
         To be overriden.
         """
         pass;
+
+    # noinspection PyProtectedMember
+    def _check(self) -> None:
+        if self._screen is None or Screen._TERMINATING:
+            return;  # We don't wanna mess with how stupid tk and turtle are.
+
+        if not self._screen.contains(self):
+            if self in self._screen._gridlines or self in self._screen._helpers:
+                return;
+
+            raise PydrawError('Cannot update or draw object that is not on the Screen!');
 
     def update(self) -> None:
         """
@@ -1974,22 +2076,44 @@ class Renderable(Object):
         if not isinstance(renderable, Renderable):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
 
-        min_ax = self.x();
-        max_ax = self.x() + self.width();
+        # Only optimize if the angle is not zero.
+        if self._angle == 0:
+            min_ax = self.x();
+            max_ax = self.x() + self.width();
 
-        min_bx = renderable.x();
-        max_bx = renderable.x() + renderable.width();
+            min_bx = renderable.x();
+            max_bx = renderable.x() + renderable.width();
 
-        min_ay = self.y();
-        max_ay = self.y() + self.height();
+            min_ay = self.y();
+            max_ay = self.y() + self.height();
 
-        min_by = renderable.y();
-        max_by = renderable.y() + renderable.height();
+            min_by = renderable.y();
+            max_by = renderable.y() + renderable.height();
 
-        a_left_b = max_ax < min_bx;
-        a_right_b = min_ax > max_bx;
-        a_above_b = min_ay > max_by;
-        a_below_b = max_ay < min_by;
+            a_left_b = max_ax < min_bx;
+            a_right_b = min_ax > max_bx;
+            a_above_b = min_ay > max_by;
+            a_below_b = max_ay < min_by;
+        else:
+            hypotenuse = math.sqrt(self.width() ** 2 + self.height() ** 2);
+            other_hypotenuse = math.sqrt(renderable.width() ** 2 + renderable.height() ** 2);
+
+            min_ax = self.x();
+            max_ax = self.x() + hypotenuse;
+
+            min_bx = renderable.x();
+            max_bx = renderable.x() + other_hypotenuse;
+
+            min_ay = self.y();
+            max_ay = self.y() + hypotenuse;
+
+            min_by = renderable.y();
+            max_by = renderable.y() + other_hypotenuse;
+
+            a_left_b = max_ax < min_bx;
+            a_right_b = min_ax > max_bx;
+            a_above_b = min_ay > max_by;
+            a_below_b = max_ay < min_by;
 
         # Do a base check to make sure they are even remotely near each other.
         if a_left_b or a_right_b or a_above_b or a_below_b:
@@ -2179,6 +2303,8 @@ class Renderable(Object):
         return new_vertices;
 
     def update(self):
+        self._check();
+
         old_ref = self._ref;
         shape = self._shape;  # List of normal vertices.
 
@@ -2463,6 +2589,8 @@ class CustomPolygon(CustomRenderable):
         return new_vertices;
 
     def update(self):
+        self._check();
+
         old_ref = self._ref;
 
         xmin = self._vertices[0][0];
@@ -2700,6 +2828,8 @@ class Polygon(Renderable):
 
     # noinspection PyProtectedMember
     def update(self):
+        self._check();
+
         old_ref = self._ref;
         shape = self._shape;  # List of normal vertices.
 
@@ -2776,6 +2906,9 @@ class Image(Renderable):
                  visible: bool = True,
                  location: Location = None):
         self._image_name = image;
+        self._original = None;
+
+        # Filetype Checking
         split = image.split('.');
         if len(split) <= 1:
             raise PydrawError('File must have extension filetype:', self._image_name);
@@ -2792,6 +2925,8 @@ class Image(Renderable):
             try:
                 from PIL import Image, ImageTk;
                 image = Image.open(self._image_name);
+                self._original = image;  # We save the originally loaded image for easy modification
+
                 self._image = ImageTk.PhotoImage(image);
             except:
                 raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
@@ -2823,9 +2958,14 @@ class Image(Renderable):
         if border is not None:
             self.border(border);
 
+    # noinspection PyProtectedMember
     def _setup(self):
         # Pre-register the vertices so we don't have issues with .center()
         self._vertices = self.vertices();
+
+        real_location = self._screen.canvas_location(self.x(), self.y());
+        self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
+                                                      real_location.y() + self._height / 2, image=self._image);
 
     def width(self, width: float = None) -> float:
         """
@@ -3034,13 +3174,9 @@ class Image(Renderable):
         ImageTk.PhotoImage.__del__ = new_del
 
     # noinspection PyProtectedMember
-    def _setup(self):
-        real_location = self._screen.canvas_location(self.x(), self.y());
-        self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
-                                                      real_location.y() + self._height / 2, image=self._image);
-
-    # noinspection PyProtectedMember
     def update(self, updated: bool = False):
+        self._check();
+
         if updated:
             try:
                 from PIL import Image, ImageTk, ImageOps;
@@ -3049,15 +3185,23 @@ class Image(Renderable):
                     self._monkey_patch_del();  # If we do have PIL we need to monkey patch this immediately.
                     self._patched = True;
 
-                image = Image.open(self._image_name);
+                # Optimized (only read file once, caching everything else)
+                # TODO: In the future, caching images by filename could increase efficiency, but have serious pitfalls.
+                # ^ Perhaps if we hash the image we could then compare against future hashes to check if the file
+                # has been modified or not. (Noah)
+                if self._original is not None:
+                    image = self._original.copy();
+                else:
+                    image = Image.open(self._image_name);
+                    self._original = image.copy();
 
                 if self._frame != -1:
                     try:
                         image.seek(self._frame);
                     except EOFError:
-                        raise PydrawError('No more images in GIF File!');
+                        raise PydrawError(f'No more frames in GIF: {self._image_name}!');
 
-                image = image.convert('RGBA');
+                image = image.convert('RGBA');  # Convert so we can color-filter the image
 
                 if self._color is not None and self._color != Color.NONE:
                     r, g, b, alpha = image.split()
@@ -3442,6 +3586,7 @@ class Text(CustomRenderable):
 
     # noinspection PyProtectedMember
     def update(self) -> None:
+        self._check();
         # super().update(); | JUST FOR RENDERABLES - DO NOT USE
         # we are going to delete and re-add text to the screen. You cannot alter a text object.
         old_ref = self._ref;
@@ -3973,6 +4118,8 @@ class Line(Object):
 
     # noinspection PyProtectedMember
     def update(self):
+        self._check();
+
         try:
             old_ref = self._ref;
 
