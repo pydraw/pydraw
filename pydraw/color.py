@@ -84,7 +84,7 @@ class Color:
 
     def green(self):
         """
-        Get the green propety
+        Get the green property
         :return: g
         """
         return self._g;

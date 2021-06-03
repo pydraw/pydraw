@@ -17,6 +17,8 @@ from pydraw import Screen;
 from pydraw import Location;
 from pydraw import Color;
 
+from pydraw.overload import overload;
+
 PIXEL_RATIO = 20;
 
 
@@ -415,7 +417,7 @@ class Renderable(Object):
 
     def contains(self, *args) -> bool:
         """
-        Returns whether or not a point is contained within the object.
+        Returns whether or not a Location is contained within the object.
         :param args: You may pass in either two numbers, a Location, or a tuple containing and x and y point.
         :return: a boolean value representing whether or not the point is within the bounds of the object.
         """
@@ -486,14 +488,14 @@ class Renderable(Object):
 
         return not (count % 2 == 0);
 
-    def overlaps(self, renderable) -> bool:
+    def overlaps(self, other) -> bool:
         """
         Returns if this object is overlapping with the passed object.
-        :param renderable: another Renderable instance.
+        :param other: another Renderable instance.
         :return: true if they are overlapping, false if not.
         """
 
-        if not isinstance(renderable, Renderable):
+        if not isinstance(other, Renderable):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
 
         # Only optimize if the angle is not zero.
@@ -501,14 +503,14 @@ class Renderable(Object):
             min_ax = self.x();
             max_ax = self.x() + self.width();
 
-            min_bx = renderable.x();
-            max_bx = renderable.x() + renderable.width();
+            min_bx = other.x();
+            max_bx = other.x() + other.width();
 
             min_ay = self.y();
             max_ay = self.y() + self.height();
 
-            min_by = renderable.y();
-            max_by = renderable.y() + renderable.height();
+            min_by = other.y();
+            max_by = other.y() + other.height();
 
             a_left_b = max_ax < min_bx;
             a_right_b = min_ax > max_bx;
@@ -516,19 +518,19 @@ class Renderable(Object):
             a_below_b = max_ay < min_by;
         else:
             hypotenuse = math.sqrt(self.width() ** 2 + self.height() ** 2);
-            other_hypotenuse = math.sqrt(renderable.width() ** 2 + renderable.height() ** 2);
+            other_hypotenuse = math.sqrt(other.width() ** 2 + other.height() ** 2);
 
             min_ax = self.x();
             max_ax = self.x() + hypotenuse;
 
-            min_bx = renderable.x();
-            max_bx = renderable.x() + other_hypotenuse;
+            min_bx = other.x();
+            max_bx = other.x() + other_hypotenuse;
 
             min_ay = self.y();
             max_ay = self.y() + hypotenuse;
 
-            min_by = renderable.y();
-            max_by = renderable.y() + other_hypotenuse;
+            min_by = other.y();
+            max_by = other.y() + other_hypotenuse;
 
             a_left_b = max_ax < min_bx;
             a_right_b = min_ax > max_bx;
@@ -552,7 +554,7 @@ class Renderable(Object):
         shape1 = self.vertices();
 
         # noinspection PyProtectedMember
-        shape2 = renderable.vertices();
+        shape2 = other.vertices();
 
         # Orientation method that will determine if it is a triangle (and in what direction [cc or ccw]) or a line.
         def orientation(point1: Location, point2: Location, point3: Location) -> str:
@@ -1071,13 +1073,55 @@ class CustomPolygon(CustomRenderable):
 
 
 class Rectangle(Renderable):
-    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
                  fill: bool = True,
                  rotation: float = 0,
                  visible: bool = True):
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float))
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
         self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
@@ -1090,12 +1134,67 @@ class Oval(Renderable):
                 (-3.09, -9.51), (-0.00, -10.00), (3.09, -9.51),
                 (5.88, -8.09), (8.09, -5.88), (9.51, -3.09));
 
-    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
                  fill: bool = True,
                  rotation: float = 0,
                  visible: bool = True):
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float))
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
         self._width = width;
         self._height = height;
 
@@ -1165,7 +1264,8 @@ class Oval(Renderable):
 
 
 class Triangle(Renderable):
-    def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
                  fill: bool = True,
@@ -1174,15 +1274,109 @@ class Triangle(Renderable):
         self._shape = ((10, -10), (0, 10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
-
-class Polygon(Renderable):
-    def __init__(self, screen: Screen, num_sides: int, x: float = 0, y: float = 0, width: float = 10,
-                 height: float = 10,
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
                  fill: bool = True,
                  rotation: float = 0,
                  visible: bool = True):
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float))
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+
+class Polygon(Renderable):
+
+    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float))
+    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, int, Location, (int, float), (int, float))
+    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, int, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
         self._num_sides = num_sides;
         radius = PIXEL_RATIO / 2;
         shape_points = [];
@@ -1317,14 +1511,16 @@ class Image(Renderable):
 
     TKINTER_TYPES = ['.png', '.gif', '.ppm'];
 
+    # (x, y) INITIALIZERS
+
+    @overload(Screen, str, (int, float), (int, float))
     def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
                  width: float = None,
                  height: float = None,
                  color: Color = None,
                  border: Color = Color.NONE,
                  rotation: float = 0,
-                 visible: bool = True,
-                 location: Location = None):
+                 visible: bool = True):
         self._image_name = image;
         self._original = None;
 
@@ -1364,7 +1560,323 @@ class Image(Renderable):
         self._patched = False;
 
         super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
-                         rotation=rotation, visible=visible, location=location);
+                         rotation=rotation, visible=visible);
+        self._setup()
+
+        if width is not None:
+            self.width(width);
+        if height is not None:
+            self.height(height);
+
+        if color is not None:
+            self.color(color);
+
+        if border is not None:
+            self.border(border);
+
+    @overload(Screen, str, (int, float), (int, float), (int, float), (int, float))
+    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
+                 width: float = None,
+                 height: float = None,
+                 color: Color = None,
+                 border: Color = Color.NONE,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._image_name = image;
+        self._original = None;
+
+        # Filetype Checking
+        split = image.split('.');
+        if len(split) <= 1:
+            raise PydrawError('File must have extension filetype:', self._image_name);
+
+        filetype = split[len(split) - 1]
+
+        import os;
+        if not os.path.isfile(image):
+            raise InvalidArgumentError(f'Image does not exist or is directory: {image}');
+
+        if filetype in self.TKINTER_TYPES:
+            self._image = tk.PhotoImage(name=image, file=image);
+        else:
+            try:
+                from PIL import Image, ImageTk;
+                image = Image.open(self._image_name);
+                self._original = image;  # We save the originally loaded image for easy modification
+
+                self._image = ImageTk.PhotoImage(image);
+            except:
+                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
+                                       'Install Pillow via: \'pip install pillow\'.');
+
+        self._width = self._image.width();
+        self._height = self._image.height();
+
+        self._frame = -1;
+        self._frames = -1;
+
+        self._mask = 123;
+
+        # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
+        self._patched = False;
+
+        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
+                         rotation=rotation, visible=visible);
+        self._setup()
+
+        if width is not None:
+            self.width(width);
+        if height is not None:
+            self.height(height);
+
+        if color is not None:
+            self.color(color);
+
+        if border is not None:
+            self.border(border);
+
+    @overload(Screen, str, (int, float), (int, float), (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
+                 width: float = None,
+                 height: float = None,
+                 color: Color = None,
+                 border: Color = Color.NONE,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._image_name = image;
+        self._original = None;
+
+        # Filetype Checking
+        split = image.split('.');
+        if len(split) <= 1:
+            raise PydrawError('File must have extension filetype:', self._image_name);
+
+        filetype = split[len(split) - 1]
+
+        import os;
+        if not os.path.isfile(image):
+            raise InvalidArgumentError(f'Image does not exist or is directory: {image}');
+
+        if filetype in self.TKINTER_TYPES:
+            self._image = tk.PhotoImage(name=image, file=image);
+        else:
+            try:
+                from PIL import Image, ImageTk;
+                image = Image.open(self._image_name);
+                self._original = image;  # We save the originally loaded image for easy modification
+
+                self._image = ImageTk.PhotoImage(image);
+            except:
+                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
+                                       'Install Pillow via: \'pip install pillow\'.');
+
+        self._width = self._image.width();
+        self._height = self._image.height();
+
+        self._frame = -1;
+        self._frames = -1;
+
+        self._mask = 123;
+
+        # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
+        self._patched = False;
+
+        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
+                         rotation=rotation, visible=visible);
+        self._setup()
+
+        if width is not None:
+            self.width(width);
+        if height is not None:
+            self.height(height);
+
+        if color is not None:
+            self.color(color);
+
+        if border is not None:
+            self.border(border);
+
+    # Location INITIALIZERS
+
+    @overload(Screen, str, Location)
+    def __init__(self, screen: Screen, image: str, location: Location,
+                 width: float = None,
+                 height: float = None,
+                 color: Color = None,
+                 border: Color = Color.NONE,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._image_name = image;
+        self._original = None;
+
+        x = location.x();
+        y = location.y();
+
+        # Filetype Checking
+        split = image.split('.');
+        if len(split) <= 1:
+            raise PydrawError('File must have extension filetype:', self._image_name);
+
+        filetype = split[len(split) - 1]
+
+        import os;
+        if not os.path.isfile(image):
+            raise InvalidArgumentError(f'Image does not exist or is directory: {image}');
+
+        if filetype in self.TKINTER_TYPES:
+            self._image = tk.PhotoImage(name=image, file=image);
+        else:
+            try:
+                from PIL import Image, ImageTk;
+                image = Image.open(self._image_name);
+                self._original = image;  # We save the originally loaded image for easy modification
+
+                self._image = ImageTk.PhotoImage(image);
+            except:
+                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
+                                       'Install Pillow via: \'pip install pillow\'.');
+
+        self._width = self._image.width();
+        self._height = self._image.height();
+
+        self._frame = -1;
+        self._frames = -1;
+
+        self._mask = 123;
+
+        # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
+        self._patched = False;
+
+        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
+                         rotation=rotation, visible=visible);
+        self._setup()
+
+        if width is not None:
+            self.width(width);
+        if height is not None:
+            self.height(height);
+
+        if color is not None:
+            self.color(color);
+
+        if border is not None:
+            self.border(border);
+
+    @overload(Screen, str, Location, (int, float), (int, float))
+    def __init__(self, screen: Screen, image: str, location: Location,
+                 width: float = None,
+                 height: float = None,
+                 color: Color = None,
+                 border: Color = Color.NONE,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._image_name = image;
+        self._original = None;
+
+        x = location.x();
+        y = location.y();
+
+        # Filetype Checking
+        split = image.split('.');
+        if len(split) <= 1:
+            raise PydrawError('File must have extension filetype:', self._image_name);
+
+        filetype = split[len(split) - 1]
+
+        import os;
+        if not os.path.isfile(image):
+            raise InvalidArgumentError(f'Image does not exist or is directory: {image}');
+
+        if filetype in self.TKINTER_TYPES:
+            self._image = tk.PhotoImage(name=image, file=image);
+        else:
+            try:
+                from PIL import Image, ImageTk;
+                image = Image.open(self._image_name);
+                self._original = image;  # We save the originally loaded image for easy modification
+
+                self._image = ImageTk.PhotoImage(image);
+            except:
+                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
+                                       'Install Pillow via: \'pip install pillow\'.');
+
+        self._width = self._image.width();
+        self._height = self._image.height();
+
+        self._frame = -1;
+        self._frames = -1;
+
+        self._mask = 123;
+
+        # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
+        self._patched = False;
+
+        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
+                         rotation=rotation, visible=visible);
+        self._setup()
+
+        if width is not None:
+            self.width(width);
+        if height is not None:
+            self.height(height);
+
+        if color is not None:
+            self.color(color);
+
+        if border is not None:
+            self.border(border);
+
+    @overload(Screen, str, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, image: str, location: Location,
+                 width: float = None,
+                 height: float = None,
+                 color: Color = None,
+                 border: Color = Color.NONE,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._image_name = image;
+        self._original = None;
+
+        x = location.x();
+        y = location.y();
+
+        # Filetype Checking
+        split = image.split('.');
+        if len(split) <= 1:
+            raise PydrawError('File must have extension filetype:', self._image_name);
+
+        filetype = split[len(split) - 1]
+
+        import os;
+        if not os.path.isfile(image):
+            raise InvalidArgumentError(f'Image does not exist or is directory: {image}');
+
+        if filetype in self.TKINTER_TYPES:
+            self._image = tk.PhotoImage(name=image, file=image);
+        else:
+            try:
+                from PIL import Image, ImageTk;
+                image = Image.open(self._image_name);
+                self._original = image;  # We save the originally loaded image for easy modification
+
+                self._image = ImageTk.PhotoImage(image);
+            except:
+                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
+                                       'Install Pillow via: \'pip install pillow\'.');
+
+        self._width = self._image.width();
+        self._height = self._image.height();
+
+        self._frame = -1;
+        self._frames = -1;
+
+        self._mask = 123;
+
+        # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
+        self._patched = False;
+
+        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
+                         rotation=rotation, visible=visible);
         self._setup()
 
         if width is not None:
@@ -1670,9 +2182,232 @@ class Text(CustomRenderable):
     _aligns = {'left': tk.LEFT, 'center': tk.CENTER, 'right': tk.RIGHT};
 
     # noinspection PyProtectedMember
+    @overload(Screen, str, (int, float), (int, float))
     def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
                  font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
                  underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+        self._screen = screen;
+        self._location = Location(x, y);
+        self._screen._add(self);
+
+        self._text = text if text is not None else '';
+        self._color = color;
+        self._font = font;
+        self._size = size;
+        self._align = align;
+        self._bold = bold;
+        self._italic = italic;
+        self._underline = underline;
+        self._strikethrough = strikethrough;
+        self._angle = rotation;
+        self._visible = visible;
+
+        verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
+               align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
+               visible, bool);
+
+        # Handle font and decorations
+        decorations = '';
+        if self.bold():
+            decorations += 'bold ';
+        if self.italic():
+            decorations += 'italic ';
+        if self.underline():
+            decorations += 'underline ';
+        if self.strikethrough():
+            decorations += 'overstrike ';
+
+        # we use negative font size to change from point font-size to pixel font-size.
+        font_data = (self.font(), -self.size(), decorations);
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+
+        import tkinter.font as tkfont;
+
+        font = tkfont.Font(font=font_data);
+        true_width = font.measure(self._text);
+        true_height = font.metrics('linespace');
+
+        hypotenuse = true_width / 2;
+        radians = math.radians(self._angle);
+
+        dx = math.cos(radians) * hypotenuse;
+        dy = math.sin(radians) * hypotenuse;
+
+        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
+        real_y = (self.y() - (self._screen.height() / 2)) - dy;
+
+        self._ref = self._screen._screen.cv.create_text(real_x,
+                                                        real_y,
+                                                        text=self.text(),
+                                                        anchor=Text._anchor,
+                                                        justify=Text._aligns[self.align()],
+                                                        fill=self._screen._screen._colorstr(self.color().__value__()),
+                                                        font=font_data,
+                                                        state=state,
+                                                        angle=-self._angle);
+
+        # x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref);
+        # self._width = x1 - x0;
+        # self._height = y1 - y0;
+
+        self._width = true_width;
+        self._height = true_height * (self._text.count('\n') + 1);
+
+    @overload(Screen, str, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
+                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+        self._screen = screen;
+        self._location = Location(x, y);
+        self._screen._add(self);
+
+        self._text = text if text is not None else '';
+        self._color = color;
+        self._font = font;
+        self._size = size;
+        self._align = align;
+        self._bold = bold;
+        self._italic = italic;
+        self._underline = underline;
+        self._strikethrough = strikethrough;
+        self._angle = rotation;
+        self._visible = visible;
+
+        verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
+               align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
+               visible, bool);
+
+        # Handle font and decorations
+        decorations = '';
+        if self.bold():
+            decorations += 'bold ';
+        if self.italic():
+            decorations += 'italic ';
+        if self.underline():
+            decorations += 'underline ';
+        if self.strikethrough():
+            decorations += 'overstrike ';
+
+        # we use negative font size to change from point font-size to pixel font-size.
+        font_data = (self.font(), -self.size(), decorations);
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+
+        import tkinter.font as tkfont;
+
+        font = tkfont.Font(font=font_data);
+        true_width = font.measure(self._text);
+        true_height = font.metrics('linespace');
+
+        hypotenuse = true_width / 2;
+        radians = math.radians(self._angle);
+
+        dx = math.cos(radians) * hypotenuse;
+        dy = math.sin(radians) * hypotenuse;
+
+        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
+        real_y = (self.y() - (self._screen.height() / 2)) - dy;
+
+        self._ref = self._screen._screen.cv.create_text(real_x,
+                                                        real_y,
+                                                        text=self.text(),
+                                                        anchor=Text._anchor,
+                                                        justify=Text._aligns[self.align()],
+                                                        fill=self._screen._screen._colorstr(self.color().__value__()),
+                                                        font=font_data,
+                                                        state=state,
+                                                        angle=-self._angle);
+
+        # x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref);
+        # self._width = x1 - x0;
+        # self._height = y1 - y0;
+
+        self._width = true_width;
+        self._height = true_height * (self._text.count('\n') + 1);
+
+    @overload(Screen, str, Location)
+    def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
+                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._screen = screen;
+        self._location = Location(x, y);
+        self._screen._add(self);
+
+        self._text = text if text is not None else '';
+        self._color = color;
+        self._font = font;
+        self._size = size;
+        self._align = align;
+        self._bold = bold;
+        self._italic = italic;
+        self._underline = underline;
+        self._strikethrough = strikethrough;
+        self._angle = rotation;
+        self._visible = visible;
+
+        verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
+               align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
+               visible, bool);
+
+        # Handle font and decorations
+        decorations = '';
+        if self.bold():
+            decorations += 'bold ';
+        if self.italic():
+            decorations += 'italic ';
+        if self.underline():
+            decorations += 'underline ';
+        if self.strikethrough():
+            decorations += 'overstrike ';
+
+        # we use negative font size to change from point font-size to pixel font-size.
+        font_data = (self.font(), -self.size(), decorations);
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+
+        import tkinter.font as tkfont;
+
+        font = tkfont.Font(font=font_data);
+        true_width = font.measure(self._text);
+        true_height = font.metrics('linespace');
+
+        hypotenuse = true_width / 2;
+        radians = math.radians(self._angle);
+
+        dx = math.cos(radians) * hypotenuse;
+        dy = math.sin(radians) * hypotenuse;
+
+        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx;
+        real_y = (self.y() - (self._screen.height() / 2)) - dy;
+
+        self._ref = self._screen._screen.cv.create_text(real_x,
+                                                        real_y,
+                                                        text=self.text(),
+                                                        anchor=Text._anchor,
+                                                        justify=Text._aligns[self.align()],
+                                                        fill=self._screen._screen._colorstr(self.color().__value__()),
+                                                        font=font_data,
+                                                        state=state,
+                                                        angle=-self._angle);
+
+        # x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref);
+        # self._width = x1 - x0;
+        # self._height = y1 - y0;
+
+        self._width = true_width;
+        self._height = true_height * (self._text.count('\n') + 1);
+
+    @overload(Screen, str, Location, Color)
+    def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
+                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+        x = location.x();
+        y = location.y();
+
         self._screen = screen;
         self._location = Location(x, y);
         self._screen._add(self);

@@ -1,4 +1,5 @@
 from pydraw import *;
+from pydraw import compound;
 
 screen = Screen(800, 600);
 
@@ -8,15 +9,21 @@ screen.grid(helpers=True);
 
 
 p1 = Polygon(screen, 5, 150, 50, 50, 50)
-poly = Triangle(screen, 50, 50, 50, 50);
-image = Image(screen, '../images/pacman.gif', 100, 50, 50, 50);
-image.load();
+poly = Triangle(screen, 50, 50, 50, 50)
+image = Image(screen, '../images/pacman.gif', 100, 50, 50, 50)
+image.load()
 
+# rect = Rectangle(screen, 20, 20, 150, 150)
 
 print(hash(p1))
-rect = Rectangle(screen, 250, 250, 100, -50, Color('BLUE'))
+# rect = Rectangle(screen, 250, 250, 100, -50, Color('BLUE'))
 
 text = Text(screen, 'Some Text', 300, 300)
+
+
+
+comp = compound.CompoundObject(p1, poly, image);
+
 
 # poly.width(500, ratio=True)
 count = 5
@@ -45,11 +52,14 @@ def keydown(key):
     elif key == 'c':
         print(text.center())
         print(image.center())
+    elif key == 'z':
+        comp.move(5, 5)
 
 
 def mousedown(button, location):
-    print(f'Verties: {rect.vertices()}');
-    print(f'Rect Contains: {rect.contains(location)}');
+    print('click')
+    # print(f'Verties: {rect.vertices()}');
+    # print(f'Rect Contains: {rect.contains(location)}');
 
 screen.listen();
 

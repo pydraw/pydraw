@@ -96,7 +96,8 @@ KEYS = [
            'Shift_L',
            'Shift_R',
            'Control_L',
-           'Control_R'
+           'Control_R',
+           'BackSpace'
        ] + ALPHABET + UPPER_ALPHABET;
 
 BUTTONS = [
