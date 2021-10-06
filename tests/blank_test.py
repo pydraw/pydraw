@@ -8,7 +8,7 @@ screen.toggle_grid();
 screen.grid(helpers=True);
 
 
-p1 = Polygon(screen, 5, 150, 50, 50, 50)
+p1 = Polygon(screen, 5, 150, 50, 50, 50, Color('red'))
 poly = Triangle(screen, 50, 50, 50, 50)
 image = Image(screen, '../images/pacman.gif', 100, 50, 50, 50)
 image.load()
@@ -19,7 +19,7 @@ print(hash(p1))
 # rect = Rectangle(screen, 250, 250, 100, -50, Color('BLUE'))
 
 text = Text(screen, 'Some Text', 300, 300)
-
+p1.front();
 
 
 comp = compound.CompoundObject(p1, poly, image);
@@ -58,6 +58,10 @@ def keydown(key):
 
 def mousedown(button, location):
     print('click')
+    if button == 3:
+        text.front();
+    elif button == 1:
+        p1.center(location);
     # print(f'Verties: {rect.vertices()}');
     # print(f'Rect Contains: {rect.contains(location)}');
 
