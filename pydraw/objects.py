@@ -3214,7 +3214,7 @@ class Line(Object):
         """
 
         if dashes is not None:
-            verify(dashes, int);
+            verify(dashes, (int, float));
             self._dashes = dashes;
             self.update();
 
