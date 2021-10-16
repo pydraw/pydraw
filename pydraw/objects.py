@@ -223,9 +223,10 @@ class Renderable(Object):
         if angle is not None:
             verify(angle, (float, int));
             self._angle = angle;
+            print(self._angle, self._color);
             self.update();
 
-        return self._angle;
+        return self._angle % 360;
 
     def rotate(self, angle_diff: float = 0) -> None:
         """
@@ -412,7 +413,6 @@ class Renderable(Object):
         (The vertices will be returned clockwise, starting from the top-leftmost point)
         :return: a list of Locations representing the vertices
         """
-
         return self._get_vertices();
 
     def contains(self, *args) -> bool:
@@ -499,7 +499,7 @@ class Renderable(Object):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
 
         # Only optimize if the angle is not zero.
-        if self._angle == 0:
+        if self._angle % 360 == 0 and other._angle % 360 == 0:
             min_ax = self.x();
             max_ax = self.x() + self.width();
 
@@ -538,15 +538,17 @@ class Renderable(Object):
             a_below_b = max_ay < min_by;
 
         # Do a base check to make sure they are even remotely near each other.
-        if a_left_b or a_right_b or a_above_b or a_below_b:
-            return False;
+        # TODO: Re-optimize with rotation in mind.
+        if other._angle % 360 == 0 and self._angle % 360 == 0:
+            if a_left_b or a_right_b or a_above_b or a_below_b:
+                return False;
 
-        # Check if one shape is entirely inside the other shape
-        if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
-            return True;
+            # Check if one shape is entirely inside the other shape
+            if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
+                return True;
 
-        if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
-            return True;
+            if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
+                return True;
 
         # Next we are going to use a sweeping line algorithm.
         # Essentially we will process the lines on the x axis, one coordinate at a time (imagine a vertical line scan).
@@ -638,17 +640,17 @@ class Renderable(Object):
     # noinspection PyUnresolvedReferences
     def _get_vertices(self):
         real_shape = self._vertices;
-        real_shape.reverse();
-
-        min_distance = 999999;
-        top_left_index = 0;
-        for i, location in enumerate(real_shape):
-            distance = math.sqrt((location.x()) ** 2 + (location.y()) ** 2);
-            if distance < min_distance:
-                min_distance = distance;
-                top_left_index = i;
-
-        real_shape = real_shape[top_left_index:] + real_shape[:top_left_index];
+        # real_shape.reverse();
+        #
+        # min_distance = 999999;
+        # top_left_index = 0;
+        # for i, location in enumerate(real_shape):
+        #     distance = math.sqrt((location.x()) ** 2 + (location.y()) ** 2);
+        #     if distance < min_distance:
+        #         min_distance = distance;
+        #         top_left_index = i;
+        #
+        # real_shape = real_shape[top_left_index:] + real_shape[:top_left_index];
 
         return real_shape;
 
@@ -711,6 +713,8 @@ class Renderable(Object):
         else:
             centroid_x = pivot.x();
             centroid_y = pivot.y();
+
+        print("_rotate called", self._color);
 
         new_vertices = []
         for vertex in vertices:

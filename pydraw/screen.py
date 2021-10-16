@@ -727,12 +727,13 @@ class Screen:
         self._screen.listen();
 
         # Keyboard
-        for key in KEYS:
-            self._screen.onkeypress(self._create_lambda('keydown', key), key);
-            self._screen.onkeyrelease(self._create_lambda('keyup', key), key);
-
-            # custom implemented keypress
-            self._onkeytype(self._create_lambda('keypress', key), key);
+        # for key in KEYS:
+        #     self._screen.onkeypress(self._create_lambda('keydown', key), key);
+        #     self._screen.onkeyrelease(self._create_lambda('keyup', key), key);
+        #
+        #     # custom implemented keypress
+        #     self._onkeytype(self._create_lambda('keypress', key), key);
+        self._screen.cv.bind('<Key>', (lambda e: self._keyhandler(e)));
 
         # Mouse
         for btn in BUTTONS:
@@ -802,6 +803,16 @@ class Screen:
             return lambda event: (self._mousemove(Location(event.x, event.y)));
         else:
             return None;
+
+    def _keyhandler(self, event) -> None:
+        if 'keydown' not in self.registry:
+            return;
+
+        key = str(event.char);
+        if key.strip() == "":
+            key = event.keysym;
+
+        self.registry['keydown'](self.Key(key.lower()));
 
     def _keydown(self, key) -> None:
         if 'keydown' not in self.registry:
