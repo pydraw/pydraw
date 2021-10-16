@@ -866,13 +866,19 @@ class Screen:
         self.registry['mousemove'](location);
 
     # --- Helper Methods --- #
-    def create_location(self, x, y) -> Location:
+    def create_location(self, x, y, canvas: bool = False) -> Location:
         """
         Is passed turtle-based coordinates and converts them into normal coordinates
         :param x: the x component
         :param y: the y component
+        :param canvas: whether or not the supplied coordinates are from the canvas or input
         :return: a location comprised of the passed x and y components
         """
+
+        # Switch these around if the coords are from, for example, canvas.bbox
+        if canvas:
+            y = -y
+
         return Location(x + (self.width() / 2), -y + (self.height() / 2));
 
     def canvas_location(self, x, y) -> Location:

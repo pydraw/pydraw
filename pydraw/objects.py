@@ -20,6 +20,7 @@ from pydraw import Color;
 from pydraw.overload import overload;
 
 PIXEL_RATIO = 20;
+NoneType = type(None);
 
 
 class Object:
@@ -185,7 +186,25 @@ class Renderable(Object):
 
         return self._height;
 
-    def center(self, move_to: Location = None) -> Location:
+    @overload()
+    def center(self) -> Location:
+        # We gonna create a centroid so we can rotate the points around a realistic center
+        # Sorry for those of you that get weird rotations..
+        x_list = [];
+        y_list = [];
+
+        for vertex in self._vertices:
+            x_list.append(vertex.x());
+            y_list.append(vertex.y());
+
+        # Create a simple centroid (not full centroid)
+        centroid_x = sum(x_list) / len(y_list);
+        centroid_y = sum(y_list) / len(x_list);
+
+        return Location(centroid_x, centroid_y);
+
+    @overload(Location)
+    def center(self, move_to: Location):
         """
         Returns the location of the center
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
@@ -211,7 +230,35 @@ class Renderable(Object):
 
         return Location(centroid_x, centroid_y);
 
-        # return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
+    @overload((int, float, NoneType), (int, float, NoneType))
+    def center(self, x, y):
+        """
+        Returns the location of the center
+        :param x: if defined, moves the objects center x-coordinate to this spot
+        :param y: if defined, moves the objects center y-coordinate to this spot
+        :return: Location object representing center of Renderable
+        """
+
+        verify(x, (int, float), y, (int, float));
+        if x is not None:
+            self.moveto(x=x - self.width() / 2);
+        if y is not None:
+            self.moveto(y=y - self.height() / 2);
+
+        # We gonna create a centroid so we can rotate the points around a realistic center
+        # Sorry for those of you that get weird rotations..
+        x_list = [];
+        y_list = [];
+
+        for vertex in self._vertices:
+            x_list.append(vertex.x());
+            y_list.append(vertex.y());
+
+        # Create a simple centroid (not full centroid)
+        centroid_x = sum(x_list) / len(y_list);
+        centroid_y = sum(y_list) / len(x_list);
+
+        return Location(centroid_x, centroid_y);
 
     def rotation(self, angle: float = None) -> float:
         """
@@ -223,7 +270,6 @@ class Renderable(Object):
         if angle is not None:
             verify(angle, (float, int));
             self._angle = angle;
-            print(self._angle, self._color);
             self.update();
 
         return self._angle % 360;
@@ -415,11 +461,22 @@ class Renderable(Object):
         """
         return self._get_vertices();
 
+    def bounds(self) -> (Location, float, float):
+        """
+        Get the location and dimensions of a bounding box that contains the entire shape
+        :return: a tuple containing the Location, width, and height.
+        """
+
+        x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
+        location = self._screen.create_location(x0, y0, canvas=True);
+
+        return location, (x1 - x0), (y1 - y0);
+
     def contains(self, *args) -> bool:
         """
         Returns whether or not a Location is contained within the object.
         :param args: You may pass in either two numbers, a Location, or a tuple containing and x and y point.
-        :return: a boolean value representing whether or not the point is within the bounds of the object.
+        :return: a boolean value representing whether or not the point is within the vertices of the object.
         """
 
         x, y = 0, 0;
@@ -714,8 +771,6 @@ class Renderable(Object):
             centroid_x = pivot.x();
             centroid_y = pivot.y();
 
-        print("_rotate called", self._color);
-
         new_vertices = []
         for vertex in vertices:
             # We have to create these separately because they're ironically used in each others calculations xD
@@ -767,7 +822,8 @@ class Renderable(Object):
                 fill=self._screen._colorstr(color_state),
                 outline=self._screen._screen._colorstr(self._border.__value__()),
                 width=self._borderwidth,
-                state=state
+                state=state,
+                joinstyle=tk.MITER
             );
 
             self._screen._canvas.tag_lower(self._ref, old_ref);
@@ -1487,15 +1543,17 @@ class Polygon(Renderable):
                                 (vertex.y() - (self._screen.height() / 2))));
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
 
         try:
             # noinspection PyProtectedMember
             self._ref = self._screen._canvas.create_polygon(
                 tk_vertices,
-                fill=self._screen._colorstr(self._color),
+                fill=self._screen._colorstr(color_state),
                 outline=self._screen._screen._colorstr(self._border.__value__()),
                 width=self._borderwidth,
-                state=state
+                state=state,
+                joinstyle=tk.MITER
             );
 
             self._screen._canvas.tag_lower(self._ref, old_ref);
@@ -2226,11 +2284,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -2298,11 +2358,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -2373,11 +2435,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -2448,11 +2512,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -2767,11 +2833,13 @@ class Text(CustomRenderable):
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
         try:
-            import tkinter.font as tkfont;
+            # import tkinter.font as tkfont;
+            #
+            # font = tkfont.Font(font=font_data);
+            # true_width = font.measure(self._text);
+            # true_height = font.metrics('linespace');
 
-            font = tkfont.Font(font=font_data);
-            true_width = font.measure(self._text);
-            true_height = font.metrics('linespace');
+            true_width, true_height = self._calculate_transform(font_data);
 
             hypotenuse = true_width / 2;
             radians = math.radians(self._angle);
@@ -2799,6 +2867,17 @@ class Text(CustomRenderable):
         except (tk.TclError, AttributeError):
             pass;
 
+    def _calculate_transform(self, font_data):
+        import tkinter.font as tkfont;
+        lines = self._text.split('\n');
+        true_width = 0;
+
+        font = tkfont.Font(font=font_data);
+        for line in lines:
+            true_width = max(font.measure(line), true_width);
+        true_height = font.metrics('linespace');
+
+        return true_width, true_height;
 
 # == NON RENDERABLES == #
 
