@@ -154,6 +154,7 @@ class Renderable(Object):
         self._borderwidth = 1;
         self._fill = fill;
         self._angle = rotation;
+        self._last_angle = rotation;
         self._visible = visible;
 
         self._setup();
@@ -805,7 +806,10 @@ class Renderable(Object):
 
             vertex.move(self.x() + width / 2, self.y() + height / 2);
 
-        self._vertices = self._rotate(self._vertices, self._angle);
+        # Check if angle has changed from last_angle, and if so rotate and change last_angle
+        if self._angle != self._last_angle:
+            self._vertices = self._rotate(self._vertices, self._angle);
+            self._last_angle = self._angle;
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
@@ -3208,13 +3212,23 @@ class Line(Object):
 
     def dashes(self, dashes: int = None) -> Union[int, tuple]:
         """
-        Retrive or enable/disable the dashes for the line
+        Retrieve or enable/disable the dashes for the line
+
+        On systems which support only a limited set of dash patterns, the dash pattern will be displayed as the closest
+        dash pattern that is available. For example, on Windows only a few dash patterns are available, most of which
+        do not allow for special dash-spacing (if passing in a tuple).
+
         :param dashes: the visibility to set to, if any
         :return: the toggle-state of dashes
         """
 
         if dashes is not None:
-            verify(dashes, (int, float));
+            verify(dashes, (int, tuple));
+
+            if type(dashes) == tuple:
+                for dash in dashes:
+                    verify(dash, int);
+
             self._dashes = dashes;
             self.update();
 
