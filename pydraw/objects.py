@@ -354,6 +354,7 @@ class Renderable(Object):
         """
         Add or get the border of the object
         :param color: the color to set the border too, set to Color.NONE to remove border
+        :param width: the width of the border
         :param fill: whether or not to fill the polygon.
         :return: The Color of the border
         """
@@ -377,6 +378,19 @@ class Renderable(Object):
             self.update();
 
         return self._border;
+
+    def border_width(self, width: float = None) -> float:
+        """
+        Gets or sets the border width
+        :param width: the border width to set to
+        :return: the border width
+        """
+
+        if width is not None:
+            self._borderwidth = width;
+            self.update();
+
+        return self._borderwidth;
 
     def fill(self, fill: bool = None) -> bool:
         """
@@ -807,10 +821,8 @@ class Renderable(Object):
 
             vertex.move(self.x() + width / 2, self.y() + height / 2);
 
-        # Check if angle has changed from last_angle, and if so rotate and change last_angle
-        if self._angle != self._last_angle:
-            self._vertices = self._rotate(self._vertices, self._angle);
-            self._last_angle = self._angle;
+        self._vertices = self._rotate(self._vertices, self._angle);
+        self._last_angle = self._angle;
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
@@ -1040,10 +1052,8 @@ class RoundedRectangle(CustomRenderable):
 
             vertex.move(self.x() + width / 2, self.y() + height / 2);
 
-        # Check if angle has changed from last_angle, and if so rotate and change last_angle
-        if self._angle != self._last_angle:
-            self._vertices = self._rotate(self._vertices, self._angle);
-            self._last_angle = self._angle;
+        self._vertices = self._rotate(self._vertices, self._angle);
+        self._last_angle = self._angle;
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
