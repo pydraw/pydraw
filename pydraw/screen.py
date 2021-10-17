@@ -836,13 +836,37 @@ class Screen:
         if 'mousedown' not in self.registry:
             return;
 
-        self.registry['mousedown'](button, location);
+        signature = inspect.signature(self.registry['mousedown']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mousedown'](button, location);
+            print("[WARNING] in `mousedown` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mousedown'](location);
+            return;
+
+        self.registry['mousedown'](location, button);
 
     def _mouseup(self, button, location) -> None:
         if 'mouseup' not in self.registry:
             return;
 
-        self.registry['mouseup'](button, location);
+        signature = inspect.signature(self.registry['mouseup']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mouseup'](button, location);
+            print("[WARNING] in `mouseup` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mouseup'](location);
+            return;
+
+        self.registry['mouseup'](location, button);
 
     def _mouseclick(self, button, location) -> None:
         if 'mouseclick' not in self.registry:
@@ -854,7 +878,19 @@ class Screen:
         if 'mousedrag' not in self.registry:
             return;
 
-        self.registry['mousedrag'](button, location);
+        signature = inspect.signature(self.registry['mousedrag']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mousedrag'](button, location);
+            print("[WARNING] in `mousedrag` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mousedrag'](location);
+            return;
+
+        self.registry['mousedrag'](location, button);
 
     def _mousemove(self, location) -> None:
         # We will update our internal storage of the mouse-location no matter what

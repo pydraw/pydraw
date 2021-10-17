@@ -5,7 +5,7 @@ with open("C:\\Users\\Noah\\PycharmProjects\\PyDraw\\README_pypi.md", "r") as fh
 
 setuptools.setup(
     name="pydraw",
-    version="2.0a1",
+    version="2.0a2",
     author="Noah Coetsee",
     author_email="noah@noahcoetsee.me",
     description="A package designed to make graphics with Python simple and easy!",
