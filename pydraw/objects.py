@@ -752,7 +752,8 @@ class Renderable(Object):
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
             width=self._borderwidth,
-            state=state
+            state=state,
+            joinstyle=tk.MITER
         );
         # self.update(); # CustomPolygon(self._screen, vertices);
 
@@ -841,6 +842,232 @@ class CustomRenderable(Renderable):
     A wrapper class to distintify classes that extend Renderable but have some custom functionality.
     """
     pass;
+
+
+class RoundedRectangle(CustomRenderable):
+    """
+    CustomRenderable that creates a rounded rectangle utilizing the border system.
+    As a result borders are unavailable and immutable in this Object.
+    """
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = Location(x, y);
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = Location(x, y);
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, Location, (int, float), (int, float))
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
+                          Location(location.x(), location.y() + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = location.clone();
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
+                          Location(location.x(), location.y() + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = location.clone();
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    # We redefine the border method to do nothing
+    # def border(self, color: Color = None, width: float = 1, fill: bool = None) -> Color:
+    #     raise NotImplemented("This method is not allowed for `Rounded` shapes.")
+    border = property(doc='(!) Disallowed inherited')
+
+    def radius(self, radius: float = None) -> float:
+        """
+        Set the border radius of the rounded shape.
+        :param radius: the radius to set to (not pixel accurate)
+        :return: the radius
+        """
+
+        if radius is not None:
+            self._borderwidth = radius;
+            self._update();
+
+        return self._borderwidth;
+
+    def _setup(self):
+        if not hasattr(self, '_shape'):
+            raise AttributeError('An error occured while initializing a Renderable: '
+                                 'Is _shape set? (Advanced Users Only)');
+
+        shape = self._shape;  # List of normal vertices.
+
+        width = self._width;
+        height = self._height;
+
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
+
+        cx = 0
+        cy = 0
+
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
+
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
+
+        self._vertices = vertices;
+
+        self._vertices = self._rotate(self._vertices, self._angle);
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
+
+        print(self._borderwidth)
+        # noinspection PyProtectedMember
+        self._ref = self._screen._canvas.create_polygon(
+            tk_vertices,
+            fill=self._screen._colorstr(color_state),
+            outline=self._screen._colorstr(self._color), #self._screen._screen._colorstr(self._border.__value__()),
+            width=self._borderwidth,
+            state=state,
+            joinstyle=tk.ROUND
+        );
+        # self.update(); # CustomPolygon(self._screen, vertices);
+
+    def update(self):
+        self._check();
+
+        old_ref = self._ref;
+        shape = self._shape;  # List of normal vertices.
+
+        width = self._width;
+        height = self._height;
+
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
+
+        cx = 0
+        cy = 0
+
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+        self._vertices = vertices;
+
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
+
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
+
+        # Check if angle has changed from last_angle, and if so rotate and change last_angle
+        if self._angle != self._last_angle:
+            self._vertices = self._rotate(self._vertices, self._angle);
+            self._last_angle = self._angle;
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
+
+        try:
+            # noinspection PyProtectedMember
+            self._ref = self._screen._canvas.create_polygon(
+                tk_vertices,
+                fill=self._screen._colorstr(color_state),
+                outline=self._screen._screen._colorstr(self._border.__value__()),
+                width=self._borderwidth,
+                state=state,
+                joinstyle=tk.ROUND
+            );
+
+            self._screen._canvas.tag_lower(self._ref, old_ref);
+            self._screen._canvas.delete(old_ref);
+        except:
+            pass;
 
 
 # noinspection PyProtectedMember
