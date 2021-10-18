@@ -4,34 +4,39 @@ from pydraw.errors import *;
 
 
 class CompoundObject(Object):
+    """
+    A compound group of objects that can be moved or modified together.
+    """
+
     def __init__(self, *args, **kwargs):
         """
         Pass in the shapes/objects to be used to create the CompoundObject
         :param args: the shapes/objects to use
         :param kwargs: shapes/objects to use that along with identifiers
         """
-
         self._objects = {};
 
         for arg in args:
             if not isinstance(arg, Object):
                 raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg);
 
-            self._objects.update(str(arg), arg);
+            self._objects[str(arg)] = arg;
 
         for (name, arg) in kwargs:
             if not isinstance(arg, Object):
                 raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg);
 
-            self._objects.update(name, arg);
+            self._objects[name] = arg;
 
         if len(self._objects) == 0:
             raise InvalidArgumentError('You must pass at least one object to create a CompoundObject!');
 
-        x = self._objects.values()[0].x();
-        y = self._objects.values()[0].y();
-        endx = self._objects.values()[len(self._objects) - 1].x();
-        endy = self._objects.values()[len(self._objects) - 1].y();
+        values = list(self._objects.values());
+
+        x = values[0].x();
+        y = values[0].y();
+        endx = values[len(self._objects) - 1].x();
+        endy = values[len(self._objects) - 1].y();
 
         self._location = Location(x, y);
         self._end = Location(endx, endy);
@@ -130,7 +135,7 @@ class CompoundObject(Object):
         if name is None:
             name = str(obj);
 
-        self._objects.update(name, obj);
+        self._objects[name] = obj;
 
         # Now we must check if x and y need to change
         if obj.x() < self._location.x():
@@ -147,10 +152,14 @@ class CompoundObject(Object):
         :return: the Object that got removed (or None)
         """
 
+        removed_obj = None;
+
         if obj is not None and name is None:
-            self._objects.pop(str(obj));
+            removed_obj = self._objects.pop(str(obj));
         elif name is not None:
-            self._objects.pop(name);
+            removed_obj = self._objects.pop(name);
+
+        return removed_obj;
 
     def object(self, name) -> Object:
         """

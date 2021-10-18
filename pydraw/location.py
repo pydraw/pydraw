@@ -136,6 +136,14 @@ class Location:
 
         return math.sqrt((location.x() - self.x()) ** 2 + (location.y() - self.y()) ** 2);
 
+    def clone(self):
+        """
+        Clone the Location
+        :return: a new Location with the same x and y as this one.
+        """
+
+        return Location(self._x, self._y);
+
     def __str__(self):
         return f'(X: {self._x}, Y: {self._y})';
 
@@ -174,4 +182,4 @@ class Location:
         return self.x() == other[0] and self.y() == other[1];
 
     def __hash__(self):
-        return hash(self._x) ^ hash(self._y);
+        return hash((self._x, self._y));

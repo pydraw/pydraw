@@ -7,10 +7,9 @@
 - [x] Overload methods such as move, moveto, and contains to accept Locations, tuples, and plain x and y
 - [x] Dependency injection of PIL, Image resizing, Rotation
 - [x] Fix .move and .moveto to work with **kwargs
-- [!] Fix .move and .moveto to work with **kwargs for Text (Non-Renderable)
+- [x] Fix .move and .moveto to work with **kwargs for Text (Non-Renderable)
 - [x] Fix image rotation to flicker less and create fewer artifacts
 - [x] Fix image coloring. 
-- [ ] 
 - [x] Add Screen#grab(filename) to take screenshots
 - [x] Add type-checks for all methods and constructors
 - [x] Add .clone() and .transform() to Renderables (no CustomRenderables)
@@ -27,3 +26,6 @@
 - [x] Add Lines
 - [x] Add Images
 - [x] Polygons, regular and non  regular.
+- [x] Scenes
+- [x] CompoundObjects
+- [x] `.overlaps()` corrections
