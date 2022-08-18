@@ -1,5 +1,5 @@
 """
-pyDraw v2.0a2
+pyDraw v2.0.2
 
 This library is a graphics-interface library designed to make graphics in Python
 easier and more simple. It was designed to be easy to teach/learn and to utilize
@@ -2188,6 +2188,7 @@ class Screen:
         #     # custom implemented keypress
         #     self._onkeytype(self._create_lambda('keypress', key), key);
         self._screen.cv.bind('<Key>', (lambda e: self._keyhandler(e)));
+        self._screen.cv.bind('<KeyRelease>', (lambda e: self._keyuphandler(e)));
 
         # Mouse
         for btn in BUTTONS:
@@ -2267,6 +2268,16 @@ class Screen:
             key = event.keysym;
 
         self.registry['keydown'](self.Key(key.lower()));
+
+    def _keyuphandler(self, event) -> None:
+        if 'keyup' not in self.registry:
+            return;
+
+        key = str(event.char);
+        if key.strip() == "":
+            key = event.keysym;
+
+        self.registry['keyup'](self.Key(key.lower()));
 
     def _keydown(self, key) -> None:
         if 'keydown' not in self.registry:
@@ -2449,7 +2460,7 @@ class Scene:
         :return: None
         """
 
-    def mousedown(self, button: int, location: Location) -> None:
+    def mousedown(self, location: Location, button: int) -> None:
         """
         Mouse event, called when a mouse button is pressed down.
         :param button: the button pressed (0-2)
@@ -2457,7 +2468,7 @@ class Scene:
         :return: None
         """
 
-    def mouseup(self, button: int, location: Location) -> None:
+    def mouseup(self, location: Location, button: int) -> None:
         """
         Mouse event, called when a mouse button is released.
         :param button: the button released (0-2)
@@ -2465,7 +2476,7 @@ class Scene:
         :return: None
         """
 
-    def mousedrag(self, button: int, location: Location) -> None:
+    def mousedrag(self, location: Location, button: int) -> None:
         """
         Mouse event, called when the mouse moves after a mousedown event (without a mouseup event)
         :param button: the button being held (0-2)
@@ -2695,64 +2706,56 @@ class Renderable(Object):
 
         return self._height;
 
-    @overload()
-    def center(self) -> Location:
-        # We gonna create a centroid so we can rotate the points around a realistic center
-        # Sorry for those of you that get weird rotations..
-        x_list = [];
-        y_list = [];
-
-        for vertex in self._vertices:
-            x_list.append(vertex.x());
-            y_list.append(vertex.y());
-
-        # Create a simple centroid (not full centroid)
-        centroid_x = sum(x_list) / len(y_list);
-        centroid_y = sum(y_list) / len(x_list);
-
-        return Location(centroid_x, centroid_y);
-
-    @overload(Location)
-    def center(self, move_to: Location):
+    def center(self, *args, **kwargs) -> Location:
         """
         Returns the location of the center
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
         :return: Location object representing center of Renderable
         """
 
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
+
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, move_to: Location = None):
         if move_to is not None:
             verify(move_to, Location);
             self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
-
-        # We gonna create a centroid so we can rotate the points around a realistic center
-        # Sorry for those of you that get weird rotations..
-        x_list = [];
-        y_list = [];
-
-        for vertex in self._vertices:
-            x_list.append(vertex.x());
-            y_list.append(vertex.y());
-
-        # Create a simple centroid (not full centroid)
-        centroid_x = sum(x_list) / len(y_list);
-        centroid_y = sum(y_list) / len(x_list);
-
-        return Location(centroid_x, centroid_y);
-
-    @overload((int, float, NoneType), (int, float, NoneType))
-    def center(self, x, y):
-        """
-        Returns the location of the center
-        :param x: if defined, moves the objects center x-coordinate to this spot
-        :param y: if defined, moves the objects center y-coordinate to this spot
-        :return: Location object representing center of Renderable
-        """
-
-        verify(x, (int, float), y, (int, float));
-        if x is not None:
-            self.moveto(x=x - self.width() / 2);
-        if y is not None:
-            self.moveto(y=y - self.height() / 2);
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -2862,6 +2865,7 @@ class Renderable(Object):
         """
         Add or get the border of the object
         :param color: the color to set the border too, set to Color.NONE to remove border
+        :param width: the width of the border
         :param fill: whether or not to fill the polygon.
         :return: The Color of the border
         """
@@ -2885,6 +2889,19 @@ class Renderable(Object):
             self.update();
 
         return self._border;
+
+    def border_width(self, width: float = None) -> float:
+        """
+        Gets or sets the border width
+        :param width: the border width to set to
+        :return: the border width
+        """
+
+        if width is not None:
+            self._borderwidth = width;
+            self.update();
+
+        return self._borderwidth;
 
     def fill(self, fill: bool = None) -> bool:
         """
@@ -3315,10 +3332,8 @@ class Renderable(Object):
 
             vertex.move(self.x() + width / 2, self.y() + height / 2);
 
-        # Check if angle has changed from last_angle, and if so rotate and change last_angle
-        if self._angle != self._last_angle:
-            self._vertices = self._rotate(self._vertices, self._angle);
-            self._last_angle = self._angle;
+        self._vertices = self._rotate(self._vertices, self._angle);
+        self._last_angle = self._angle;
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
@@ -3548,10 +3563,8 @@ class RoundedRectangle(CustomRenderable):
 
             vertex.move(self.x() + width / 2, self.y() + height / 2);
 
-        # Check if angle has changed from last_angle, and if so rotate and change last_angle
-        if self._angle != self._last_angle:
-            self._vertices = self._rotate(self._vertices, self._angle);
-            self._last_angle = self._angle;
+        self._vertices = self._rotate(self._vertices, self._angle);
+        self._last_angle = self._angle;
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
@@ -3739,11 +3752,53 @@ class CustomPolygon(CustomRenderable):
 
         return self._angle;
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
         """
-        Returns the centroid for the CustomPolygon
-        :return: centroid in the form of a Location
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing centroid of CustomRenderable
         """
+
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
+
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, moveto: Location = None) -> Location:
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -4771,7 +4826,53 @@ class Image(Renderable):
             self._angle += angle_diff;
             self.update(True);
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
+        """
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing center of Image
+        """
+
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
+
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, moveto: Location = None) -> Location:
         if moveto is not None:
             verify(moveto, Location);
             self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
@@ -5466,17 +5567,58 @@ class Text(CustomRenderable):
 
         self.rotate(theta);
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
         """
-        Get the Center of the Text's points
-        :param moveto: If defined, will move the Line to be centered on the passed Location
-        :return: the Centroid/Center of the Text
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing center of Renderable
         """
 
-        if moveto is not None:
-            self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
 
-        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2)
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, move_to: Location = None):
+        if move_to is not None:
+            verify(move_to, Location);
+            self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
+
+        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
     def vertices(self) -> list:
         """

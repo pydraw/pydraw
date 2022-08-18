@@ -196,10 +196,20 @@ class Renderable(Object):
         :return: Location object representing center of Renderable
         """
 
-        if len(args) == 0 and len(kwargs) == 0:
-            return self._center();
+        centroid = False
+        if len(args) == 0:
+            if len(kwargs) > 0:
+                if 'centroid' in kwargs:
+                    if type(kwargs['centroid']) is bool:
+                        centroid = kwargs['centroid'];
+                    else:
+                        raise InvalidArgumentError(
+                            ".center() requires a boolean for centroid (whether to return a bounds "
+                            "center or a calculated centroid).");
+            return self._center(centroid=centroid);
 
         location = Location(self._center())
+
         if len(args) != 0:
             if type(args[0]) is Location or type(args[0]) is tuple:
                 location.moveto(args[0]);
@@ -230,13 +240,22 @@ class Renderable(Object):
                     location.y(kwargs['y']);
                 else:
                     raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'centroid' in kwargs:
+                if type(kwargs['centroid']) is bool:
+                    centroid = kwargs['centroid'];
+                else:
+                    raise InvalidArgumentError(".center() requires a boolean for centroid (whether to return a bounds "
+                                               "center or a calculated centroid).");
 
-        return self._center(location);
+        return self._center(location, centroid);
 
-    def _center(self, move_to: Location = None):
+    def _center(self, move_to: Location = None, centroid: bool = False):
         if move_to is not None:
             verify(move_to, Location);
             self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
+
+        if centroid:
+            return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -291,8 +310,8 @@ class Renderable(Object):
 
         location = Location(obj[0], obj[1]);
         # theta = -math.atan2(location.x() - self.x(), location.y() - self.y()) - math.radians(self.rotation());
-        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) \
-                - math.radians(self.rotation()) + math.pi / 2;
+        theta = math.atan2(location.y() - self.center().y(), location.x() - self.center().x()) \
+            - math.radians(self.rotation()) + math.pi / 2;
         theta = math.degrees(theta);
 
         return theta;
@@ -552,7 +571,7 @@ class Renderable(Object):
 
         return not (count % 2 == 0);
 
-    def overlaps(self, other) -> bool:
+    def overlaps(self, other: 'Renderable') -> bool:
         """
         Returns if this object is overlapping with the passed object.
         :param other: another Renderable instance.
@@ -562,39 +581,52 @@ class Renderable(Object):
         if not isinstance(other, Renderable):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
 
+        x = self.x();
+        y = self.y();
+        width = self.width();
+        height = self.height();
+
+        other_x = other.x();
+        other_y = other.y();
+        other_width = other.width();
+        other_height = other.height();
+
         # Only optimize if the angle is not zero.
         if self._angle % 360 == 0 and other._angle % 360 == 0:
-            min_ax = self.x();
-            max_ax = self.x() + self.width();
+            min_ax = x;
+            max_ax = x + width;
 
-            min_bx = other.x();
-            max_bx = other.x() + other.width();
+            min_bx = other_x;
+            max_bx = other_x + other_width;
 
-            min_ay = self.y();
-            max_ay = self.y() + self.height();
+            min_ay = y;
+            max_ay = y + height;
 
-            min_by = other.y();
-            max_by = other.y() + other.height();
+            min_by = other_y;
+            max_by = other_y + other_height;
 
             a_left_b = max_ax < min_bx;
             a_right_b = min_ax > max_bx;
             a_above_b = min_ay > max_by;
             a_below_b = max_ay < min_by;
         else:
-            hypotenuse = math.sqrt(self.width() ** 2 + self.height() ** 2);
-            other_hypotenuse = math.sqrt(other.width() ** 2 + other.height() ** 2);
+            hypotenuse = math.sqrt(width ** 2 + height ** 2) + 1;
+            other_hypotenuse = math.sqrt(other_width ** 2 + other_height ** 2) + 1;
 
-            min_ax = self.x();
-            max_ax = self.x() + hypotenuse;
+            center = Location(x + width / 2, y + height / 2);
+            other_center = Location(other_x + other_width / 2, other_y + other_height / 2);
 
-            min_bx = other.x();
-            max_bx = other.x() + other_hypotenuse;
+            min_ax = center.x() - (hypotenuse / 2);
+            max_ax = center.x() + (hypotenuse / 2);
 
-            min_ay = self.y();
-            max_ay = self.y() + hypotenuse;
+            min_bx = other_center.x() - (other_hypotenuse / 2);
+            max_bx = other_center.x() + (other_hypotenuse / 2);
 
-            min_by = other.y();
-            max_by = other.y() + other_hypotenuse;
+            min_ay = center.y() - (hypotenuse / 2);
+            max_ay = center.y() + (hypotenuse / 2);
+
+            min_by = other_center.y() - (other_hypotenuse / 2);
+            max_by = other_center.y() + (other_hypotenuse / 2);
 
             a_left_b = max_ax < min_bx;
             a_right_b = min_ax > max_bx;
@@ -603,16 +635,16 @@ class Renderable(Object):
 
         # Do a base check to make sure they are even remotely near each other.
         # TODO: Re-optimize with rotation in mind.
-        if other._angle % 360 == 0 and self._angle % 360 == 0:
-            if a_left_b or a_right_b or a_above_b or a_below_b:
-                return False;
+        # if other._angle % 360 == 0 and self._angle % 360 == 0:
+        if a_left_b or a_right_b or a_above_b or a_below_b:
+            return False;
 
-            # Check if one shape is entirely inside the other shape
-            if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
-                return True;
+        # Check if one shape is entirely inside the other shape
+        if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
+            return True;
 
-            if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
-                return True;
+        if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
+            return True;
 
         # Next we are going to use a sweeping line algorithm.
         # Essentially we will process the lines on the x axis, one coordinate at a time (imagine a vertical line scan).
@@ -2418,6 +2450,7 @@ class Image(Renderable):
         return vertices;
 
     def flip(self, axis: str = 'y'):
+        # TODO: Finish this noah
         pass;
 
     def load(self) -> None:
@@ -2445,6 +2478,7 @@ class Image(Renderable):
 
         if self._frame >= self._frames:
             self._frame = 0;
+
         self.update(True);
 
     def frame(self, frame: int = None) -> int:
@@ -2460,13 +2494,13 @@ class Image(Renderable):
 
         return self._frame;
 
-    def frames(self):
+    def frames(self) -> int:
         """
         Returns how many frames there are, returns -1 if not animated, 0 if corrupted file.
         :return:
         """
 
-        self._frames;
+        return self._frames;
 
     @staticmethod
     def _monkey_patch_del():
@@ -2512,7 +2546,7 @@ class Image(Renderable):
 
                 if self._frame != -1:
                     try:
-                        image.seek(self._frame);
+                        self._original.seek(self._frame);  # we have to seek on original for some reason.
                     except EOFError:
                         raise PydrawError(f'No more frames in GIF: {self._image_name}!');
 

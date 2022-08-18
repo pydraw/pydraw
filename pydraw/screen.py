@@ -734,6 +734,7 @@ class Screen:
         #     # custom implemented keypress
         #     self._onkeytype(self._create_lambda('keypress', key), key);
         self._screen.cv.bind('<Key>', (lambda e: self._keyhandler(e)));
+        self._screen.cv.bind('<KeyRelease>', (lambda e: self._keyuphandler(e)));
 
         # Mouse
         for btn in BUTTONS:
@@ -809,10 +810,20 @@ class Screen:
             return;
 
         key = str(event.char);
-        if key.strip() == "":
+        if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
             key = event.keysym;
 
         self.registry['keydown'](self.Key(key.lower()));
+
+    def _keyuphandler(self, event) -> None:
+        if 'keyup' not in self.registry:
+            return;
+
+        key = str(event.char);
+        if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
+            key = event.keysym;
+
+        self.registry['keyup'](self.Key(key.lower()));
 
     def _keydown(self, key) -> None:
         if 'keydown' not in self.registry:

@@ -88,10 +88,10 @@ screen = Screen(800, 600, 'My First Project!')
 
 box = Rectangle(screen, 50, 50, 50, 50) 
 
-def mousedown(button, location):
+def mousedown(location, button):
   print(f'Wow, the {button}-button on the mouse!')
 
-def mouseup(button, location):
+def mouseup(location, button):
   print('How un-impressive...')
 
 def keydown(key):
