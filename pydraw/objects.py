@@ -361,12 +361,12 @@ class Renderable(Object):
 
         return self._color;
 
-    def border(self, color: Color = None, width: float = 1, fill: bool = None) -> Color:
+    def border(self, color: Color = None, width: float = None, fill: bool = None) -> Color:
         """
         Add or get the border of the object
         :param color: the color to set the border too, set to Color.NONE to remove border
         :param width: the width of the border
-        :param fill: whether or not to fill the polygon.
+        :param fill: whether to fill the polygon.
         :return: The Color of the border
         """
 
@@ -398,6 +398,7 @@ class Renderable(Object):
         """
 
         if width is not None:
+            verify(width, (float, int));
             self._borderwidth = width;
             self.update();
 
@@ -855,7 +856,7 @@ class Renderable(Object):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
         color_state = self._color if self._fill else Color.NONE;
-
+            
         try:
             # noinspection PyProtectedMember
             self._ref = self._screen._canvas.create_polygon(
@@ -2903,7 +2904,7 @@ class Text(CustomRenderable):
 
     def text(self, text: str = None) -> str:
         """
-        Get or set the text. Use '\n' to separate lines.
+        Get or set the text. Use '\n' to separate lines
         :param text: text to set to (str), if any
         :return: the text
         """
@@ -3077,7 +3078,7 @@ class Text(CustomRenderable):
 
         location = Location(obj[0], obj[1]);
 
-        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) - math.radians(self.rotation());
+        theta = math.atan2(location.y() - self.center().y(), location.x() - self.center().x()) - math.radians(self.rotation());
         theta = math.degrees(theta) + 90;
 
         self.rotate(theta);
