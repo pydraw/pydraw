@@ -1463,6 +1463,17 @@ class Rectangle(Renderable):
         self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -1479,6 +1490,22 @@ class Rectangle(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -1534,6 +1561,22 @@ class Oval(Renderable):
         self._shape = vertices;
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -1554,6 +1597,25 @@ class Oval(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -1652,6 +1714,16 @@ class Triangle(Renderable):
         self._shape = ((10, -10), (0, 10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -1666,6 +1738,19 @@ class Triangle(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -1715,6 +1800,23 @@ class Polygon(Renderable):
 
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, int, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -1736,6 +1838,26 @@ class Polygon(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, int, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, int, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
