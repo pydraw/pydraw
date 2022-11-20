@@ -6,3 +6,4 @@ from pydraw.location import Location;
 from pydraw.screen import Screen;
 from pydraw.scene import Scene;
 from pydraw.objects import *;
+from pydraw.sound import Sound;

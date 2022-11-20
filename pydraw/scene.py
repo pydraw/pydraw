@@ -32,7 +32,7 @@ class Scene:
         :return: None
         """
 
-    def mousedown(self, button: int, location: Location) -> None:
+    def mousedown(self, location: Location, button: int) -> None:
         """
         Mouse event, called when a mouse button is pressed down.
         :param button: the button pressed (0-2)
@@ -40,7 +40,7 @@ class Scene:
         :return: None
         """
 
-    def mouseup(self, button: int, location: Location) -> None:
+    def mouseup(self, location: Location, button: int) -> None:
         """
         Mouse event, called when a mouse button is released.
         :param button: the button released (0-2)
@@ -48,7 +48,7 @@ class Scene:
         :return: None
         """
 
-    def mousedrag(self, button: int, location: Location) -> None:
+    def mousedrag(self, location: Location, button: int) -> None:
         """
         Mouse event, called when the mouse moves after a mousedown event (without a mouseup event)
         :param button: the button being held (0-2)

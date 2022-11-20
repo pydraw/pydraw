@@ -1,5 +1,5 @@
 """
-pyDraw v1.5
+pyDraw v2.0.2
 
 This library is a graphics-interface library designed to make graphics in Python
 easier and more simple. It was designed to be easy to teach/learn and to utilize
@@ -1530,6 +1530,9 @@ KEYS = [
            '-',
            '_',
 
+           '`',
+           '~',
+
            '_',
            '=',
            '+',
@@ -2178,12 +2181,14 @@ class Screen:
         self._screen.listen();
 
         # Keyboard
-        for key in KEYS:
-            self._screen.onkeypress(self._create_lambda('keydown', key), key);
-            self._screen.onkeyrelease(self._create_lambda('keyup', key), key);
-
-            # custom implemented keypress
-            self._onkeytype(self._create_lambda('keypress', key), key);
+        # for key in KEYS:
+        #     self._screen.onkeypress(self._create_lambda('keydown', key), key);
+        #     self._screen.onkeyrelease(self._create_lambda('keyup', key), key);
+        #
+        #     # custom implemented keypress
+        #     self._onkeytype(self._create_lambda('keypress', key), key);
+        self._screen.cv.bind('<Key>', (lambda e: self._keyhandler(e)));
+        self._screen.cv.bind('<KeyRelease>', (lambda e: self._keyuphandler(e)));
 
         # Mouse
         for btn in BUTTONS:
@@ -2254,6 +2259,26 @@ class Screen:
         else:
             return None;
 
+    def _keyhandler(self, event) -> None:
+        if 'keydown' not in self.registry:
+            return;
+
+        key = str(event.char);
+        if key.strip() == "":
+            key = event.keysym;
+
+        self.registry['keydown'](self.Key(key.lower()));
+
+    def _keyuphandler(self, event) -> None:
+        if 'keyup' not in self.registry:
+            return;
+
+        key = str(event.char);
+        if key.strip() == "":
+            key = event.keysym;
+
+        self.registry['keyup'](self.Key(key.lower()));
+
     def _keydown(self, key) -> None:
         if 'keydown' not in self.registry:
             return;
@@ -2276,13 +2301,37 @@ class Screen:
         if 'mousedown' not in self.registry:
             return;
 
-        self.registry['mousedown'](button, location);
+        signature = inspect.signature(self.registry['mousedown']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mousedown'](button, location);
+            print("[WARNING] in `mousedown` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mousedown'](location);
+            return;
+
+        self.registry['mousedown'](location, button);
 
     def _mouseup(self, button, location) -> None:
         if 'mouseup' not in self.registry:
             return;
 
-        self.registry['mouseup'](button, location);
+        signature = inspect.signature(self.registry['mouseup']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mouseup'](button, location);
+            print("[WARNING] in `mouseup` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mouseup'](location);
+            return;
+
+        self.registry['mouseup'](location, button);
 
     def _mouseclick(self, button, location) -> None:
         if 'mouseclick' not in self.registry:
@@ -2294,7 +2343,19 @@ class Screen:
         if 'mousedrag' not in self.registry:
             return;
 
-        self.registry['mousedrag'](button, location);
+        signature = inspect.signature(self.registry['mousedrag']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mousedrag'](button, location);
+            print("[WARNING] in `mousedrag` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mousedrag'](location);
+            return;
+
+        self.registry['mousedrag'](location, button);
 
     def _mousemove(self, location) -> None:
         # We will update our internal storage of the mouse-location no matter what
@@ -2306,13 +2367,19 @@ class Screen:
         self.registry['mousemove'](location);
 
     # --- Helper Methods --- #
-    def create_location(self, x, y) -> Location:
+    def create_location(self, x, y, canvas: bool = False) -> Location:
         """
         Is passed turtle-based coordinates and converts them into normal coordinates
         :param x: the x component
         :param y: the y component
+        :param canvas: whether or not the supplied coordinates are from the canvas or input
         :return: a location comprised of the passed x and y components
         """
+
+        # Switch these around if the coords are from, for example, canvas.bbox
+        if canvas:
+            y = -y
+
         return Location(x + (self.width() / 2), -y + (self.height() / 2));
 
     def canvas_location(self, x, y) -> Location:
@@ -2393,7 +2460,7 @@ class Scene:
         :return: None
         """
 
-    def mousedown(self, button: int, location: Location) -> None:
+    def mousedown(self, location: Location, button: int) -> None:
         """
         Mouse event, called when a mouse button is pressed down.
         :param button: the button pressed (0-2)
@@ -2401,7 +2468,7 @@ class Scene:
         :return: None
         """
 
-    def mouseup(self, button: int, location: Location) -> None:
+    def mouseup(self, location: Location, button: int) -> None:
         """
         Mouse event, called when a mouse button is released.
         :param button: the button released (0-2)
@@ -2409,7 +2476,7 @@ class Scene:
         :return: None
         """
 
-    def mousedrag(self, button: int, location: Location) -> None:
+    def mousedrag(self, location: Location, button: int) -> None:
         """
         Mouse event, called when the mouse moves after a mousedown event (without a mouseup event)
         :param button: the button being held (0-2)
@@ -2472,6 +2539,7 @@ from typing import Union;
 # from pydraw.overload import overload;
 
 PIXEL_RATIO = 20;
+NoneType = type(None);
 
 
 class Object:
@@ -2605,6 +2673,7 @@ class Renderable(Object):
         self._borderwidth = 1;
         self._fill = fill;
         self._angle = rotation;
+        self._last_angle = rotation;
         self._visible = visible;
 
         self._setup();
@@ -2637,13 +2706,53 @@ class Renderable(Object):
 
         return self._height;
 
-    def center(self, move_to: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
         """
         Returns the location of the center
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
         :return: Location object representing center of Renderable
         """
 
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
+
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, move_to: Location = None):
         if move_to is not None:
             verify(move_to, Location);
             self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
@@ -2663,8 +2772,6 @@ class Renderable(Object):
 
         return Location(centroid_x, centroid_y);
 
-        # return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
-
     def rotation(self, angle: float = None) -> float:
         """
         Get or set the rotation of the object.
@@ -2677,7 +2784,7 @@ class Renderable(Object):
             self._angle = angle;
             self.update();
 
-        return self._angle;
+        return self._angle % 360;
 
     def rotate(self, angle_diff: float = 0) -> None:
         """
@@ -2758,6 +2865,7 @@ class Renderable(Object):
         """
         Add or get the border of the object
         :param color: the color to set the border too, set to Color.NONE to remove border
+        :param width: the width of the border
         :param fill: whether or not to fill the polygon.
         :return: The Color of the border
         """
@@ -2781,6 +2889,19 @@ class Renderable(Object):
             self.update();
 
         return self._border;
+
+    def border_width(self, width: float = None) -> float:
+        """
+        Gets or sets the border width
+        :param width: the border width to set to
+        :return: the border width
+        """
+
+        if width is not None:
+            self._borderwidth = width;
+            self.update();
+
+        return self._borderwidth;
 
     def fill(self, fill: bool = None) -> bool:
         """
@@ -2864,14 +2985,24 @@ class Renderable(Object):
         (The vertices will be returned clockwise, starting from the top-leftmost point)
         :return: a list of Locations representing the vertices
         """
-
         return self._get_vertices();
+
+    def bounds(self) -> (Location, float, float):
+        """
+        Get the location and dimensions of a bounding box that contains the entire shape
+        :return: a tuple containing the Location, width, and height.
+        """
+
+        x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
+        location = self._screen.create_location(x0, y0, canvas=True);
+
+        return location, (x1 - x0), (y1 - y0);
 
     def contains(self, *args) -> bool:
         """
         Returns whether or not a Location is contained within the object.
         :param args: You may pass in either two numbers, a Location, or a tuple containing and x and y point.
-        :return: a boolean value representing whether or not the point is within the bounds of the object.
+        :return: a boolean value representing whether or not the point is within the vertices of the object.
         """
 
         x, y = 0, 0;
@@ -2951,7 +3082,7 @@ class Renderable(Object):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
 
         # Only optimize if the angle is not zero.
-        if self._angle == 0:
+        if self._angle % 360 == 0 and other._angle % 360 == 0:
             min_ax = self.x();
             max_ax = self.x() + self.width();
 
@@ -2990,15 +3121,17 @@ class Renderable(Object):
             a_below_b = max_ay < min_by;
 
         # Do a base check to make sure they are even remotely near each other.
-        if a_left_b or a_right_b or a_above_b or a_below_b:
-            return False;
+        # TODO: Re-optimize with rotation in mind.
+        if other._angle % 360 == 0 and self._angle % 360 == 0:
+            if a_left_b or a_right_b or a_above_b or a_below_b:
+                return False;
 
-        # Check if one shape is entirely inside the other shape
-        if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
-            return True;
+            # Check if one shape is entirely inside the other shape
+            if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
+                return True;
 
-        if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
-            return True;
+            if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
+                return True;
 
         # Next we are going to use a sweeping line algorithm.
         # Essentially we will process the lines on the x axis, one coordinate at a time (imagine a vertical line scan).
@@ -3090,17 +3223,17 @@ class Renderable(Object):
     # noinspection PyUnresolvedReferences
     def _get_vertices(self):
         real_shape = self._vertices;
-        real_shape.reverse();
-
-        min_distance = 999999;
-        top_left_index = 0;
-        for i, location in enumerate(real_shape):
-            distance = math.sqrt((location.x()) ** 2 + (location.y()) ** 2);
-            if distance < min_distance:
-                min_distance = distance;
-                top_left_index = i;
-
-        real_shape = real_shape[top_left_index:] + real_shape[:top_left_index];
+        # real_shape.reverse();
+        #
+        # min_distance = 999999;
+        # top_left_index = 0;
+        # for i, location in enumerate(real_shape):
+        #     distance = math.sqrt((location.x()) ** 2 + (location.y()) ** 2);
+        #     if distance < min_distance:
+        #         min_distance = distance;
+        #         top_left_index = i;
+        #
+        # real_shape = real_shape[top_left_index:] + real_shape[:top_left_index];
 
         return real_shape;
 
@@ -3144,7 +3277,8 @@ class Renderable(Object):
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
             width=self._borderwidth,
-            state=state
+            state=state,
+            joinstyle=tk.MITER
         );
         # self.update(); # CustomPolygon(self._screen, vertices);
 
@@ -3199,6 +3333,7 @@ class Renderable(Object):
             vertex.move(self.x() + width / 2, self.y() + height / 2);
 
         self._vertices = self._rotate(self._vertices, self._angle);
+        self._last_angle = self._angle;
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
@@ -3215,7 +3350,8 @@ class Renderable(Object):
                 fill=self._screen._colorstr(color_state),
                 outline=self._screen._screen._colorstr(self._border.__value__()),
                 width=self._borderwidth,
-                state=state
+                state=state,
+                joinstyle=tk.MITER
             );
 
             self._screen._canvas.tag_lower(self._ref, old_ref);
@@ -3229,6 +3365,230 @@ class CustomRenderable(Renderable):
     A wrapper class to distintify classes that extend Renderable but have some custom functionality.
     """
     pass;
+
+
+class RoundedRectangle(CustomRenderable):
+    """
+    CustomRenderable that creates a rounded rectangle utilizing the border system.
+    As a result borders are unavailable and immutable in this Object.
+    """
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = Location(x, y);
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = Location(x, y);
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, Location, (int, float), (int, float))
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
+                          Location(location.x(), location.y() + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = location.clone();
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
+                          Location(location.x(), location.y() + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = location.clone();
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    # We redefine the border method to do nothing
+    # def border(self, color: Color = None, width: float = 1, fill: bool = None) -> Color:
+    #     raise NotImplemented("This method is not allowed for `Rounded` shapes.")
+    border = property(doc='(!) Disallowed inherited')
+
+    def radius(self, radius: float = None) -> float:
+        """
+        Set the border radius of the rounded shape.
+        :param radius: the radius to set to (not pixel accurate)
+        :return: the radius
+        """
+
+        if radius is not None:
+            self._borderwidth = radius;
+            self._update();
+
+        return self._borderwidth;
+
+    def _setup(self):
+        if not hasattr(self, '_shape'):
+            raise AttributeError('An error occured while initializing a Renderable: '
+                                 'Is _shape set? (Advanced Users Only)');
+
+        shape = self._shape;  # List of normal vertices.
+
+        width = self._width;
+        height = self._height;
+
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
+
+        cx = 0
+        cy = 0
+
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
+
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
+
+        self._vertices = vertices;
+
+        self._vertices = self._rotate(self._vertices, self._angle);
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
+
+        print(self._borderwidth)
+        # noinspection PyProtectedMember
+        self._ref = self._screen._canvas.create_polygon(
+            tk_vertices,
+            fill=self._screen._colorstr(color_state),
+            outline=self._screen._colorstr(self._color), #self._screen._screen._colorstr(self._border.__value__()),
+            width=self._borderwidth,
+            state=state,
+            joinstyle=tk.ROUND
+        );
+        # self.update(); # CustomPolygon(self._screen, vertices);
+
+    def update(self):
+        self._check();
+
+        old_ref = self._ref;
+        shape = self._shape;  # List of normal vertices.
+
+        width = self._width;
+        height = self._height;
+
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
+
+        cx = 0
+        cy = 0
+
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+        self._vertices = vertices;
+
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
+
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
+
+        self._vertices = self._rotate(self._vertices, self._angle);
+        self._last_angle = self._angle;
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
+
+        try:
+            # noinspection PyProtectedMember
+            self._ref = self._screen._canvas.create_polygon(
+                tk_vertices,
+                fill=self._screen._colorstr(color_state),
+                outline=self._screen._screen._colorstr(self._border.__value__()),
+                width=self._borderwidth,
+                state=state,
+                joinstyle=tk.ROUND
+            );
+
+            self._screen._canvas.tag_lower(self._ref, old_ref);
+            self._screen._canvas.delete(old_ref);
+        except:
+            pass;
 
 
 # noinspection PyProtectedMember
@@ -3392,11 +3752,53 @@ class CustomPolygon(CustomRenderable):
 
         return self._angle;
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
         """
-        Returns the centroid for the CustomPolygon
-        :return: centroid in the form of a Location
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing centroid of CustomRenderable
         """
+
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
+
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, moveto: Location = None) -> Location:
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -3935,15 +4337,17 @@ class Polygon(Renderable):
                                 (vertex.y() - (self._screen.height() / 2))));
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
 
         try:
             # noinspection PyProtectedMember
             self._ref = self._screen._canvas.create_polygon(
                 tk_vertices,
-                fill=self._screen._colorstr(self._color),
+                fill=self._screen._colorstr(color_state),
                 outline=self._screen._screen._colorstr(self._border.__value__()),
                 width=self._borderwidth,
-                state=state
+                state=state,
+                joinstyle=tk.MITER
             );
 
             self._screen._canvas.tag_lower(self._ref, old_ref);
@@ -4422,7 +4826,53 @@ class Image(Renderable):
             self._angle += angle_diff;
             self.update(True);
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
+        """
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing center of Image
+        """
+
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
+
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, moveto: Location = None) -> Location:
         if moveto is not None:
             verify(moveto, Location);
             self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
@@ -4674,11 +5124,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -4746,11 +5198,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -4821,11 +5275,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -4896,11 +5352,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -5109,17 +5567,58 @@ class Text(CustomRenderable):
 
         self.rotate(theta);
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
         """
-        Get the Center of the Text's points
-        :param moveto: If defined, will move the Line to be centered on the passed Location
-        :return: the Centroid/Center of the Text
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing center of Renderable
         """
 
-        if moveto is not None:
-            self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
 
-        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2)
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, move_to: Location = None):
+        if move_to is not None:
+            verify(move_to, Location);
+            self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
+
+        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
     def vertices(self) -> list:
         """
@@ -5215,11 +5714,13 @@ class Text(CustomRenderable):
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
         try:
-            import tkinter.font as tkfont;
+            # import tkinter.font as tkfont;
+            #
+            # font = tkfont.Font(font=font_data);
+            # true_width = font.measure(self._text);
+            # true_height = font.metrics('linespace');
 
-            font = tkfont.Font(font=font_data);
-            true_width = font.measure(self._text);
-            true_height = font.metrics('linespace');
+            true_width, true_height = self._calculate_transform(font_data);
 
             hypotenuse = true_width / 2;
             radians = math.radians(self._angle);
@@ -5247,6 +5748,17 @@ class Text(CustomRenderable):
         except (tk.TclError, AttributeError):
             pass;
 
+    def _calculate_transform(self, font_data):
+        import tkinter.font as tkfont;
+        lines = self._text.split('\n');
+        true_width = 0;
+
+        font = tkfont.Font(font=font_data);
+        for line in lines:
+            true_width = max(font.measure(line), true_width);
+        true_height = font.metrics('linespace');
+
+        return true_width, true_height;
 
 # == NON RENDERABLES == #
 
@@ -5577,13 +6089,23 @@ class Line(Object):
 
     def dashes(self, dashes: int = None) -> Union[int, tuple]:
         """
-        Retrive or enable/disable the dashes for the line
+        Retrieve or enable/disable the dashes for the line
+
+        On systems which support only a limited set of dash patterns, the dash pattern will be displayed as the closest
+        dash pattern that is available. For example, on Windows only a few dash patterns are available, most of which
+        do not allow for special dash-spacing (if passing in a tuple).
+
         :param dashes: the visibility to set to, if any
         :return: the toggle-state of dashes
         """
 
         if dashes is not None:
-            verify(dashes, int);
+            verify(dashes, (int, tuple));
+
+            if type(dashes) == tuple:
+                for dash in dashes:
+                    verify(dash, int);
+
             self._dashes = dashes;
             self.update();
 

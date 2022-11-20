@@ -9,19 +9,17 @@ It was originally designed to replace turtle as the goto graphics library for te
 computer science. It has grown into a larger project, with loftier goals of creating an 
 easy-to-use library that will be easy to learn, teach, and use in almost any circumstance.
 
-Indicators: (⭐ = Important, 🚀 = Awesome/Fun Feature, 😻 = Cat)
-
 ### Features
 - Simple, One-Line Shape Construction
 - Consistent Object Management and Manipulation
-- Simplified and Automatated Input System 🚀
+- Simplified and Automatated Input System
 - Top-Left Anchored Coordinate System
 - Special Shapes, Irregular Polygons
 - Precise `.overlaps()` and `.contains()` methods for all Renderables!
   - Highly Optimized Algorithms for __0.01 * 10<sup>-16</sup>s__ runtime (avg).
 - Separated Location (Vector2D) and Color classes!
 - Support for Tuples/Locations in most cases (excluding constructors)!
-- Designed for LEARNING! 🚀😻
+- Designed for LEARNING!
 
 ## Getting Started
 
@@ -80,7 +78,7 @@ screen.exit()
 ```
 
 
-⭐ And getting straight to the point, one of pydraw's primary features is incredibly easy user-input detection.
+And getting straight to the point, one of pydraw's primary features is incredibly easy user-input detection.
 ```python
 from pydraw import *
 
@@ -88,10 +86,10 @@ screen = Screen(800, 600, 'My First Project!')
 
 box = Rectangle(screen, 50, 50, 50, 50) 
 
-def mousedown(location, button):
+def mousedown(button, location):
   print(f'Wow, the {button}-button on the mouse!')
 
-def mouseup(location, button):
+def mouseup(button, location):
   print('How un-impressive...')
 
 def keydown(key):

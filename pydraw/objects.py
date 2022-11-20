@@ -20,6 +20,7 @@ from pydraw import Color;
 from pydraw.overload import overload;
 
 PIXEL_RATIO = 20;
+NoneType = type(None);
 
 
 class Object:
@@ -153,6 +154,7 @@ class Renderable(Object):
         self._borderwidth = 1;
         self._fill = fill;
         self._angle = rotation;
+        self._last_angle = rotation;
         self._visible = visible;
 
         self._setup();
@@ -185,16 +187,75 @@ class Renderable(Object):
 
         return self._height;
 
-    def center(self, move_to: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
         """
         Returns the location of the center
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
         :return: Location object representing center of Renderable
         """
 
+        centroid = False
+        if len(args) == 0:
+            if len(kwargs) > 0:
+                if 'centroid' in kwargs:
+                    if type(kwargs['centroid']) is bool:
+                        centroid = kwargs['centroid'];
+                    else:
+                        raise InvalidArgumentError(
+                            ".center() requires a boolean for centroid (whether to return a bounds "
+                            "center or a calculated centroid).");
+            return self._center(centroid=centroid);
+
+        location = Location(self._center())
+
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'centroid' in kwargs:
+                if type(kwargs['centroid']) is bool:
+                    centroid = kwargs['centroid'];
+                else:
+                    raise InvalidArgumentError(".center() requires a boolean for centroid (whether to return a bounds "
+                                               "center or a calculated centroid).");
+
+        return self._center(location, centroid);
+
+    def _center(self, move_to: Location = None, centroid: bool = False):
         if move_to is not None:
             verify(move_to, Location);
             self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
+
+        if centroid:
+            return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -211,8 +272,6 @@ class Renderable(Object):
 
         return Location(centroid_x, centroid_y);
 
-        # return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
-
     def rotation(self, angle: float = None) -> float:
         """
         Get or set the rotation of the object.
@@ -225,7 +284,7 @@ class Renderable(Object):
             self._angle = angle;
             self.update();
 
-        return self._angle;
+        return self._angle % 360;
 
     def rotate(self, angle_diff: float = 0) -> None:
         """
@@ -251,8 +310,8 @@ class Renderable(Object):
 
         location = Location(obj[0], obj[1]);
         # theta = -math.atan2(location.x() - self.x(), location.y() - self.y()) - math.radians(self.rotation());
-        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) \
-                - math.radians(self.rotation()) + math.pi / 2;
+        theta = math.atan2(location.y() - self.center().y(), location.x() - self.center().x()) \
+            - math.radians(self.rotation()) + math.pi / 2;
         theta = math.degrees(theta);
 
         return theta;
@@ -302,11 +361,12 @@ class Renderable(Object):
 
         return self._color;
 
-    def border(self, color: Color = None, width: float = 1, fill: bool = None) -> Color:
+    def border(self, color: Color = None, width: float = None, fill: bool = None) -> Color:
         """
         Add or get the border of the object
         :param color: the color to set the border too, set to Color.NONE to remove border
-        :param fill: whether or not to fill the polygon.
+        :param width: the width of the border
+        :param fill: whether to fill the polygon.
         :return: The Color of the border
         """
 
@@ -330,10 +390,24 @@ class Renderable(Object):
 
         return self._border;
 
+    def border_width(self, width: float = None) -> float:
+        """
+        Gets or sets the border width
+        :param width: the border width to set to
+        :return: the border width
+        """
+
+        if width is not None:
+            verify(width, (float, int));
+            self._borderwidth = width;
+            self.update();
+
+        return self._borderwidth;
+
     def fill(self, fill: bool = None) -> bool:
         """
         Returns or sets the current fill boolean
-        :param fill: a new fill value, whether or not to fill the polygon
+        :param fill: a new fill value, whether to fill the polygon
         :return: the fill value
         """
 
@@ -412,14 +486,24 @@ class Renderable(Object):
         (The vertices will be returned clockwise, starting from the top-leftmost point)
         :return: a list of Locations representing the vertices
         """
-
         return self._get_vertices();
+
+    def bounds(self) -> (Location, float, float):
+        """
+        Get the location and dimensions of a bounding box that contains the entire shape
+        :return: a tuple containing the Location, width, and height.
+        """
+
+        x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref);
+        location = self._screen.create_location(x0, y0, canvas=True);
+
+        return location, (x1 - x0), (y1 - y0);
 
     def contains(self, *args) -> bool:
         """
         Returns whether or not a Location is contained within the object.
         :param args: You may pass in either two numbers, a Location, or a tuple containing and x and y point.
-        :return: a boolean value representing whether or not the point is within the bounds of the object.
+        :return: a boolean value representing whether or not the point is within the vertices of the object.
         """
 
         x, y = 0, 0;
@@ -488,7 +572,7 @@ class Renderable(Object):
 
         return not (count % 2 == 0);
 
-    def overlaps(self, other) -> bool:
+    def overlaps(self, other: 'Renderable') -> bool:
         """
         Returns if this object is overlapping with the passed object.
         :param other: another Renderable instance.
@@ -498,39 +582,52 @@ class Renderable(Object):
         if not isinstance(other, Renderable):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
 
+        x = self.x();
+        y = self.y();
+        width = self.width();
+        height = self.height();
+
+        other_x = other.x();
+        other_y = other.y();
+        other_width = other.width();
+        other_height = other.height();
+
         # Only optimize if the angle is not zero.
-        if self._angle == 0:
-            min_ax = self.x();
-            max_ax = self.x() + self.width();
+        if self._angle % 360 == 0 and other._angle % 360 == 0:
+            min_ax = x;
+            max_ax = x + width;
 
-            min_bx = other.x();
-            max_bx = other.x() + other.width();
+            min_bx = other_x;
+            max_bx = other_x + other_width;
 
-            min_ay = self.y();
-            max_ay = self.y() + self.height();
+            min_ay = y;
+            max_ay = y + height;
 
-            min_by = other.y();
-            max_by = other.y() + other.height();
+            min_by = other_y;
+            max_by = other_y + other_height;
 
             a_left_b = max_ax < min_bx;
             a_right_b = min_ax > max_bx;
             a_above_b = min_ay > max_by;
             a_below_b = max_ay < min_by;
         else:
-            hypotenuse = math.sqrt(self.width() ** 2 + self.height() ** 2);
-            other_hypotenuse = math.sqrt(other.width() ** 2 + other.height() ** 2);
+            hypotenuse = math.sqrt(width ** 2 + height ** 2) + 1;
+            other_hypotenuse = math.sqrt(other_width ** 2 + other_height ** 2) + 1;
 
-            min_ax = self.x();
-            max_ax = self.x() + hypotenuse;
+            center = Location(x + width / 2, y + height / 2);
+            other_center = Location(other_x + other_width / 2, other_y + other_height / 2);
 
-            min_bx = other.x();
-            max_bx = other.x() + other_hypotenuse;
+            min_ax = center.x() - (hypotenuse / 2);
+            max_ax = center.x() + (hypotenuse / 2);
 
-            min_ay = self.y();
-            max_ay = self.y() + hypotenuse;
+            min_bx = other_center.x() - (other_hypotenuse / 2);
+            max_bx = other_center.x() + (other_hypotenuse / 2);
 
-            min_by = other.y();
-            max_by = other.y() + other_hypotenuse;
+            min_ay = center.y() - (hypotenuse / 2);
+            max_ay = center.y() + (hypotenuse / 2);
+
+            min_by = other_center.y() - (other_hypotenuse / 2);
+            max_by = other_center.y() + (other_hypotenuse / 2);
 
             a_left_b = max_ax < min_bx;
             a_right_b = min_ax > max_bx;
@@ -538,6 +635,8 @@ class Renderable(Object):
             a_below_b = max_ay < min_by;
 
         # Do a base check to make sure they are even remotely near each other.
+        # TODO: Re-optimize with rotation in mind.
+        # if other._angle % 360 == 0 and self._angle % 360 == 0:
         if a_left_b or a_right_b or a_above_b or a_below_b:
             return False;
 
@@ -638,17 +737,17 @@ class Renderable(Object):
     # noinspection PyUnresolvedReferences
     def _get_vertices(self):
         real_shape = self._vertices;
-        real_shape.reverse();
-
-        min_distance = 999999;
-        top_left_index = 0;
-        for i, location in enumerate(real_shape):
-            distance = math.sqrt((location.x()) ** 2 + (location.y()) ** 2);
-            if distance < min_distance:
-                min_distance = distance;
-                top_left_index = i;
-
-        real_shape = real_shape[top_left_index:] + real_shape[:top_left_index];
+        # real_shape.reverse();
+        #
+        # min_distance = 999999;
+        # top_left_index = 0;
+        # for i, location in enumerate(real_shape):
+        #     distance = math.sqrt((location.x()) ** 2 + (location.y()) ** 2);
+        #     if distance < min_distance:
+        #         min_distance = distance;
+        #         top_left_index = i;
+        #
+        # real_shape = real_shape[top_left_index:] + real_shape[:top_left_index];
 
         return real_shape;
 
@@ -692,7 +791,8 @@ class Renderable(Object):
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
             width=self._borderwidth,
-            state=state
+            state=state,
+            joinstyle=tk.MITER
         );
         # self.update(); # CustomPolygon(self._screen, vertices);
 
@@ -747,6 +847,238 @@ class Renderable(Object):
             vertex.move(self.x() + width / 2, self.y() + height / 2);
 
         self._vertices = self._rotate(self._vertices, self._angle);
+        self._last_angle = self._angle;
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
+            
+        try:
+            # noinspection PyProtectedMember
+            self._ref = self._screen._canvas.create_polygon(
+                tk_vertices,
+                fill=self._screen._colorstr(color_state),
+                outline=self._screen._screen._colorstr(self._border.__value__()),
+                width=self._borderwidth,
+                state=state,
+                joinstyle=tk.MITER
+            );
+
+            self._screen._canvas.tag_lower(self._ref, old_ref);
+            self._screen._canvas.delete(old_ref);
+        except:
+            pass;
+
+
+class CustomRenderable(Renderable):
+    """
+    A wrapper class to distintify classes that extend Renderable but have some custom functionality.
+    """
+    pass;
+
+
+class RoundedRectangle(CustomRenderable):
+    """
+    CustomRenderable that creates a rounded rectangle utilizing the border system.
+    As a result borders are unavailable and immutable in this Object.
+    """
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = Location(x, y);
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = Location(x, y);
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, Location, (int, float), (int, float))
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
+                          Location(location.x(), location.y() + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = location.clone();
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 radius: float = 10,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._screen = screen;
+        self._screen.add(self);
+
+        self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
+                          Location(location.x(), location.y() + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+
+        self._location = location.clone();
+        self._width = width;
+        self._height = height;
+        self._color = color;
+        self._border = color;
+        self._fill = fill;
+        self._angle = rotation;
+        self._visible = visible;
+        self._borderwidth = radius;
+
+        self._setup();
+
+    # We redefine the border method to do nothing
+    # def border(self, color: Color = None, width: float = 1, fill: bool = None) -> Color:
+    #     raise NotImplemented("This method is not allowed for `Rounded` shapes.")
+    border = property(doc='(!) Disallowed inherited')
+
+    def radius(self, radius: float = None) -> float:
+        """
+        Set the border radius of the rounded shape.
+        :param radius: the radius to set to (not pixel accurate)
+        :return: the radius
+        """
+
+        if radius is not None:
+            self._borderwidth = radius;
+            self._update();
+
+        return self._borderwidth;
+
+    def _setup(self):
+        if not hasattr(self, '_shape'):
+            raise AttributeError('An error occured while initializing a Renderable: '
+                                 'Is _shape set? (Advanced Users Only)');
+
+        shape = self._shape;  # List of normal vertices.
+
+        width = self._width;
+        height = self._height;
+
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
+
+        cx = 0
+        cy = 0
+
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
+
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
+
+        self._vertices = vertices;
+
+        self._vertices = self._rotate(self._vertices, self._angle);
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._vertices:
+            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
+                                (vertex.y() - (self._screen.height() / 2))));
+
+        state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
+
+        print(self._borderwidth)
+        # noinspection PyProtectedMember
+        self._ref = self._screen._canvas.create_polygon(
+            tk_vertices,
+            fill=self._screen._colorstr(color_state),
+            outline=self._screen._colorstr(self._color), #self._screen._screen._colorstr(self._border.__value__()),
+            width=self._borderwidth,
+            state=state,
+            joinstyle=tk.ROUND
+        );
+        # self.update(); # CustomPolygon(self._screen, vertices);
+
+    def update(self):
+        self._check();
+
+        old_ref = self._ref;
+        shape = self._shape;  # List of normal vertices.
+
+        width = self._width;
+        height = self._height;
+
+        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO);
+
+        cx = 0
+        cy = 0
+
+        vertices = [Location(vertex[0], vertex[1]) for vertex in shape];
+        self._vertices = vertices;
+
+        for vertex in vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy);
+
+            vertex.move(self.x() + width / 2, self.y() + height / 2);
+
+        self._vertices = self._rotate(self._vertices, self._angle);
+        self._last_angle = self._angle;
 
         tk_vertices = [];  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
@@ -763,20 +1095,14 @@ class Renderable(Object):
                 fill=self._screen._colorstr(color_state),
                 outline=self._screen._screen._colorstr(self._border.__value__()),
                 width=self._borderwidth,
-                state=state
+                state=state,
+                joinstyle=tk.ROUND
             );
 
             self._screen._canvas.tag_lower(self._ref, old_ref);
             self._screen._canvas.delete(old_ref);
         except:
             pass;
-
-
-class CustomRenderable(Renderable):
-    """
-    A wrapper class to distintify classes that extend Renderable but have some custom functionality.
-    """
-    pass;
 
 
 # noinspection PyProtectedMember
@@ -940,11 +1266,53 @@ class CustomPolygon(CustomRenderable):
 
         return self._angle;
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
         """
-        Returns the centroid for the CustomPolygon
-        :return: centroid in the form of a Location
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing centroid of CustomRenderable
         """
+
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
+
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, moveto: Location = None) -> Location:
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -1095,6 +1463,17 @@ class Rectangle(Renderable):
         self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -1111,6 +1490,22 @@ class Rectangle(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -1166,6 +1561,22 @@ class Oval(Renderable):
         self._shape = vertices;
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -1186,6 +1597,25 @@ class Oval(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -1284,6 +1714,16 @@ class Triangle(Renderable):
         self._shape = ((10, -10), (0, 10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -1298,6 +1738,19 @@ class Triangle(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -1347,6 +1800,23 @@ class Polygon(Renderable):
 
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, int, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -1368,6 +1838,26 @@ class Polygon(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, int, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, int, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -1483,15 +1973,17 @@ class Polygon(Renderable):
                                 (vertex.y() - (self._screen.height() / 2))));
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
+        color_state = self._color if self._fill else Color.NONE;
 
         try:
             # noinspection PyProtectedMember
             self._ref = self._screen._canvas.create_polygon(
                 tk_vertices,
-                fill=self._screen._colorstr(self._color),
+                fill=self._screen._colorstr(color_state),
                 outline=self._screen._screen._colorstr(self._border.__value__()),
                 width=self._borderwidth,
-                state=state
+                state=state,
+                joinstyle=tk.MITER
             );
 
             self._screen._canvas.tag_lower(self._ref, old_ref);
@@ -1970,7 +2462,53 @@ class Image(Renderable):
             self._angle += angle_diff;
             self.update(True);
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
+        """
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing center of Image
+        """
+
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
+
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, moveto: Location = None) -> Location:
         if moveto is not None:
             verify(moveto, Location);
             self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
@@ -2035,6 +2573,7 @@ class Image(Renderable):
         return vertices;
 
     def flip(self, axis: str = 'y'):
+        # TODO: Finish this noah
         pass;
 
     def load(self) -> None:
@@ -2062,6 +2601,7 @@ class Image(Renderable):
 
         if self._frame >= self._frames:
             self._frame = 0;
+
         self.update(True);
 
     def frame(self, frame: int = None) -> int:
@@ -2077,13 +2617,13 @@ class Image(Renderable):
 
         return self._frame;
 
-    def frames(self):
+    def frames(self) -> int:
         """
         Returns how many frames there are, returns -1 if not animated, 0 if corrupted file.
         :return:
         """
 
-        self._frames;
+        return self._frames;
 
     @staticmethod
     def _monkey_patch_del():
@@ -2129,7 +2669,7 @@ class Image(Renderable):
 
                 if self._frame != -1:
                     try:
-                        image.seek(self._frame);
+                        self._original.seek(self._frame);  # we have to seek on original for some reason.
                     except EOFError:
                         raise PydrawError(f'No more frames in GIF: {self._image_name}!');
 
@@ -2222,11 +2762,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -2294,11 +2836,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -2369,11 +2913,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -2444,11 +2990,13 @@ class Text(CustomRenderable):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
-        import tkinter.font as tkfont;
+        # import tkinter.font as tkfont;
+        #
+        # font = tkfont.Font(font=font_data);
+        # true_width = font.measure(self._text);
+        # true_height = font.metrics('linespace');
 
-        font = tkfont.Font(font=font_data);
-        true_width = font.measure(self._text);
-        true_height = font.metrics('linespace');
+        true_width, true_height = self._calculate_transform(font_data);
 
         hypotenuse = true_width / 2;
         radians = math.radians(self._angle);
@@ -2478,7 +3026,7 @@ class Text(CustomRenderable):
 
     def text(self, text: str = None) -> str:
         """
-        Get or set the text. Use '\n' to separate lines.
+        Get or set the text. Use '\n' to separate lines
         :param text: text to set to (str), if any
         :return: the text
         """
@@ -2652,22 +3200,63 @@ class Text(CustomRenderable):
 
         location = Location(obj[0], obj[1]);
 
-        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) - math.radians(self.rotation());
+        theta = math.atan2(location.y() - self.center().y(), location.x() - self.center().x()) - math.radians(self.rotation());
         theta = math.degrees(theta) + 90;
 
         self.rotate(theta);
 
-    def center(self, moveto: Location = None) -> Location:
+    def center(self, *args, **kwargs) -> Location:
         """
-        Get the Center of the Text's points
-        :param moveto: If defined, will move the Line to be centered on the passed Location
-        :return: the Centroid/Center of the Text
+        Returns the location of the center
+        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
+        :param x: if defined, move the center x-coordinate to the specified value
+        :param y: if defined, move the center y-coordinate to the specified value
+        :return: Location object representing center of Renderable
         """
 
-        if moveto is not None:
-            self.moveto(moveto.x() - self.width() / 2, moveto.y() - self.height() / 2);
+        if len(args) == 0 and len(kwargs) == 0:
+            return self._center();
 
-        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2)
+        location = Location(self._center())
+        if len(args) != 0:
+            if type(args[0]) is Location or type(args[0]) is tuple:
+                location.moveto(args[0]);
+            elif type(args[0]) == float or type(args[0]) is int:
+                if len(args) != 2:
+                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.");
+                elif type(args[1]) is not float and type(args[1]) is not int:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+                location.moveto(args[0], args[1]);
+            else:
+                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        if len(kwargs) != 0:
+            if 'move_to' in kwargs:
+                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
+                    location.moveto(kwargs['move_to']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+            if 'x' in kwargs:
+                if type(kwargs['x']) is float or type(kwargs['x']) is int:
+                    location.x(kwargs['x']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'y' in kwargs:
+                if type(kwargs['y']) is float or type(kwargs['y']) is int:
+                    location.y(kwargs['y']);
+                else:
+                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+
+        return self._center(location);
+
+    def _center(self, move_to: Location = None):
+        if move_to is not None:
+            verify(move_to, Location);
+            self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
+
+        return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
     def vertices(self) -> list:
         """
@@ -2763,11 +3352,13 @@ class Text(CustomRenderable):
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
         try:
-            import tkinter.font as tkfont;
+            # import tkinter.font as tkfont;
+            #
+            # font = tkfont.Font(font=font_data);
+            # true_width = font.measure(self._text);
+            # true_height = font.metrics('linespace');
 
-            font = tkfont.Font(font=font_data);
-            true_width = font.measure(self._text);
-            true_height = font.metrics('linespace');
+            true_width, true_height = self._calculate_transform(font_data);
 
             hypotenuse = true_width / 2;
             radians = math.radians(self._angle);
@@ -2795,6 +3386,17 @@ class Text(CustomRenderable):
         except (tk.TclError, AttributeError):
             pass;
 
+    def _calculate_transform(self, font_data):
+        import tkinter.font as tkfont;
+        lines = self._text.split('\n');
+        true_width = 0;
+
+        font = tkfont.Font(font=font_data);
+        for line in lines:
+            true_width = max(font.measure(line), true_width);
+        true_height = font.metrics('linespace');
+
+        return true_width, true_height;
 
 # == NON RENDERABLES == #
 
@@ -3125,13 +3727,23 @@ class Line(Object):
 
     def dashes(self, dashes: int = None) -> Union[int, tuple]:
         """
-        Retrive or enable/disable the dashes for the line
+        Retrieve or enable/disable the dashes for the line
+
+        On systems which support only a limited set of dash patterns, the dash pattern will be displayed as the closest
+        dash pattern that is available. For example, on Windows only a few dash patterns are available, most of which
+        do not allow for special dash-spacing (if passing in a tuple).
+
         :param dashes: the visibility to set to, if any
         :return: the toggle-state of dashes
         """
 
         if dashes is not None:
-            verify(dashes, int);
+            verify(dashes, (int, tuple));
+
+            if type(dashes) == tuple:
+                for dash in dashes:
+                    verify(dash, int);
+
             self._dashes = dashes;
             self.update();
 

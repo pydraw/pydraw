@@ -727,12 +727,14 @@ class Screen:
         self._screen.listen();
 
         # Keyboard
-        for key in KEYS:
-            self._screen.onkeypress(self._create_lambda('keydown', key), key);
-            self._screen.onkeyrelease(self._create_lambda('keyup', key), key);
-
-            # custom implemented keypress
-            self._onkeytype(self._create_lambda('keypress', key), key);
+        # for key in KEYS:
+        #     self._screen.onkeypress(self._create_lambda('keydown', key), key);
+        #     self._screen.onkeyrelease(self._create_lambda('keyup', key), key);
+        #
+        #     # custom implemented keypress
+        #     self._onkeytype(self._create_lambda('keypress', key), key);
+        self._screen.cv.bind('<Key>', (lambda e: self._keyhandler(e)));
+        self._screen.cv.bind('<KeyRelease>', (lambda e: self._keyuphandler(e)));
 
         # Mouse
         for btn in BUTTONS:
@@ -803,6 +805,26 @@ class Screen:
         else:
             return None;
 
+    def _keyhandler(self, event) -> None:
+        if 'keydown' not in self.registry:
+            return;
+
+        key = str(event.char);
+        if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
+            key = event.keysym;
+
+        self.registry['keydown'](self.Key(key.lower()));
+
+    def _keyuphandler(self, event) -> None:
+        if 'keyup' not in self.registry:
+            return;
+
+        key = str(event.char);
+        if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
+            key = event.keysym;
+
+        self.registry['keyup'](self.Key(key.lower()));
+
     def _keydown(self, key) -> None:
         if 'keydown' not in self.registry:
             return;
@@ -825,13 +847,37 @@ class Screen:
         if 'mousedown' not in self.registry:
             return;
 
-        self.registry['mousedown'](button, location);
+        signature = inspect.signature(self.registry['mousedown']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mousedown'](button, location);
+            print("[WARNING] in `mousedown` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mousedown'](location);
+            return;
+
+        self.registry['mousedown'](location, button);
 
     def _mouseup(self, button, location) -> None:
         if 'mouseup' not in self.registry:
             return;
 
-        self.registry['mouseup'](button, location);
+        signature = inspect.signature(self.registry['mouseup']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mouseup'](button, location);
+            print("[WARNING] in `mouseup` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mouseup'](location);
+            return;
+
+        self.registry['mouseup'](location, button);
 
     def _mouseclick(self, button, location) -> None:
         if 'mouseclick' not in self.registry:
@@ -843,7 +889,19 @@ class Screen:
         if 'mousedrag' not in self.registry:
             return;
 
-        self.registry['mousedrag'](button, location);
+        signature = inspect.signature(self.registry['mousedrag']);
+        keys = list(signature.parameters.keys());
+
+        if keys[0] == "button" and keys[1] == "location":
+            self.registry['mousedrag'](button, location);
+            print("[WARNING] in `mousedrag` | Argument Pattern: (button, location) has been deprecated, "
+                  "please use (location, button) instead.");
+            return;
+        elif len(keys) == 1:
+            self.registry['mousedrag'](location);
+            return;
+
+        self.registry['mousedrag'](location, button);
 
     def _mousemove(self, location) -> None:
         # We will update our internal storage of the mouse-location no matter what
@@ -855,13 +913,19 @@ class Screen:
         self.registry['mousemove'](location);
 
     # --- Helper Methods --- #
-    def create_location(self, x, y) -> Location:
+    def create_location(self, x, y, canvas: bool = False) -> Location:
         """
         Is passed turtle-based coordinates and converts them into normal coordinates
         :param x: the x component
         :param y: the y component
+        :param canvas: whether or not the supplied coordinates are from the canvas or input
         :return: a location comprised of the passed x and y components
         """
+
+        # Switch these around if the coords are from, for example, canvas.bbox
+        if canvas:
+            y = -y
+
         return Location(x + (self.width() / 2), -y + (self.height() / 2));
 
     def canvas_location(self, x, y) -> Location:
