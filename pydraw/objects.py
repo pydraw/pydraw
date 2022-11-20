@@ -407,7 +407,7 @@ class Renderable(Object):
     def fill(self, fill: bool = None) -> bool:
         """
         Returns or sets the current fill boolean
-        :param fill: a new fill value, whether or not to fill the polygon
+        :param fill: a new fill value, whether to fill the polygon
         :return: the fill value
         """
 
