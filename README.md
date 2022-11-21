@@ -271,11 +271,10 @@ then you'll find a `pydraw.py` file in the `compiled/` directory!
 ---
 
 ### A Big Thanks To:
-- Barry Lindler (An incredible person with a brain that can bench 345lbs and a heart of gold)
+- Barry Lindler (An incredible person and a good friend)
   - Follow this man on Twitter: [@barrylindler](https://twitter.com/barrylindler)
 - Whatever geniuses came up with the crossing number algorithm, and the line-segment orientation algorithm
 - Schrödinger for his cat obsession
 - The nerd who decided to create ANOTHER language and actually did a good job: Guido van Rossum
   - (He kinda created Python) (Sometimes you can still find him on StackOverflow too...)
 - My Dad. For all sorts of reasons. ¯\_(ツ)_/¯
-
