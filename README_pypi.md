@@ -1,4 +1,4 @@
-![pyDraw](https://i.ibb.co/2dTRYqZ/pydraw.png)
+![pyDraw](https://pydraw.graphics/logo.png)
 
 ![version](https://img.shields.io/pypi/v/pydraw)
 
@@ -254,7 +254,7 @@ line.lookat(another_location)  # SUPER NIFTY!
 ---
 
 ## API/Docs
-The documentation for [pydraw](https://pypi.org/project/pydraw) wis available at the main website: https://pydraw.graphics
+The documentation for [pydraw](https://pypi.org/project/pydraw) is available at the main website: https://pydraw.graphics
 The documentation is shipped with the package so code completion and method descriptors are
 available for supporting IDEs.
 
@@ -263,12 +263,13 @@ available for supporting IDEs.
 ## DIY
 If you want to build your own version of pydraw, just fork this repository and run 
 `python -m build` in the terminal. You should get a release/ directory with a pydraw.py held
-dearly within it. (As well as a `pydraw.py` file in the `compiled/` directory!)
+dearly within it. To build a pydraw.py file you should run `python tools/compile.py` in the main directory,
+then you'll find a `pydraw.py` file in the `compiled/` directory!
 
 ---
 
 ### A Big Thanks To:
-- Barry Lindler (An incredible person with a brain that can bench 345lbs and a heart of gold)
+- Barry Lindler (An incredible person and a good friend)
   - Follow this man on Twitter: [@barrylindler](https://twitter.com/barrylindler)
 - Whatever geniuses came up with the crossing number algorithm, and the line-segment orientation algorithm
 - Schrödinger for his cat obsession
