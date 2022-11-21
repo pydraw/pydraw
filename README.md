@@ -1,4 +1,4 @@
-![pyDraw](https://i.ibb.co/2dTRYqZ/pydraw.png)
+![pyDraw](https://pydraw.graphics/logo.png)
 
 ![version](https://img.shields.io/pypi/v/pydraw)
 
