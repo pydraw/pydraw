@@ -49,6 +49,22 @@ pydraw.screen module
    :undoc-members:
    :show-inheritance:
 
+pydraw.scene module
+--------------------
+
+.. automodule:: pydraw.scene
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pydraw.sound module
+--------------------
+
+.. automodule:: pydraw.sound
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 pydraw.util module
 ------------------
 

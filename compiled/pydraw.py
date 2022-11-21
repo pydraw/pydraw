@@ -1,5 +1,5 @@
 """
-pyDraw v2.0.2
+pyDraw v2.1
 
 This library is a graphics-interface library designed to make graphics in Python
 easier and more simple. It was designed to be easy to teach/learn and to utilize
@@ -2264,7 +2264,7 @@ class Screen:
             return;
 
         key = str(event.char);
-        if key.strip() == "":
+        if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
             key = event.keysym;
 
         self.registry['keydown'](self.Key(key.lower()));
@@ -2274,7 +2274,7 @@ class Screen:
             return;
 
         key = str(event.char);
-        if key.strip() == "":
+        if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
             key = event.keysym;
 
         self.registry['keyup'](self.Key(key.lower()));
@@ -2715,10 +2715,20 @@ class Renderable(Object):
         :return: Location object representing center of Renderable
         """
 
-        if len(args) == 0 and len(kwargs) == 0:
-            return self._center();
+        centroid = False
+        if len(args) == 0:
+            if len(kwargs) > 0:
+                if 'centroid' in kwargs:
+                    if type(kwargs['centroid']) is bool:
+                        centroid = kwargs['centroid'];
+                    else:
+                        raise InvalidArgumentError(
+                            ".center() requires a boolean for centroid (whether to return a bounds "
+                            "center or a calculated centroid).");
+            return self._center(centroid=centroid);
 
         location = Location(self._center())
+
         if len(args) != 0:
             if type(args[0]) is Location or type(args[0]) is tuple:
                 location.moveto(args[0]);
@@ -2749,13 +2759,22 @@ class Renderable(Object):
                     location.y(kwargs['y']);
                 else:
                     raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!");
+            if 'centroid' in kwargs:
+                if type(kwargs['centroid']) is bool:
+                    centroid = kwargs['centroid'];
+                else:
+                    raise InvalidArgumentError(".center() requires a boolean for centroid (whether to return a bounds "
+                                               "center or a calculated centroid).");
 
-        return self._center(location);
+        return self._center(location, centroid);
 
-    def _center(self, move_to: Location = None):
+    def _center(self, move_to: Location = None, centroid: bool = False):
         if move_to is not None:
             verify(move_to, Location);
             self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2);
+
+        if centroid:
+            return Location(self.x() + self.width() / 2, self.y() + self.height() / 2);
 
         # We gonna create a centroid so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -2810,8 +2829,8 @@ class Renderable(Object):
 
         location = Location(obj[0], obj[1]);
         # theta = -math.atan2(location.x() - self.x(), location.y() - self.y()) - math.radians(self.rotation());
-        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) \
-                - math.radians(self.rotation()) + math.pi / 2;
+        theta = math.atan2(location.y() - self.center().y(), location.x() - self.center().x()) \
+            - math.radians(self.rotation()) + math.pi / 2;
         theta = math.degrees(theta);
 
         return theta;
@@ -2861,12 +2880,12 @@ class Renderable(Object):
 
         return self._color;
 
-    def border(self, color: Color = None, width: float = 1, fill: bool = None) -> Color:
+    def border(self, color: Color = None, width: float = None, fill: bool = None) -> Color:
         """
         Add or get the border of the object
         :param color: the color to set the border too, set to Color.NONE to remove border
         :param width: the width of the border
-        :param fill: whether or not to fill the polygon.
+        :param fill: whether to fill the polygon.
         :return: The Color of the border
         """
 
@@ -2898,6 +2917,7 @@ class Renderable(Object):
         """
 
         if width is not None:
+            verify(width, (float, int));
             self._borderwidth = width;
             self.update();
 
@@ -2906,7 +2926,7 @@ class Renderable(Object):
     def fill(self, fill: bool = None) -> bool:
         """
         Returns or sets the current fill boolean
-        :param fill: a new fill value, whether or not to fill the polygon
+        :param fill: a new fill value, whether to fill the polygon
         :return: the fill value
         """
 
@@ -3071,7 +3091,7 @@ class Renderable(Object):
 
         return not (count % 2 == 0);
 
-    def overlaps(self, other) -> bool:
+    def overlaps(self, other: 'Renderable') -> bool:
         """
         Returns if this object is overlapping with the passed object.
         :param other: another Renderable instance.
@@ -3081,39 +3101,52 @@ class Renderable(Object):
         if not isinstance(other, Renderable):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!');
 
+        x = self.x();
+        y = self.y();
+        width = self.width();
+        height = self.height();
+
+        other_x = other.x();
+        other_y = other.y();
+        other_width = other.width();
+        other_height = other.height();
+
         # Only optimize if the angle is not zero.
         if self._angle % 360 == 0 and other._angle % 360 == 0:
-            min_ax = self.x();
-            max_ax = self.x() + self.width();
+            min_ax = x;
+            max_ax = x + width;
 
-            min_bx = other.x();
-            max_bx = other.x() + other.width();
+            min_bx = other_x;
+            max_bx = other_x + other_width;
 
-            min_ay = self.y();
-            max_ay = self.y() + self.height();
+            min_ay = y;
+            max_ay = y + height;
 
-            min_by = other.y();
-            max_by = other.y() + other.height();
+            min_by = other_y;
+            max_by = other_y + other_height;
 
             a_left_b = max_ax < min_bx;
             a_right_b = min_ax > max_bx;
             a_above_b = min_ay > max_by;
             a_below_b = max_ay < min_by;
         else:
-            hypotenuse = math.sqrt(self.width() ** 2 + self.height() ** 2);
-            other_hypotenuse = math.sqrt(other.width() ** 2 + other.height() ** 2);
+            hypotenuse = math.sqrt(width ** 2 + height ** 2) + 1;
+            other_hypotenuse = math.sqrt(other_width ** 2 + other_height ** 2) + 1;
 
-            min_ax = self.x();
-            max_ax = self.x() + hypotenuse;
+            center = Location(x + width / 2, y + height / 2);
+            other_center = Location(other_x + other_width / 2, other_y + other_height / 2);
 
-            min_bx = other.x();
-            max_bx = other.x() + other_hypotenuse;
+            min_ax = center.x() - (hypotenuse / 2);
+            max_ax = center.x() + (hypotenuse / 2);
 
-            min_ay = self.y();
-            max_ay = self.y() + hypotenuse;
+            min_bx = other_center.x() - (other_hypotenuse / 2);
+            max_bx = other_center.x() + (other_hypotenuse / 2);
 
-            min_by = other.y();
-            max_by = other.y() + other_hypotenuse;
+            min_ay = center.y() - (hypotenuse / 2);
+            max_ay = center.y() + (hypotenuse / 2);
+
+            min_by = other_center.y() - (other_hypotenuse / 2);
+            max_by = other_center.y() + (other_hypotenuse / 2);
 
             a_left_b = max_ax < min_bx;
             a_right_b = min_ax > max_bx;
@@ -3122,16 +3155,16 @@ class Renderable(Object):
 
         # Do a base check to make sure they are even remotely near each other.
         # TODO: Re-optimize with rotation in mind.
-        if other._angle % 360 == 0 and self._angle % 360 == 0:
-            if a_left_b or a_right_b or a_above_b or a_below_b:
-                return False;
+        # if other._angle % 360 == 0 and self._angle % 360 == 0:
+        if a_left_b or a_right_b or a_above_b or a_below_b:
+            return False;
 
-            # Check if one shape is entirely inside the other shape
-            if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
-                return True;
+        # Check if one shape is entirely inside the other shape
+        if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
+            return True;
 
-            if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
-                return True;
+        if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
+            return True;
 
         # Next we are going to use a sweeping line algorithm.
         # Essentially we will process the lines on the x axis, one coordinate at a time (imagine a vertical line scan).
@@ -3342,7 +3375,7 @@ class Renderable(Object):
 
         state = tk.NORMAL if self._visible else tk.HIDDEN;
         color_state = self._color if self._fill else Color.NONE;
-
+            
         try:
             # noinspection PyProtectedMember
             self._ref = self._screen._canvas.create_polygon(
@@ -3949,6 +3982,17 @@ class Rectangle(Renderable):
         self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -3965,6 +4009,22 @@ class Rectangle(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -4020,6 +4080,22 @@ class Oval(Renderable):
         self._shape = vertices;
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -4040,6 +4116,25 @@ class Oval(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -4138,6 +4233,16 @@ class Triangle(Renderable):
         self._shape = ((10, -10), (0, 10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -4152,6 +4257,19 @@ class Triangle(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -4201,6 +4319,23 @@ class Polygon(Renderable):
 
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
+    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color)
+    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, int, Location, (int, float), (int, float))
     def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
                  color: Color = Color('black'),
@@ -4222,6 +4357,26 @@ class Polygon(Renderable):
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, int, Location, (int, float), (int, float), Color)
+    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        x = location.x();
+        y = location.y();
+
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
+    @overload(Screen, int, Location, (int, float), (int, float), Color, Color)
     def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -4937,6 +5092,7 @@ class Image(Renderable):
         return vertices;
 
     def flip(self, axis: str = 'y'):
+        # TODO: Finish this noah
         pass;
 
     def load(self) -> None:
@@ -4964,6 +5120,7 @@ class Image(Renderable):
 
         if self._frame >= self._frames:
             self._frame = 0;
+
         self.update(True);
 
     def frame(self, frame: int = None) -> int:
@@ -4979,13 +5136,13 @@ class Image(Renderable):
 
         return self._frame;
 
-    def frames(self):
+    def frames(self) -> int:
         """
         Returns how many frames there are, returns -1 if not animated, 0 if corrupted file.
         :return:
         """
 
-        self._frames;
+        return self._frames;
 
     @staticmethod
     def _monkey_patch_del():
@@ -5031,7 +5188,7 @@ class Image(Renderable):
 
                 if self._frame != -1:
                     try:
-                        image.seek(self._frame);
+                        self._original.seek(self._frame);  # we have to seek on original for some reason.
                     except EOFError:
                         raise PydrawError(f'No more frames in GIF: {self._image_name}!');
 
@@ -5388,7 +5545,7 @@ class Text(CustomRenderable):
 
     def text(self, text: str = None) -> str:
         """
-        Get or set the text. Use '\n' to separate lines.
+        Get or set the text. Use '\n' to separate lines
         :param text: text to set to (str), if any
         :return: the text
         """
@@ -5562,7 +5719,7 @@ class Text(CustomRenderable):
 
         location = Location(obj[0], obj[1]);
 
-        theta = math.atan2(location.y() - self.y(), location.x() - self.x()) - math.radians(self.rotation());
+        theta = math.atan2(location.y() - self.center().y(), location.x() - self.center().x()) - math.radians(self.rotation());
         theta = math.degrees(theta) + 90;
 
         self.rotate(theta);
@@ -6269,5 +6426,284 @@ class Line(Object):
             # self._screen._screen.cv.update();
         except tk.TclError:
             pass;  # Just catch TclErrors and throw them out.
+
+
+# pulled from pip package 'playsound'
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class PlaysoundException(Exception):
+    pass
+
+
+def _canonicalizePath(path):
+    """
+    Support passing in a pathlib.Path-like object by converting to str.
+    """
+    import sys
+    if sys.version_info[0] >= 3:
+        return str(path)
+    else:
+        # On earlier Python versions, str is a byte string, so attempting to
+        # convert a unicode string to str will fail. Leave it alone in this case.
+        return path
+
+
+def _playsoundWin(sound, block=True):
+    '''
+    Utilizes windll.winmm. Tested and known to work with MP3 and WAVE on
+    Windows 7 with Python 2.7. Probably works with more file formats.
+    Probably works on Windows XP thru Windows 10. Probably works with all
+    versions of Python.
+    Inspired by (but not copied from) Michael Gundlach <gundlach@gmail.com>'s mp3play:
+    https://github.com/michaelgundlach/mp3play
+    I never would have tried using windll.winmm without seeing his code.
+    '''
+    sound = '"' + _canonicalizePath(sound) + '"'
+
+    from ctypes import create_unicode_buffer, windll, wintypes
+    from time import sleep
+    windll.winmm.mciSendStringW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.UINT, wintypes.HANDLE]
+    windll.winmm.mciGetErrorStringW.argtypes = [wintypes.DWORD, wintypes.LPWSTR, wintypes.UINT]
+
+    def winCommand(*command):
+        bufLen = 600
+        buf = create_unicode_buffer(bufLen)
+        command = ' '.join(command)
+        errorCode = int(
+            windll.winmm.mciSendStringW(command, buf, bufLen - 1, 0))  # use widestring version of the function
+        if errorCode:
+            errorBuffer = create_unicode_buffer(bufLen)
+            windll.winmm.mciGetErrorStringW(errorCode, errorBuffer,
+                                            bufLen - 1)  # use widestring version of the function
+            exceptionMessage = ('\n    Error ' + str(errorCode) + ' for command:'
+                                                                  '\n        ' + command +
+                                '\n    ' + errorBuffer.value)
+            logger.error(exceptionMessage)
+            raise PlaysoundException(exceptionMessage)
+        return buf.value
+
+    try:
+        logger.debug('Starting')
+        winCommand(u'open {}'.format(sound))
+        winCommand(u'play {}{}'.format(sound, ' wait' if block else ''))
+        logger.debug('Returning')
+    finally:
+        try:
+            winCommand(u'close {}'.format(sound))
+        except PlaysoundException:
+            logger.warning(u'Failed to close the file: {}'.format(sound))
+            # If it fails, there's nothing more that can be done...
+            pass
+
+
+def _handlePathOSX(sound):
+    sound = _canonicalizePath(sound)
+
+    if '://' not in sound:
+        if not sound.startswith('/'):
+            from os import getcwd
+            sound = getcwd() + '/' + sound
+        sound = 'file://' + sound
+
+    try:
+        # Don't double-encode it.
+        sound.encode('ascii')
+        return sound.replace(' ', '%20')
+    except UnicodeEncodeError:
+        try:
+            from urllib.parse import quote  # Try the Python 3 import first...
+        except ImportError:
+            from urllib import quote  # Try using the Python 2 import before giving up entirely...
+
+        parts = sound.split('://', 1)
+        return parts[0] + '://' + quote(parts[1].encode('utf-8')).replace(' ', '%20')
+
+
+def _playsoundOSX(sound, block=True):
+    '''
+    Utilizes AppKit.NSSound. Tested and known to work with MP3 and WAVE on
+    OS X 10.11 with Python 2.7. Probably works with anything QuickTime supports.
+    Probably works on OS X 10.5 and newer. Probably works with all versions of
+    Python.
+    Inspired by (but not copied from) Aaron's Stack Overflow answer here:
+    http://stackoverflow.com/a/34568298/901641
+    I never would have tried using AppKit.NSSound without seeing his code.
+    '''
+    try:
+        from AppKit import NSSound
+    except ImportError:
+        logger.warning("playsound could not find a copy of AppKit - falling back to using macOS's system copy.")
+        sys.path.append('/System/Library/Frameworks/Python.framework/Versions/2.7/Extras/lib/python/PyObjC')
+        from AppKit import NSSound
+
+    from Foundation import NSURL
+    from time import sleep
+
+    sound = _handlePathOSX(sound)
+    url = NSURL.URLWithString_(sound)
+    if not url:
+        raise PlaysoundException('Cannot find a sound with filename: ' + sound)
+
+    for i in range(5):
+        nssound = NSSound.alloc().initWithContentsOfURL_byReference_(url, True)
+        if nssound:
+            break
+        else:
+            logger.debug('Failed to load sound, although url was good... ' + sound)
+    else:
+        raise PlaysoundException('Could not load sound with filename, although URL was good... ' + sound)
+    nssound.play()
+
+    if block:
+        sleep(nssound.duration())
+
+
+def _playsoundNix(sound, block=True):
+    """Play a sound using GStreamer.
+    Inspired by this:
+    https://gstreamer.freedesktop.org/documentation/tutorials/playback/playbin-usage.html
+    """
+    sound = _canonicalizePath(sound)
+
+    # pathname2url escapes non-URL-safe characters
+    from os.path import abspath, exists
+    try:
+        from urllib.request import pathname2url
+    except ImportError:
+        # python 2
+        from urllib import pathname2url
+
+    import gi
+    gi.require_version('Gst', '1.0')
+    from gi.repository import Gst
+
+    Gst.init(None)
+
+    playbin = Gst.ElementFactory.make('playbin', 'playbin')
+    if sound.startswith(('http://', 'https://')):
+        playbin.props.uri = sound
+    else:
+        path = abspath(sound)
+        if not exists(path):
+            raise PlaysoundException(u'File not found: {}'.format(path))
+        playbin.props.uri = 'file://' + pathname2url(path)
+
+    set_result = playbin.set_state(Gst.State.PLAYING)
+    if set_result != Gst.StateChangeReturn.ASYNC:
+        raise PlaysoundException(
+            "playbin.set_state returned " + repr(set_result))
+
+    # FIXME: use some other bus method than poll() with block=False
+    # https://lazka.github.io/pgi-docs/#Gst-1.0/classes/Bus.html
+    logger.debug('Starting play')
+    if block:
+        bus = playbin.get_bus()
+        try:
+            bus.poll(Gst.MessageType.EOS, Gst.CLOCK_TIME_NONE)
+        finally:
+            playbin.set_state(Gst.State.NULL)
+
+    logger.debug('Finishing play')
+
+
+def _playsoundAnotherPython(otherPython, sound, block=True, macOS=False):
+    '''
+    Mostly written so that when this is run on python3 on macOS, it can invoke
+    python2 on macOS... but maybe this idea could be useful on linux, too.
+    '''
+    from inspect import getsourcefile
+    from os.path import abspath, exists
+    from subprocess import check_call
+    from threading import Thread
+
+    sound = _canonicalizePath(sound)
+
+    class PropogatingThread(Thread):
+        def run(self):
+            self.exc = None
+            try:
+                self.ret = self._target(*self._args, **self._kwargs)
+            except BaseException as e:
+                self.exc = e
+
+        def join(self, timeout=None):
+            super().join(timeout)
+            if self.exc:
+                raise self.exc
+            return self.ret
+
+    # Check if the file exists...
+    if not exists(abspath(sound)):
+        raise PlaysoundException('Cannot find a sound with filename: ' + sound)
+
+    playsoundPath = abspath(getsourcefile(lambda: 0))
+    t = PropogatingThread(
+        target=lambda: check_call([otherPython, playsoundPath, _handlePathOSX(sound) if macOS else sound]))
+    t.start()
+    if block:
+        t.join()
+
+
+from platform import system
+
+system = system()
+
+if system == 'Windows':
+    playsound = _playsoundWin
+elif system == 'Darwin':
+    playsound = _playsoundOSX
+    import sys
+
+    if sys.version_info[0] > 2:
+        try:
+            from AppKit import NSSound
+        except ImportError:
+            logger.warning(
+                "playsound is relying on a python 2 subprocess. Please use `pip3 install PyObjC` if you want playsound to run more efficiently.")
+            playsound = lambda sound, block=True: _playsoundAnotherPython(
+                '/System/Library/Frameworks/Python.framework/Versions/2.7/bin/python', sound, block, macOS=True)
+else:
+    playsound = _playsoundNix
+    if __name__ != '__main__':  # Ensure we don't infinitely recurse trying to get another python instance.
+        try:
+            import gi
+
+            gi.require_version('Gst', '1.0')
+            from gi.repository import Gst
+        except:
+            logger.warning(
+                "playsound is relying on another python subprocess. Please use `pip install pygobject` if you want playsound to run more efficiently.")
+            playsound = lambda sound, block=True: _playsoundAnotherPython('/usr/bin/python3', sound, block, macOS=False)
+
+del system
+
+
+class Sound:
+    def __int__(self, path: str, autoplay: bool = False, loop: bool = False):
+        print("sound init");
+
+        # Add path verification
+        self._path = path;
+        self._loop = loop;
+
+        self._ref = None;
+
+        # Check if autoplay
+        if autoplay:
+            self.play();
+
+    def play(self) -> None:
+        """
+        Plays the sound file at the path registered
+        :return: None
+        """
+
+        self._ref = playsound(self._path);
+
+
 
 
