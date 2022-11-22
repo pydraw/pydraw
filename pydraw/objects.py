@@ -1048,7 +1048,7 @@ class RoundedRectangle(CustomRenderable):
         self._ref = self._screen._canvas.create_polygon(
             tk_vertices,
             fill=self._screen._colorstr(color_state),
-            outline=self._screen._colorstr(self._color), #self._screen._screen._colorstr(self._border.__value__()),
+            outline=self._screen._colorstr(self._color),  # self._screen._screen._colorstr(self._border.__value__()),
             width=self._borderwidth,
             state=state,
             joinstyle=tk.ROUND
