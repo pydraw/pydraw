@@ -3358,7 +3358,10 @@ class Text(CustomRenderable):
             # true_width = font.measure(self._text);
             # true_height = font.metrics('linespace');
 
-            true_width, true_height = self._calculate_transform(font_data);
+            try:
+                true_width, true_height = self._calculate_transform(font_data);
+            except RuntimeError:
+                return
 
             hypotenuse = true_width / 2;
             radians = math.radians(self._angle);
