@@ -13,6 +13,7 @@ line4 = Line(screen, (0, 0), satellite2.center(), Color('green'))
 
 # Communications line
 connection = Line(screen, screen.center(), satellite2.center(), Color('red'))
+connection.back()
 
 earth = Image(screen, '../images/earth.png', screen.center().x(), screen.center().y(), 150, 150)
 earth.move(-earth.width() / 2, -earth.height() / 2)
@@ -37,16 +38,18 @@ satellite2_dx = -3
 satellite2_dy = 2
 
 
-def mousedown(button, location):
+def mousedown(location, button):
     status_text.text('Status: Connected')
     status_text.color(Color('green'))
     connection.color(Color('green'))
+    earth.color(Color.NONE)
 
 
-def mouseup(button, location):
+def mouseup(location, button):
     status_text.text('Status: Disconnected')
     status_text.color(Color('red'))
     connection.color(Color('red'))
+    earth.color(Color('gray'))
 
 
 screen.listen()
