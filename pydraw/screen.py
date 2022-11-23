@@ -682,9 +682,19 @@ class Screen:
 
     def stop(self) -> None:
         """
-        Holds the screen and all objects and prevents the window from closing.
-        (Best used in place of a while loop if the program is simply drawing shapes with no change over time)
+        Deprecated. Use `screen.loop` instead.
         :return: None
+        """
+
+        self.update();
+        self._turtle.done();
+
+    def loop(self) -> None:
+        """
+        Holds the program open and calls screen.update() for you. Must be used at the end of any pyDraw program
+        unless there is a while loop with screen.update() in it instead.
+
+        :returns: None
         """
 
         self.update();
