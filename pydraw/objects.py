@@ -23,6 +23,78 @@ PIXEL_RATIO = 20;
 NoneType = type(None);
 
 
+class Pen:
+    # Pen for drawing a line as an object moves around on the screen
+    def __init__(self, screen: Screen, ):
+        self._screen = screen;
+        self._object = None;  # Set internally for Object's Pens.
+        self._coordinates = [];  # contains all coordinates of the lines
+
+        self._color = Color('black')
+        self._width = 2
+        self._top = False
+
+        self._ref = None;
+
+    def coordinates(self, *coords):
+        self._coordinates = [];
+
+        for pos in coords:
+            if type(pos) is tuple or type(pos) is Location:
+                self._coordinates.append(pos);
+            else:
+                raise InvalidArgumentError('coordinates() takes tuples/Locations only!');
+
+    def color(self, color: Color = None) -> Color:
+        if color is not None:
+            verify(color, Color);
+            self._color = color;
+            self._update();
+
+        return self._color;
+
+    def width(self, width: int = None) -> int:
+        if width is not None:
+            verify(width, int);
+            self._width = width;
+            self._update();
+
+        return self._width;
+
+    def top(self, top: bool = None) -> bool:
+        if top is not None:
+            verify(top, bool);
+            self._top = top;
+            self._update();
+
+        return self._top();
+
+    # noinspection PyProtectedMember
+    def _update(self):
+        """Configure lineitem according to provided arguments:
+        coordlist is sequence of coordinates
+        fill is drawing color
+        width is width of drawn line.
+        top is a boolean value, which specifies if polyitem
+        will be put on top of the canvas' displaylist so it
+        will not be covered by other items.
+        """
+        # if coordlist is not None:
+        #     cl = []
+        #     for x, y in coordlist:
+        #         cl.append(x * self.xscale)
+        #         cl.append(-y * self.yscale)
+
+        self._screen._canvas.coords(self._ref, *self._coordinates)
+
+        if self._color is not None:
+            self._screen._canvas.itemconfigure(self._ref,
+                                               fill=self._screen._colorstr(self._color if self._color is not None else Color.NONE))
+        if self._width is not None:
+            self._screen._canvas.itemconfigure(self._ref, width=self._width)
+        if self._top:
+            self._screen._canvas.tag_raise(self._ref)
+
 class Object:
     """
     A base object containing a location and screen. This ensures coordinates are
