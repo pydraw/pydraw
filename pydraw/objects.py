@@ -25,25 +25,181 @@ NoneType = type(None);
 
 class Pen:
     # Pen for drawing a line as an object moves around on the screen
-    def __init__(self, screen: Screen, ):
+    def __init__(self, screen: Screen, x: float, y: float, color: Color = Color('black'), width: int = 2, top: bool = False):
         self._screen = screen;
         self._object = None;  # Set internally for Object's Pens.
         self._coordinates = [];  # contains all coordinates of the lines
+        self._location = Location(x, y)  # used for when _drawing = False
 
-        self._color = Color('black')
-        self._width = 2
-        self._top = False
+        # self._coordinates.append(Location(x, y));
 
-        self._ref = None;
+        self._color = color;
+        self._width = width;
+        self._top = top;
 
-    def coordinates(self, *coords):
-        self._coordinates = [];
+        self._drawing = False
 
-        for pos in coords:
-            if type(pos) is tuple or type(pos) is Location:
-                self._coordinates.append(pos);
+        self._history = [];  # stores old line _refs for clearing
+        self._ref = None;  # currentLine
+        self._setup();
+
+    def move(self, *args, **kwargs):
+        """
+        Adds a new coordinate to the pen line with a passed difference from the previous coordinate.
+        Requires coordinates to be len > 0.
+
+        Can take two numbers (dx, dy), a tuple, or a Location
+        :param dx: the dx to move by
+        :param dy: the dy to move by
+        :return: the location (after change)
+        """
+
+        diff = (0, 0);
+
+        # Basically we don't have an empty tuple at the start.
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is diff or
+                              type(args[0]) is tuple and not len(args[0]) == 0):
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+                diff = (args[0][0], args[0][1]);
+            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+                diff = (args[0], args[1]);
             else:
-                raise InvalidArgumentError('coordinates() takes tuples/Locations only!');
+                raise InvalidArgumentError('move() takes a tuple/Location '
+                                           'or two numbers (dx, dy)!');
+        elif len(kwargs) == 0:
+            raise InvalidArgumentError('move() takes a tuple/Location '
+                                       'or two numbers (dx, dy)!');
+
+        for (name, value) in kwargs.items():
+            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+                raise InvalidArgumentError('move() takes a tuple/Location '
+                                           'or two numbers (dx, dy)!');
+
+            if name.lower() == 'dx':
+                diff = (value, diff[1]);
+            if name.lower() == 'dy':
+                diff = (diff[0], value);
+
+        if not len(self._coordinates) > 0:
+            raise PydrawError('No starting coordinate to move Pen from.');
+
+        if self._drawing:
+            location = Location(self._coordinates[-1].x() + diff[0], self._coordinates[-1].y() + diff[1])
+            self._coordinates.append(location)
+        else:
+            self._location = Location(self._coordinates[-1].x() + diff[0], self._coordinates[-1].y() + diff[1])
+
+        self._update()
+
+    def moveto(self, *args, **kwargs):
+        """
+        Adds a new coordinate to the pen line.
+
+        Can take two coordinates (x, y), a tuple, or a Location
+        :param x: the x to move to
+        :param y: the y to move to
+        :return: the location (after change)
+        """
+
+        location = None;
+
+        # Basically we don't have an empty tuple at the start.
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
+                              type(args[0]) is tuple and not len(args[0]) == 0):
+            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+                location = (args[0][0], args[0][1]);
+            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+                location = (args[0], args[1]);
+            else:
+                raise InvalidArgumentError('move() takes a tuple/Location '
+                                           'or two numbers (dx, dy)!');
+        elif len(kwargs) == 0:
+            raise InvalidArgumentError('moveto() takes a tuple/location '
+                                       'or two numbers (dx, dy)!');
+
+        for (name, value) in kwargs.items():
+            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+                raise InvalidArgumentError('moveto() takes a tuple/location '
+                                           'or two numbers (dx, dy)!');
+
+            if name.lower() == 'x':
+                location = (value, location[1]);
+            if name.lower() == 'y':
+                location = (location[0], value);
+
+        if not len(self._coordinates) > 0:
+            raise PydrawError('No starting coordinate to move Pen from.');
+
+        if self._drawing:
+            location = Location(location[0], location[1])
+            self._coordinates.append(location)
+        else:
+            self._location = Location(location[0], location[1])
+
+        self._update()
+
+    def coordinates(self, *coords) -> list[Location]:
+
+        if len(coords) > 0:
+            self._coordinates = [];
+
+            for pos in coords:
+                if type(pos) is tuple or type(pos) is Location:
+                    self._coordinates.append(Location(pos[0], pos[1]));
+                else:
+                    raise InvalidArgumentError('coordinates() takes tuples/Locations only!');
+
+            self._update();
+
+        return self._coordinates;
+
+    def start(self):
+        self._drawing = True
+        self._coordinates = [Location(self._location)]
+
+        self._setup();
+
+    def stop(self):
+        if len(self._coordinates) > 0:
+            self._location = self._coordinates[-1]
+            # don't clear coordinates in case they get altered after we are done drawing
+
+        self._history.append(self._ref)
+        self._drawing = False
+
+    def drawing(self, drawing: bool = None) -> bool:
+        if drawing is not None:
+            if drawing and not self._drawing:
+                self.start()
+            elif not drawing and self._drawing:
+                self.stop()
+
+        return self._drawing
+
+    def toggle(self) -> bool:
+        if self._drawing:
+            self.stop()
+        else:
+            self.start()
+
+        return self._drawing
+
+    # noinspection PyProtectedMember
+    def clear(self):
+        """
+        Clear the line from the screen and all history (coordinates).
+        """
+
+        if len(self._coordinates) > 0:
+            self._location = self._coordinates[-1]
+        self._coordinates = []
+
+        # self._screen._canvas.itemconfigure(self._ref, style=tk.HIDDEN)
+        if self._ref is not None: self._screen._canvas.coords(self._ref, 0, 0, 0, 0);
+        for line in self._history:
+            self._screen._canvas.coords(line, 0, 0, 0, 0);
+
+        self._history.clear()
 
     def color(self, color: Color = None) -> Color:
         if color is not None:
@@ -69,31 +225,46 @@ class Pen:
 
         return self._top();
 
+    def _setup(self):
+        # noinspection PyProtectedMember
+        self._ref = self._screen._canvas.create_line(0, 0, 0, 0, fill="", width=2, capstyle=tk.ROUND)
+
     # noinspection PyProtectedMember
     def _update(self):
-        """Configure lineitem according to provided arguments:
-        coordlist is sequence of coordinates
-        fill is drawing color
-        width is width of drawn line.
-        top is a boolean value, which specifies if polyitem
-        will be put on top of the canvas' displaylist so it
-        will not be covered by other items.
-        """
-        # if coordlist is not None:
-        #     cl = []
-        #     for x, y in coordlist:
-        #         cl.append(x * self.xscale)
-        #         cl.append(-y * self.yscale)
+        if self._ref is None:
+            raise PydrawError('Pen has not been started yet!');
 
-        self._screen._canvas.coords(self._ref, *self._coordinates)
+        if self._coordinates is not None:
+            cl = []
+            for loc in self._coordinates:
+                x = loc[0];
+                y = loc[1];
+
+                cl.append(x - (self._screen.width() / 2))
+                cl.append(y - (self._screen.height() / 2))
+
+            self._screen._canvas.coords(self._ref, *cl)
 
         if self._color is not None:
             self._screen._canvas.itemconfigure(self._ref,
                                                fill=self._screen._colorstr(self._color if self._color is not None else Color.NONE))
+            if len(self._history) > 0:
+                for line in self._history:
+                    self._screen._canvas.itemconfigure(line,
+                                                       fill=self._screen._colorstr(self._color if self._color is not None else Color.NONE))
         if self._width is not None:
             self._screen._canvas.itemconfigure(self._ref, width=self._width)
+
+            if len(self._history) > 0:
+                for line in self._history:
+                    self._screen._canvas.itemconfigure(line, width=self._width)
         if self._top:
             self._screen._canvas.tag_raise(self._ref)
+
+            if len(self._history) > 0:
+                for line in self._history:
+                    self._screen._canvas.tag_raise(line)
+
 
 class Object:
     """
@@ -109,6 +280,9 @@ class Object:
 
         # noinspection PyProtectedMember
         self._screen._add(self);
+
+        self._pen = Pen(screen, self._location.x(), self._location.y())
+        self._pen._object = self;
 
     def x(self, x: float = None) -> float:
         if x is not None:
@@ -173,6 +347,22 @@ class Object:
 
     def remove(self) -> None:
         self._screen.remove(self);
+
+    # Pen methods
+    def pen(self, color: Color = Color('black'), width: int = 2, top: bool = False):
+        pass
+
+    def pen_clear(self):
+        pass
+
+    def pen_stop(self):
+        pass
+
+    def pen_width(self, width: int = None) -> int:
+        pass
+
+    def pen_top(self, top: bool = None) -> bool:
+        pass
 
     # # noinspection PyProtectedMember
     # def add(self) -> None:
