@@ -400,7 +400,7 @@ class Object:
         pass;
 
 
-class Renderable(Object):
+class _Renderable(Object):
     def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
                  color: Color = Color('black'),
                  border: Color = Color.NONE,
@@ -1136,7 +1136,7 @@ class Renderable(Object):
             pass;
 
 
-class FRenderable(Object):
+class Renderable(Object):
     """
     Test class for new itemconfigure-based pyDraw objects.
 
@@ -1562,7 +1562,6 @@ class FRenderable(Object):
         """
 
         constructor = type(self);
-
         return constructor(self._screen, self.x(), self.y(), self.width(), self.height(), self.color(), self.border(),
                            self.fill(), self.rotation(), self.visible());
 
@@ -1978,19 +1977,6 @@ class FRenderable(Object):
             pass;
 
 
-class FRectangle(FRenderable):
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
-
-
 class CustomRenderable(Renderable):
     """
     A wrapper class to distintify classes that extend Renderable but have some custom functionality.
@@ -2016,7 +2002,7 @@ class RoundedRectangle(CustomRenderable):
 
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
                           Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
 
         self._location = Location(x, y);
         self._width = width;
@@ -2042,7 +2028,7 @@ class RoundedRectangle(CustomRenderable):
 
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
                           Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
 
         self._location = Location(x, y);
         self._width = width;
@@ -2068,7 +2054,7 @@ class RoundedRectangle(CustomRenderable):
 
         self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
                           Location(location.x(), location.y() + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
 
         self._location = location.clone();
         self._width = width;
@@ -2094,7 +2080,7 @@ class RoundedRectangle(CustomRenderable):
 
         self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
                           Location(location.x(), location.y() + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
 
         self._location = location.clone();
         self._width = width;
@@ -2237,15 +2223,15 @@ class CustomPolygon(CustomRenderable):
                  visible: bool = True):
         self._screen = screen;
         self._color = color;
-        self._border = border if border is not None else Color('');
-        self._borderwidth = 1;
+        self._border = border if border is not None else Color.NONE;
+        self._border_width = 1;
         self._fill = fill;
         self._angle = rotation;
         self._visible = visible;
 
         self._screen._add(self);
 
-        if len(vertices) <= 2:
+        if len(vertices) < 3:
             raise InvalidArgumentError('Must pass at least 3 vertices to CustomPolygon!');
 
         xmin = vertices[0][0];
@@ -2268,7 +2254,7 @@ class CustomPolygon(CustomRenderable):
             if new_vertex.y() > ymax:
                 ymax = new_vertex.y();
 
-        self._numsides = len(real_vertices);
+        self._num_sides = len(real_vertices);
         self._vertices = real_vertices;
         self._current_vertices = self._vertices;
         self._location = Location(xmin, ymin);
@@ -2281,18 +2267,18 @@ class CustomPolygon(CustomRenderable):
         for vertex in real_vertices:
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
                                 (vertex.y() - (self._screen.height() / 2))));
-            # tk_vertices.append((self.x() - ((self._screen.width() / 2) + 1),
-            #                                 (self.y() - (self._screen.height() / 2)) + self.height()));
-
         state = tk.NORMAL if self._visible else tk.HIDDEN;
 
         self._ref = self._screen._screen.cv.create_polygon(
             tk_vertices,
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
-            width=self._borderwidth,
+            width=self._border_width,
             state=state
         );
+
+        self._pen = Pen(screen, self._location.x(), self._location.y())
+        self._pen._object = self;
 
     def move(self, *args, **kwargs):
         """
@@ -2300,11 +2286,16 @@ class CustomPolygon(CustomRenderable):
         :return: None
         """
 
-        for vertice in self._vertices:
-            vertice.move(*args, **kwargs);
-
         self._location.move(*args, **kwargs);
-        self.update();
+
+        new_location = self._screen.canvas_location(self._location.x(), self._location.y())
+        self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
+
+        # for vertice in self._vertices:
+        #     vertice.move(*args, **kwargs);
+
+        # self._location.move(*args, **kwargs);
+        # self.update();
 
     def moveto(self, *args, **kwargs):
         """
@@ -2312,28 +2303,10 @@ class CustomPolygon(CustomRenderable):
         :return: None
         """
 
-        location = self._location;
+        self._location.moveto(*args, **kwargs);
 
-        # Basically we don't have an empty tuple at the start.
-        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
-                              type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
-                location = Location(args[0][0], args[0][1]);
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
-                location = Location(args[0], args[1]);
-
-        for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('Object#move() must take either a tuple/location '
-                                           'or two numbers (dx, dy)!');
-
-            if name.lower() == 'x':
-                location = Location(value, location.y());
-            if name.lower() == 'y':
-                location = Location(location.x(), value);
-
-        diff = (location.x() - self._location.x(), location.y() - self._location.y());
-        self.move(diff);
+        new_location = self._screen.canvas_location(self._location.x(), self._location.y())
+        self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
 
     def width(self, width: float = None) -> float:
         """
@@ -2344,8 +2317,11 @@ class CustomPolygon(CustomRenderable):
 
         if width is not None:
             verify(width, (float, int));
-            self._width = width;
-            self.update();
+            # self._width = width;
+            print(f'updating coords')
+            self._update_coords(width=width)
+
+            # self.update();
             # raise UnsupportedError('Modifying the width/height of CustomPolygons is not currently possible');
 
         return self._width;
@@ -2359,8 +2335,10 @@ class CustomPolygon(CustomRenderable):
 
         if height is not None:
             verify(height, (float, int))
-            self._height = height;
-            self.update();
+            # self._height = height;
+            self._update_coords(height=height)
+
+            # self.update();
             # raise UnsupportedError('Modifying the width/height of CustomPolygons is not currently possible');
 
         return self._height;
@@ -2371,15 +2349,15 @@ class CustomPolygon(CustomRenderable):
         self._angle += angle_diff;
 
         if self._angle >= 360:
-            self._angle = self._angle - 360;
+            self._angle = self._angle % 360;
 
-        self.update();
+        self._update_coords()
 
     def rotation(self, angle: float = None) -> float:
         if angle is not None:
             verify(angle, (float, int));
             self._angle = angle;
-            self.update();
+            self._update_coords()
 
         return self._angle;
 
@@ -2455,7 +2433,8 @@ class CustomPolygon(CustomRenderable):
         return Location(centroid_x + diff_x, centroid_y + diff_y);
 
     def vertices(self) -> list:
-        return self._current_vertices.copy();
+        self._current_vertices = self._get_ref_vertices()  # update vertices during a non-intensive call, typically
+        return self._current_vertices;
 
     def clone(self):
         """
@@ -2495,6 +2474,56 @@ class CustomPolygon(CustomRenderable):
 
         return new_vertices;
 
+    def _get_ref_vertices(self) -> list:
+        def pairwise(iterable):
+            i = iter(iterable)
+            while True:
+                yield i.next(), i.next()
+
+        new_vertices = []
+        tk_coords = self._screen._canvas.coords(self._ref)
+        print(len(tk_coords), tk_coords)
+        last = None
+
+        for j in range(0, len(tk_coords), 2):
+            x = tk_coords[j]
+            y = tk_coords[j + 1]
+            new_vertices.append(Location(x + self._screen.width() / 2, y + self._screen.height() / 2))
+        # for x, y in pairwise(tk_coords):
+        #     new_vertices.append(Location(x + self._screen.width() / 2, y + self._screen.height() / 2))
+        return new_vertices
+
+    def _update_coords(self, width: float = None, height: float = None):
+        width = width if width is not None else self._width;
+        height = height if height is not None else self._height;
+
+        cx = self.x() + (self._width / 2);
+        cy = self.y() + (self._height / 2);
+
+        # calculate the scaling factor
+        # scale_factor = (self._width / width, self._height / height);
+        scale_factor = (width / self._width, height / self._height);
+
+        # self._current_vertices = self._vertices.copy();
+        self._current_vertices = self._get_ref_vertices()
+        for vertex in self._current_vertices:
+            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, scale_factor[1] * (vertex.y() - cy) + cy);
+            vertex.move(dx=(self._width - width) / 2);
+            vertex.move(dy=(self._height - height) / 2);
+
+        self._width = width
+        self._height = height
+
+        self._current_vertices = self._rotate(self._angle);
+
+        tk_vertices = [];  # we need to convert to tk's coordinate system.
+        for vertex in self._current_vertices:
+            tk_vertices.append(vertex.x() - (self._screen.width() / 2));
+            tk_vertices.append((vertex.y() - (self._screen.height() / 2)));
+
+        print('new coords', self._current_vertices)
+        self._screen._canvas.coords(self._ref, tk_vertices)
+
     def update(self):
         self._check();
 
@@ -2516,7 +2545,7 @@ class CustomPolygon(CustomRenderable):
             if vertex.y() > ymax:
                 ymax = vertex.y();
 
-        self._numsides = len(self._vertices);
+        self._num_sides = len(self._vertices);
         self._location = Location(xmin, ymin);
 
         width = xmax - xmin;
@@ -2549,7 +2578,7 @@ class CustomPolygon(CustomRenderable):
             tk_vertices,
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
-            width=self._borderwidth,
+            width=self._border_width,
             state=state
         );
 
@@ -2558,6 +2587,20 @@ class CustomPolygon(CustomRenderable):
 
 
 class Rectangle(Renderable):
+    # Full constructor for cloning
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                          Location(x, y + height)];
+        # self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, (int, float), (int, float), (int, float), (int, float))
     def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
@@ -2566,7 +2609,7 @@ class Rectangle(Renderable):
                  rotation: float = 0,
                  visible: bool = True):
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
@@ -2577,7 +2620,7 @@ class Rectangle(Renderable):
                  rotation: float = 0,
                  visible: bool = True):
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
@@ -2588,7 +2631,7 @@ class Rectangle(Renderable):
                  rotation: float = 0,
                  visible: bool = True):
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float))
@@ -2603,7 +2646,7 @@ class Rectangle(Renderable):
 
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
                           Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color)
@@ -2619,7 +2662,7 @@ class Rectangle(Renderable):
 
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
                           Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, Location, (int, float), (int, float), Color, Color)
@@ -2634,7 +2677,7 @@ class Rectangle(Renderable):
 
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
                           Location(x, y + height)];
-        self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10));
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
 
@@ -2645,6 +2688,23 @@ class Oval(Renderable):
                 (-9.51, -3.09), (-8.09, -5.88), (-5.88, -8.09),
                 (-3.09, -9.51), (-0.00, -10.00), (3.09, -9.51),
                 (5.88, -8.09), (8.09, -5.88), (9.51, -3.09));
+
+    # Full constructor for cloning
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._width = width;
+        self._height = height;
+
+        self._wedges = PIXEL_RATIO;
+
+        vertices = self._convert_vertices();
+        self._shape = vertices;
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, (int, float), (int, float), (int, float), (int, float))
     def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
@@ -2811,6 +2871,17 @@ class Oval(Renderable):
 
 
 class Triangle(Renderable):
+    # Full constructor for cloning
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._shape = ((10, -10), (0, 10), (-10, -10))
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
+
     @overload(Screen, (int, float), (int, float), (int, float), (int, float))
     def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
@@ -2882,6 +2953,23 @@ class Triangle(Renderable):
 
 
 class Polygon(Renderable):
+    # Full constructor for cloning
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
+                 color: Color = Color('black'),
+                 border: Color = None,
+                 fill: bool = True,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._num_sides = num_sides;
+        radius = PIXEL_RATIO / 2;
+        shape_points = [];
+        for i in range(num_sides):
+            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                 radius * math.cos(2 * math.pi / num_sides * i)));
+        self._shape = shape_points;
+
+        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible);
 
     @overload(Screen, int, (int, float), (int, float), (int, float), (int, float))
     def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
@@ -3122,6 +3210,67 @@ class Image(Renderable):
 
     # (x, y) INITIALIZERS
 
+    @overload(Screen, str, (int, float), (int, float), (int, float), (int, float), Color, Color, int, bool)
+    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
+                 width: float = None,
+                 height: float = None,
+                 color: Color = None,
+                 border: Color = Color.NONE,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._image_name = image;
+        self._original = None;
+
+        # Filetype Checking
+        split = image.split('.');
+        if len(split) <= 1:
+            raise PydrawError('File must have extension filetype:', self._image_name);
+
+        filetype = split[len(split) - 1]
+
+        import os;
+        if not os.path.isfile(image):
+            raise InvalidArgumentError(f'Image does not exist or is directory: {image}');
+
+        if filetype in self.TKINTER_TYPES:
+            self._image = tk.PhotoImage(name=image, file=image);
+        else:
+            try:
+                from PIL import Image, ImageTk;
+                image = Image.open(self._image_name);
+                self._original = image;  # We save the originally loaded image for easy modification
+
+                self._image = ImageTk.PhotoImage(image);
+            except:
+                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
+                                       'Install Pillow via: \'pip install pillow\'.');
+
+        self._width = self._image.width();
+        self._height = self._image.height();
+
+        self._frame = -1;
+        self._frames = -1;
+
+        self._mask = 123;
+
+        # We have to monkey patch PIL if we modify the image, but we don't wanna cause a RecursionError (call once)
+        self._patched = False;
+
+        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
+                         rotation=rotation, visible=visible);
+        self._setup()
+
+        if width is not None and width != self._width:
+            self.width(width);
+        if height is not None and height != self._height:
+            self.height(height);
+
+        if color is not None:
+            self.color(color);
+
+        if border is not None:
+            self.border(border);
+
     @overload(Screen, str, (int, float), (int, float))
     def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
                  width: float = None,
@@ -3172,9 +3321,9 @@ class Image(Renderable):
                          rotation=rotation, visible=visible);
         self._setup()
 
-        if width is not None:
+        if width is not None and width != self._width:
             self.width(width);
-        if height is not None:
+        if height is not None and height != self._height:
             self.height(height);
 
         if color is not None:
@@ -3233,9 +3382,9 @@ class Image(Renderable):
                          rotation=rotation, visible=visible);
         self._setup()
 
-        if width is not None:
+        if width is not None and width != self._width:
             self.width(width);
-        if height is not None:
+        if height is not None and height != self._height:
             self.height(height);
 
         if color is not None:
@@ -3294,9 +3443,9 @@ class Image(Renderable):
                          rotation=rotation, visible=visible);
         self._setup()
 
-        if width is not None:
+        if width is not None and width != self._width:
             self.width(width);
-        if height is not None:
+        if height is not None and height != self._height:
             self.height(height);
 
         if color is not None:
@@ -3360,9 +3509,9 @@ class Image(Renderable):
                          rotation=rotation, visible=visible);
         self._setup()
 
-        if width is not None:
+        if width is not None and width != self._width:
             self.width(width);
-        if height is not None:
+        if height is not None and height != self._height:
             self.height(height);
 
         if color is not None:
@@ -3424,9 +3573,9 @@ class Image(Renderable):
                          rotation=rotation, visible=visible);
         self._setup()
 
-        if width is not None:
+        if width is not None and width != self._width:
             self.width(width);
-        if height is not None:
+        if height is not None and height != self._height:
             self.height(height);
 
         if color is not None:
@@ -3488,9 +3637,9 @@ class Image(Renderable):
                          rotation=rotation, visible=visible);
         self._setup()
 
-        if width is not None:
+        if width is not None and width != self._width:
             self.width(width);
-        if height is not None:
+        if height is not None and height != self._height:
             self.height(height);
 
         if color is not None:
@@ -3741,6 +3890,11 @@ class Image(Renderable):
         """
 
         return self._frames;
+
+    def clone(self) -> 'Image':
+        constructor = type(self)
+        return constructor(self._screen, self._image_name, self.x(), self.y(), self.height(), self.width(),
+                           self.color(), self.border(), self.rotation(), self.visible(()))
 
     @staticmethod
     def _monkey_patch_del():
