@@ -3916,6 +3916,11 @@ class Image(Renderable):
 
         ImageTk.PhotoImage.__del__ = new_del
 
+    def _check_patch(self):
+        if not self._patched:
+            self._monkey_patch_del();  # If we do have PIL we need to monkey patch this immediately.
+            self._patched = True;
+
     # noinspection PyProtectedMember
     def update(self, updated: bool = False):
         self._check();
@@ -3924,9 +3929,7 @@ class Image(Renderable):
             try:
                 from PIL import Image, ImageTk, ImageOps;
 
-                if not self._patched:
-                    self._monkey_patch_del();  # If we do have PIL we need to monkey patch this immediately.
-                    self._patched = True;
+                self._check_patch()
 
                 # Optimized (only read file once, caching everything else)
                 # TODO: In the future, caching images by filename could increase efficiency, but have serious pitfalls.
@@ -4305,7 +4308,8 @@ class Text(CustomRenderable):
         if text is not None:
             verify(text, str);
             self._text = text;
-            self.update();
+            self._screen._canvas.itemconfigure(self._ref, text=self._text)
+            # self.update();
 
         return self._text;
 
@@ -4337,7 +4341,8 @@ class Text(CustomRenderable):
         if color is not None:
             verify(color, Color);
             self._color = color;
-            self.update();
+            self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(self._color))
+            # self.update();
 
         return self._color;
 
@@ -4351,7 +4356,8 @@ class Text(CustomRenderable):
         if font is not None:
             verify(font, str);
             self._font = font;
-            self.update();
+            self._update_font()
+            # self.update();
 
         return self._font;
 
@@ -4365,7 +4371,8 @@ class Text(CustomRenderable):
         if size is not None:
             verify(size, int);
             self._size = size;
-            self.update();
+            self._update_font()
+            # self.update();
 
         return self._size;
 
@@ -4378,8 +4385,12 @@ class Text(CustomRenderable):
 
         if align is not None:
             verify(align, str);
+            if align.lower() not in self._aligns:
+                raise PydrawError(f'Passed alignment ("{align}") is not a valid alignment. Options: left, center, right')
+
             self._align = align.lower();
-            self.update();
+            self._screen._canvas.itemconfigure(self._ref, align=self._aligns[self._align])
+            # self.update();
 
         return self._align;
 
@@ -4393,7 +4404,8 @@ class Text(CustomRenderable):
         if bold is not None:
             verify(bold, bool);
             self._bold = bold;
-            self.update();
+            self._update_font()
+            # self.update();
 
         return self._bold;
 
@@ -4407,7 +4419,8 @@ class Text(CustomRenderable):
         if italic is not None:
             verify(italic, bool);
             self._italic = italic;
-            self.update();
+            self._update_font()
+            # self.update();
 
         return self._italic;
 
@@ -4421,7 +4434,8 @@ class Text(CustomRenderable):
         if underline is not None:
             verify(underline, bool);
             self._underline = underline;
-            self.update();
+            self._update_font()
+            # self.update();
 
         return self._underline;
 
@@ -4435,7 +4449,8 @@ class Text(CustomRenderable):
         if strikethrough is not None:
             verify(strikethrough, bool);
             self._strikethrough = strikethrough;
-            self.update();
+            self._update_font()
+            # self.update();
 
         return self._strikethrough;
 
@@ -4449,7 +4464,8 @@ class Text(CustomRenderable):
         if rotation is not None:
             verify(rotation, (float, int));
             self._angle = rotation;
-            self.update();
+            self._screen._canvas.itemconfigure(self._ref, angle=self._angle)
+            # self.update();
 
         return self._angle;
 
@@ -4535,29 +4551,27 @@ class Text(CustomRenderable):
         :return: a list of Locations
         """
 
-        # First get some values that we gonna use later
-        theta = math.radians(self._angle);
-        cosine = math.cos(theta);
-        sine = math.sin(theta);
-
-        centroid_x = self.center().x();
-        centroid_y = self.center().y();
-
         vertices = [Location(self.x(), self.y()), Location(self.x() + self.width(), self.y()),
                     Location(self.x() + self.width(), self.y() + self.height()),
                     Location(self.x(), self.y() + self.height())];
-
-        new_vertices = []
-        for vertex in vertices:
-            # We have to create these separately because they're ironically used in each others calculations xD
-            old_x = vertex.x() - centroid_x;
-            old_y = vertex.y() - centroid_y;
-
-            new_x = (old_x * cosine - old_y * sine) + centroid_x;
-            new_y = (old_x * sine + old_y * cosine) + centroid_y;
-            new_vertices.append(Location(new_x, new_y));
-
         if self._angle != 0:
+            # First get some values that we gonna use later
+            theta = math.radians(self._angle);
+            cosine = math.cos(theta);
+            sine = math.sin(theta);
+
+            centroid_x = self.center().x();
+            centroid_y = self.center().y();
+
+            new_vertices = []
+            for vertex in vertices:
+                # We have to create these separately because they're ironically used in each others calculations xD
+                old_x = vertex.x() - centroid_x;
+                old_y = vertex.y() - centroid_y;
+
+                new_x = (old_x * cosine - old_y * sine) + centroid_x;
+                new_y = (old_x * sine + old_y * cosine) + centroid_y;
+                new_vertices.append(Location(new_x, new_y));
             vertices = new_vertices;
 
         return vertices;
@@ -4572,7 +4586,10 @@ class Text(CustomRenderable):
         if visible is not None:
             verify(visible, bool);
             self._visible = visible;
-            self.update();
+
+            state = tk.NORMAL if self._visible else tk.HIDDEN;
+            self._screen._canvas.itemconfigure(self._ref, state=state)
+            # self.update();
 
         return self._visible;
 
@@ -4598,6 +4615,21 @@ class Text(CustomRenderable):
                     align=self._align, bold=self._bold, italic=self._italic,
                     underline=self._underline, strikethrough=self._strikethrough,
                     rotation=self._angle, visible=self._visible);
+
+    def _update_font(self):
+        # Handle font and decorations
+        decorations = '';
+        if self.bold():
+            decorations += 'bold ';
+        if self.italic():
+            decorations += 'italic ';
+        if self.underline():
+            decorations += 'underline ';
+        if self.strikethrough():
+            decorations += 'overstrike ';
+        font_data = (self.font(), -self.size(), decorations);
+
+        self._screen._canvas.itemconfigure(self._ref, font=font_data)
 
     # noinspection PyProtectedMember
     def update(self) -> None:
@@ -4747,7 +4779,11 @@ class Line(Object):
             else:
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.');
 
-        self.update();
+        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
+                                                        self._pos1.y() - self._screen.height() / 2,
+                                                        self._pos2.x() - self._screen.width() / 2,
+                                                        self._pos2.y() - self._screen.height() / 2])
+        # self.update();
         return self._pos1;
 
     def pos2(self, *args) -> Location:
@@ -4767,7 +4803,11 @@ class Line(Object):
             else:
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.');
 
-        self.update();
+        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
+                                                self._pos1.y() - self._screen.height() / 2,
+                                                self._pos2.x() - self._screen.width() / 2,
+                                                self._pos2.y() - self._screen.height() / 2])
+        # self.update();
         return self._pos2;
 
     def move(self, *args, **kwargs) -> None:
@@ -4817,7 +4857,11 @@ class Line(Object):
             self._pos1.move(diff[0], diff[1]);
             self._pos2.move(diff[0], diff[1]);
 
-        self.update();
+        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
+                                                self._pos1.y() - self._screen.height() / 2,
+                                                self._pos2.x() - self._screen.width() / 2,
+                                                self._pos2.y() - self._screen.height() / 2])
+        # self.update();
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -4858,10 +4902,14 @@ class Line(Object):
             raise TypeError('Incorrect Argumentation: Requires either two locations, tuples, or four numbers (x1, y1, '
                             'x2, y2)');
 
-        self.update();
+        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
+                                                self._pos1.y() - self._screen.height() / 2,
+                                                self._pos2.x() - self._screen.width() / 2,
+                                                self._pos2.y() - self._screen.height() / 2])
+        # self.update();
 
     # noinspection PyUnusedLocal
-    # TODO: Allow for point specification.
+    # TODO: Allow for point specification (center)
     def lookat(self, *args, **kwargs) -> None:
         """
         Make the line look at the given point by moving the second point.
@@ -4949,7 +4997,11 @@ class Line(Object):
         new_y = (old_x * sine + old_y * cosine) + origin.y();
 
         point.moveto(new_x, new_y);
-        self.update();
+        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
+                                                self._pos1.y() - self._screen.height() / 2,
+                                                self._pos2.x() - self._screen.width() / 2,
+                                                self._pos2.y() - self._screen.height() / 2])
+        # self.update();
 
     def location(self) -> tuple:
         """
@@ -4981,7 +5033,9 @@ class Line(Object):
         if color is not None:
             verify(color, Color);
             self._color = color;
-            self.update();
+
+            self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(self._color))
+            # self.update();
 
         return self._color;
 
@@ -4995,7 +5049,8 @@ class Line(Object):
         if thickness is not None:
             verify(thickness, int);
             self._thickness = thickness;
-            self.update();
+            self._screen._canvas.itemconfigure(self._ref, width=self._thickness)
+            # self.update();
 
         return self._thickness;
 
@@ -5019,7 +5074,8 @@ class Line(Object):
                     verify(dash, int);
 
             self._dashes = dashes;
-            self.update();
+            self._screen._canvas.itemconfigure(self._ref, dash=self._dashes)
+            # self.update();
 
         return self._dashes;
 
@@ -5033,7 +5089,10 @@ class Line(Object):
         if visible is not None:
             verify(visible, bool);
             self._visible = visible;
-            self.update();
+
+            state = tk.NORMAL if self._visible else tk.HIDDEN;
+            self._screen._canvas.itemconfigure(self._ref, state=state)
+            # self.update();
 
         return self._visible;
 
