@@ -42,7 +42,7 @@ TO_COLORS = {ChessColor.WHITE: WHITE_MOVE_TO_COLOR, ChessColor.BLACK: BLACK_MOVE
 
 class Renderer:
     def __init__(self, screen: Screen, x: float, y: float, size: float):
-        self.screen = screen;
+        self.screen = screen
         self.x = x
         self.y = y
         self.size = size

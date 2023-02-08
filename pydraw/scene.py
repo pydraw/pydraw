@@ -1,4 +1,4 @@
-from pydraw import Screen, Location;
+from pydraw import Screen, Location
 
 
 class Scene:
@@ -11,14 +11,14 @@ class Scene:
     """
 
     def __init__(self):
-        self._screen = None;
+        self._screen = None
 
     def screen(self):
         """
         Retrieve the screen that the scene is tied to
         :return: a Screen
         """
-        return self._screen;
+        return self._screen
 
     def start(self) -> None:
         """
@@ -84,6 +84,6 @@ class Scene:
         :return: None
         """
 
-        self._screen = screen;
-        self.start();
-        self.run();
+        self._screen = screen
+        self.start()
+        self.run()

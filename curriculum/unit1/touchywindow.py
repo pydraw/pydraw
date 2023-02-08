@@ -10,7 +10,7 @@ def mousedown(location, button):
 
 
 def mouseup(location, button):
-    text.text("Press me!");
+    text.text("Press me!")
 
 
 screen.listen()

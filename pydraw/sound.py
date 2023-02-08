@@ -254,17 +254,17 @@ del system
 
 class Sound:
     def __int__(self, path: str, autoplay: bool = False, loop: bool = False):
-        print("sound init");
+        print("sound init")
 
         # Add path verification
-        self._path = path;
-        self._loop = loop;
+        self._path = path
+        self._loop = loop
 
-        self._ref = None;
+        self._ref = None
 
         # Check if autoplay
         if autoplay:
-            self.play();
+            self.play()
 
     def play(self) -> None:
         """
@@ -272,6 +272,6 @@ class Sound:
         :return: None
         """
 
-        self._ref = playsound(self._path);
+        self._ref = playsound(self._path)
 
 

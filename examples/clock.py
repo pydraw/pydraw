@@ -20,7 +20,7 @@ count = twilight + 20  # since we have 40 wedges, 20 past midnigth will be the 3
 hour_position = twilight
 hour_hand.lookat(positions[hour_position])
 
-fps = 1  # Clock updates once a second ;)
+fps = 1  # Clock updates once a second )
 running = True
 while running:
     if count >= len(positions):

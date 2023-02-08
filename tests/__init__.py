@@ -1,2 +1,2 @@
 import sys
-sys.path.append('../pydraw');
+sys.path.append('../pydraw')

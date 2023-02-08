@@ -38,7 +38,7 @@ class AIPlayer:
         board.make_move(move)
 
         finish_time = time.time()
-        print('Calculation finished;',
+        print('Calculation finished',
               'Start Time:', start_time,
               'Finish Time:', finish_time,
               'Took:', finish_time - start_time)

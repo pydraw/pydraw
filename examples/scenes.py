@@ -80,7 +80,7 @@ class StartScene(Scene):
 
         self.button = Rectangle(self.screen(), self.screen().width() / 2, self.screen().height() / 2 + 75,
                                 100, 50, border=Color('black'), fill=False)
-        self.button.move(-self.button.width() / 2, self.button.height() / 2);
+        self.button.move(-self.button.width() / 2, self.button.height() / 2)
         self.button_text = Text(self.screen(), 'Start', self.button.x(), self.button.y())
         self.button_text.center(self.button.center())
 
@@ -90,14 +90,14 @@ class StartScene(Scene):
             self.screen().scene(GameScene())
 
     def run(self):
-        self.screen().listen();
+        self.screen().listen()
 
         running = True
         fps = 30
         # while running:
         #     self.screen().update()
         #     self.screen().sleep(1 / fps)
-        self.screen().stop();
+        self.screen().stop()
 
 
 screen = Screen(800, 600)

@@ -72,7 +72,7 @@ class Square(Enum):
 
     def is_black(self):
         dark = 0xAA55AA55AA55AA55
-        return (dark >> self.value) & 1;
+        return (dark >> self.value) & 1
 
     def is_white(self):
         return self.is_black()

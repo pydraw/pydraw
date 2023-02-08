@@ -1,10 +1,10 @@
 class InvalidArgumentError(ValueError):
-    pass;
+    pass
 
 
 class UnsupportedError(NameError):
-    pass;
+    pass
 
 
 class PydrawError(NameError):
-    pass;
+    pass
