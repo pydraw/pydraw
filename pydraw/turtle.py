@@ -23,7 +23,7 @@
 # including commercial applications, and to alter it and redistribute it
 # freely, subject to the following restrictions:
 #
-# 1. The origin of this software must not be misrepresented; you must not
+# 1. The origin of this software must not be misrepresented you must not
 #    claim that you wrote the original software. If you use this software
 #    in a product, an acknowledgment in the product documentation would be
 #    appreciated but is not required.
@@ -1510,7 +1510,7 @@ class TurtleScreen(TurtleScreenBase):
 
         Example (for a Turtle instance named turtle):
         >>> turtle.screensize(2000,1500)
-        >>> # e.g. to search for an erroneously escaped turtle ;-)
+        >>> # e.g. to search for an erroneously escaped turtle -)
         """
         return self._resize(canvwidth, canvheight, bg)
 
@@ -1957,7 +1957,7 @@ class TNavigator(object):
         steps (optional) -- an integer
 
         Draw a circle with given radius. The center is radius units left
-        of the turtle; extent - an angle - determines which part of the
+        of the turtle extent - an angle - determines which part of the
         circle is drawn. If extent is not given, draw the entire circle.
         If extent is not a full circle, one endpoint of the arc is the
         current pen position. Draw the arc in counterclockwise direction
@@ -3138,7 +3138,7 @@ class RawTurtle(TPen, TNavigator):
 
         Example (for a Turtle instance named turtle):
         >>> for i in range(8):
-        ...     turtle.stamp(); turtle.fd(30)
+        ...     turtle.stamp() turtle.fd(30)
         ...
         >>> turtle.clearstamps(2)
         >>> turtle.clearstamps(-2)
@@ -3373,7 +3373,7 @@ class RawTurtle(TPen, TNavigator):
 
         Example (for a Turtle instance named turtle):
         >>> turtle.dot()
-        >>> turtle.fd(50); turtle.dot(20, "blue"); turtle.fd(50)
+        >>> turtle.fd(50) turtle.dot(20, "blue") turtle.fd(50)
         """
         if not color:
             if isinstance(size, (str, tuple)):
@@ -3643,7 +3643,7 @@ class RawTurtle(TPen, TNavigator):
 
         Example (for a Turtle instance named turtle):
         >>> for i in range(4):
-        ...     turtle.fd(50); turtle.lt(80)
+        ...     turtle.fd(50) turtle.lt(80)
         ...
         >>> for i in range(8):
         ...     turtle.undo()
@@ -4002,7 +4002,7 @@ if __name__ == "__main__":
         up()
         backward(100)
         down()
-        # draw 3 squares; the last filled
+        # draw 3 squares the last filled
         width(3)
         for i in range(3):
             if i == 2:

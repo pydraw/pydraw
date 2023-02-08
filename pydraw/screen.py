@@ -1,11 +1,11 @@
-import turtle;
-import tkinter as tk;
-import inspect;
-import time;
+import turtle
+import tkinter as tk
+import inspect
+import time
 
-from pydraw import Color;
-from pydraw import Location;
-from pydraw.util import *;
+from pydraw import Color
+from pydraw import Location
+from pydraw.util import *
 
 INPUT_TYPES = [
     'mousedown',
@@ -15,7 +15,7 @@ INPUT_TYPES = [
     'keydown',
     'keyup',
     'keypress'
-];
+]
 
 ALPHABET = [
     'a',
@@ -44,11 +44,11 @@ ALPHABET = [
     'x',
     'y',
     'z',
-];
+]
 
-UPPER_ALPHABET = [];
+UPPER_ALPHABET = []
 for letter in ALPHABET:
-    UPPER_ALPHABET.append(letter.upper());
+    UPPER_ALPHABET.append(letter.upper())
 
 KEYS = [
            '1',
@@ -91,7 +91,7 @@ KEYS = [
 
            '.',
            ',',
-           ';',
+           '',
            '\'',
            'Return',
            'Caps_Lock',
@@ -107,15 +107,15 @@ KEYS = [
            'Control_L',
            'Control_R',
            'BackSpace'
-       ] + ALPHABET + UPPER_ALPHABET;
+       ] + ALPHABET + UPPER_ALPHABET
 
 BUTTONS = [
     1,
     2,
     3
-];
+]
 
-BORDER_CONSTANT = 10;
+BORDER_CONSTANT = 10
 
 
 class Screen:
@@ -127,66 +127,66 @@ class Screen:
     _TERMINATING = False
 
     def __init__(self, width: int = 800, height: int = 600, title: str = "pydraw"):
-        verify(width, int, height, int, title, str);
+        verify(width, int, height, int, title, str)
 
-        self._screen = turtle.Screen();
-        self._turtle = turtle;
-        self._canvas = self._screen.cv;
-        self._root = self._canvas.winfo_toplevel();
+        self._screen = turtle.Screen()
+        self._turtle = turtle
+        self._canvas = self._screen.cv
+        self._root = self._canvas.winfo_toplevel()
 
-        self._width = width;
-        self._height = height;
+        self._width = width
+        self._height = height
 
-        self._time = None;
+        self._time = None
 
         # The only thing on the canvas is itself, so we prevent anything stupid from happening.
-        # self._canvas.configure(scrollregion=self._canvas.bbox("all"));
-        self._turtle.mode('logo');
-        self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT);
-        self._screen.screensize(width, height);
-        # self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT);
+        # self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        self._turtle.mode('logo')
+        self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT)
+        self._screen.screensize(width, height)
+        # self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT)
         # self._canvas.configure(width=self._root.winfo_width(), height=self._root.winfo_height())
-        # self.update();
+        # self.update()
         # This was not necessary as the canvas will align with the window's dimensions as set in the above line.
 
-        self._root.resizable(False, False);  # No resizing!
+        self._root.resizable(False, False)  # No resizing!
 
-        self._screen.title(title);
-        self._title = title;
-        self._color = Color('white');
+        self._screen.title(title)
+        self._title = title
+        self._color = Color('white')
 
-        self._objects = [];  # Store objects on the screen :)
-        self._fullscreen = False;
+        self._objects = []  # Store objects on the screen :)
+        self._fullscreen = False
 
-        self._screen.colormode(255);
+        self._screen.colormode(255)
 
         # store the mouse position
-        self._mouse = Location(0, 0);
-        self._gridlines = [];
-        self._gridstate = False;  # grid is disabled by default
+        self._mouse = Location(0, 0)
+        self._gridlines = []
+        self._gridstate = False  # grid is disabled by default
 
-        self._helpers = [];
-        self._helperstate = 0;
+        self._helpers = []
+        self._helperstate = 0
 
         # By default we want to make sure that all objects are drawn instantly.
-        self._screen.tracer(0);
-        self._screen.update();
+        self._screen.tracer(0)
+        self._screen.update()
 
-        self._scene = None;  # We store our current Scene.
+        self._scene = None  # We store our current Scene.
 
-        # import atexit;
-        # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler);
+        # import atexit
+        # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler)
         # atexit.register(self._exit_handler)
 
         # --- #
 
         def onclose():
             Screen._TERMINATING = True
-            self._root.destroy();
+            self._root.destroy()
 
-        self._root.protocol("WM_DELETE_WINDOW", onclose);
+        self._root.protocol("WM_DELETE_WINDOW", onclose)
 
-        self.registry = {};  # The input function registry (stores input callbacks)
+        self.registry = {}  # The input function registry (stores input callbacks)
 
     def title(self, title: str = None) -> str:
         """
@@ -196,11 +196,11 @@ class Screen:
         """
 
         if title is not None:
-            verify(title, str);
-            self._title = title;
-            self._screen.title(title);
+            verify(title, str)
+            self._title = title
+            self._screen.title(title)
 
-        return self._title;
+        return self._title
 
     def color(self, color: Color = None) -> Color:
         """
@@ -210,10 +210,10 @@ class Screen:
         """
 
         if color is not None:
-            verify(color, Color);
-            self._color = color;
-            self._screen.bgcolor(color.__value__());
-        return self._color;
+            verify(color, Color)
+            self._color = color
+            self._screen.bgcolor(color.__value__())
+        return self._color
 
     def picture(self, pic: str) -> None:
         """
@@ -222,8 +222,8 @@ class Screen:
         :return: None
         """
 
-        verify(pic, str);
-        self._screen.bgpic(pic);
+        verify(pic, str)
+        self._screen.bgpic(pic)
 
     def resize(self, width: int, height: int) -> None:
         """
@@ -233,12 +233,12 @@ class Screen:
         :return: None
         """
 
-        verify(width, int, height, int);
+        verify(width, int, height, int)
         # noinspection PyBroadException
         try:
-            self._screen.screensize(width, height);
+            self._screen.screensize(width, height)
         except:
-            pass;
+            pass
 
     def size(self) -> (int, int):
         """
@@ -249,9 +249,9 @@ class Screen:
 
         # noinspection PyBroadException
         try:
-            return self._screen.window_width(), self._screen.window_height();
+            return self._screen.window_width(), self._screen.window_height()
         except:
-            return -1, -1;  # Again, trying to avoid showing errors due to tkinter shutting down.
+            return -1, -1  # Again, trying to avoid showing errors due to tkinter shutting down.
 
     def width(self) -> int:
         """
@@ -261,9 +261,9 @@ class Screen:
 
         # noinspection PyBroadException
         try:
-            return self._screen.getcanvas().winfo_width() - BORDER_CONSTANT;
+            return self._screen.getcanvas().winfo_width() - BORDER_CONSTANT
         except:
-            return -1;  # Just return -1 because tkinter is shutting down
+            return -1  # Just return -1 because tkinter is shutting down
 
     def height(self) -> int:
         """
@@ -273,16 +273,16 @@ class Screen:
 
         # noinspection PyBroadException
         try:
-            return self._screen.getcanvas().winfo_height() - BORDER_CONSTANT;
+            return self._screen.getcanvas().winfo_height() - BORDER_CONSTANT
         except:
-            return -1;  # Just return -1 because tkinter is shutting down
+            return -1  # Just return -1 because tkinter is shutting down
 
     def center(self) -> Location:
         """
         Gets the center of the screen.
         """
 
-        return Location(self.width() / 2, self.height() / 2);
+        return Location(self.width() / 2, self.height() / 2)
 
     # noinspection PyMethodMayBeStatic
     def top_left(self) -> Location:
@@ -291,7 +291,7 @@ class Screen:
         :return: Location
         """
 
-        return Location(0, 0);
+        return Location(0, 0)
 
     def top_right(self) -> Location:
         """
@@ -299,7 +299,7 @@ class Screen:
         :return: Location
         """
 
-        return Location(self.width(), 0);
+        return Location(self.width(), 0)
 
     def bottom_left(self) -> Location:
         """
@@ -307,7 +307,7 @@ class Screen:
         :return: Location
         """
 
-        return Location(0, self.height());
+        return Location(0, self.height())
 
     def bottom_right(self) -> Location:
         """
@@ -315,7 +315,7 @@ class Screen:
         :return: Location
         """
 
-        return Location(self.width(), self.height());
+        return Location(self.width(), self.height())
 
     def mouse(self) -> Location:
         """
@@ -323,7 +323,7 @@ class Screen:
         :return: the mouse-position in the form of a Location
         """
 
-        return self._mouse;
+        return self._mouse
 
     # Direct Manipulation
     def alert(self, text: str, title: str = 'Alert', accept_text: str = 'Ok', cancel_text: str = 'Cancel') -> bool:
@@ -337,7 +337,7 @@ class Screen:
         """
         from tkinter.simpledialog import SimpleDialog
 
-        verify(text, str, title, str, accept_text, str, cancel_text, str);
+        verify(text, str, title, str, accept_text, str, cancel_text, str)
 
         alert = SimpleDialog(self._root,
                              text=text,
@@ -355,67 +355,67 @@ class Screen:
         :return: None
         """
 
-        verify(text, str, title, str);
+        verify(text, str, title, str)
 
-        text = self._screen.textinput(title, text);
+        text = self._screen.textinput(title, text)
 
-        self._screen.listen();  # keep us nice and listening :)
-        return text;
+        self._screen.listen()  # keep us nice and listening :)
+        return text
 
     def grid(self, rows: int = None, cols: int = None, cellsize: tuple = (50, 50), helpers: bool = True):
-        from pydraw import Line, Text;
+        from pydraw import Line, Text
 
-        verify(rows, int, cols, int, cellsize, tuple, helpers, bool);
+        verify(rows, int, cols, int, cellsize, tuple, helpers, bool)
 
         if len(self._gridlines) > 0:
-            [line.remove() for line in self._gridlines];
-            self._gridlines.clear();
+            [line.remove() for line in self._gridlines]
+            self._gridlines.clear()
         if len(self._helpers) > 0:
-            [helper.remove() for helper in self._helpers];
-            self._helpers.clear();
-        self._gridstate = True;
+            [helper.remove() for helper in self._helpers]
+            self._helpers.clear()
+        self._gridstate = True
 
         if rows is not None:
-            cellsize = (self.height() / rows, cellsize[1]);
+            cellsize = (self.height() / rows, cellsize[1])
         if cols is not None:
-            cellsize = (cellsize[0], self.width() / cols);
+            cellsize = (cellsize[0], self.width() / cols)
 
         if helpers:
-            textsize = int((self.width() + self.height() / 2) / 70);  # Text size is proportionate to screensize.
+            textsize = int((self.width() + self.height() / 2) / 70)  # Text size is proportionate to screensize.
 
         for row in range(int(cellsize[1]), int(self.height()), int(cellsize[1])):
             line = Line(self, Location(0, row), Location(self.width(), row),
-                        color=Color('lightgray'));
-            self._gridlines.append(line);
-            self._objects.remove(line);  # Don't want this in our objects list :)
+                        color=Color('lightgray'))
+            self._gridlines.append(line)
+            self._objects.remove(line)  # Don't want this in our objects list :)
 
             if helpers:
-                helper = Text(self, str(row), 15, row, color=Color('gray'), size=textsize);
-                helper.move(-helper.width() / 2, -helper.height() / 2);
-                self._helpers.append(helper);
-                self._objects.remove(helper);
+                helper = Text(self, str(row), 15, row, color=Color('gray'), size=textsize)
+                helper.move(-helper.width() / 2, -helper.height() / 2)
+                self._helpers.append(helper)
+                self._objects.remove(helper)
 
         for col in range(int(cellsize[0]), int(self.width()), int(cellsize[0])):
             line = Line(self, Location(col, 0), Location(col, self.height()),
-                        color=Color('lightgray'));
-            self._gridlines.append(line);
-            self._objects.remove(line);  # Don't want this in our objects list :)
+                        color=Color('lightgray'))
+            self._gridlines.append(line)
+            self._objects.remove(line)  # Don't want this in our objects list :)
 
             if helpers:
-                helper = Text(self, str(col), col, 10, color=Color('gray'), size=textsize);
-                helper.move(-helper.width() / 2, -helper.height() / 2);
-                self._helpers.append(helper);
-                self._objects.remove(helper);
+                helper = Text(self, str(col), col, 10, color=Color('gray'), size=textsize)
+                helper.move(-helper.width() / 2, -helper.height() / 2)
+                self._helpers.append(helper)
+                self._objects.remove(helper)
 
     def toggle_grid(self, value=None):
         if value is None:
-            value = not self._gridstate;
+            value = not self._gridstate
 
         if len(self._gridlines) == 0:
-            self.grid();  # Create a grid if one does not exist.
+            self.grid()  # Create a grid if one does not exist.
 
-        [line.visible(value) for line in self._gridlines];
-        [helper.visible(value) for helper in self._helpers];
+        [line.visible(value) for line in self._gridlines]
+        [helper.visible(value) for helper in self._helpers]
 
     def gridlines(self) -> tuple:
         """
@@ -423,33 +423,33 @@ class Screen:
         :return: a tuple (immutable list) of the gridlines.
         """
 
-        return tuple(self._gridlines);
+        return tuple(self._gridlines)
 
     def _redraw_grid(self):
         """
         An internal method to redraw the grid to the screen after screen.clear() is called.
         """
-        from pydraw import Line, Text;
+        from pydraw import Line, Text
 
-        new_lines = [];
+        new_lines = []
         for line in self._gridlines:
-            new_line = Line(self, line.pos1(), line.pos2(), color=line.color());
-            line.remove();
-            self._objects.remove(new_line);  # Still don't want this in the main objects list.
-            new_lines.append(new_line);
+            new_line = Line(self, line.pos1(), line.pos2(), color=line.color())
+            line.remove()
+            self._objects.remove(new_line)  # Still don't want this in the main objects list.
+            new_lines.append(new_line)
 
-        new_helpers = [];
+        new_helpers = []
         for helper in self._helpers:
-            new_helper = Text(self, helper.text(), helper.x(), helper.y(), color=helper.color(), size=helper.size());
-            helper.remove();
-            self._objects.remove(new_helper);
-            new_helpers.append(new_helper);
+            new_helper = Text(self, helper.text(), helper.x(), helper.y(), color=helper.color(), size=helper.size())
+            helper.remove()
+            self._objects.remove(new_helper)
+            new_helpers.append(new_helper)
 
-        self._gridlines.clear();
-        self._gridlines = new_lines;
+        self._gridlines.clear()
+        self._gridlines = new_lines
 
-        self._helpers.clear();
-        self._helpers = new_helpers;
+        self._helpers.clear()
+        self._helpers = new_helpers
 
     def grab(self, filename: str = None) -> str:
         """
@@ -460,28 +460,28 @@ class Screen:
         """
 
         if filename is None:
-            filename = 'pydraw' + str(time.time() % 10000);
+            filename = 'pydraw' + str(time.time() % 10000)
 
-        verify(filename, str);
+        verify(filename, str)
 
         if not filename.endswith('.png'):
-            filename += '.png';
+            filename += '.png'
 
         # noinspection PyBroadException
         try:
-            from PIL import ImageGrab;
+            from PIL import ImageGrab
 
             # We need to get the exact canvas coordinates. (bruh)
-            x1 = self._root.winfo_rootx() + self._canvas.winfo_x() + BORDER_CONSTANT;
-            y1 = self._root.winfo_rooty() + self._canvas.winfo_y() + BORDER_CONSTANT;
-            x2 = x1 + self.width() - BORDER_CONSTANT;
-            y2 = y1 + self.height() - BORDER_CONSTANT;
+            x1 = self._root.winfo_rootx() + self._canvas.winfo_x() + BORDER_CONSTANT
+            y1 = self._root.winfo_rooty() + self._canvas.winfo_y() + BORDER_CONSTANT
+            x2 = x1 + self.width() - BORDER_CONSTANT
+            y2 = y1 + self.height() - BORDER_CONSTANT
 
-            ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename);
-            return filename;
+            ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename)
+            return filename
         except:
             raise UnsupportedError('As PIL is not installed, you cannot grab the screen! '
-                                   'Install Pillow via: \'pip install pillow\'.');
+                                   'Install Pillow via: \'pip install pillow\'.')
 
     def fullscreen(self, fullscreen: bool = None) -> bool:
         """
@@ -494,28 +494,28 @@ class Screen:
         """
 
         if fullscreen is not None:
-            verify(fullscreen, bool);
-            self._fullscreen = fullscreen;
-            self._root.attributes("-fullscreen", fullscreen);
-            self.update();
+            verify(fullscreen, bool)
+            self._fullscreen = fullscreen
+            self._root.attributes("-fullscreen", fullscreen)
+            self.update()
 
-        return self._fullscreen;
+        return self._fullscreen
 
     def _front(self, obj) -> None:
-        from pydraw import Object;
+        from pydraw import Object
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.');
+            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.')
 
-        self._canvas.tag_raise(obj._ref);
+        self._canvas.tag_raise(obj._ref)
 
     def _back(self, obj) -> None:
-        from pydraw import Object;
+        from pydraw import Object
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.');
+            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.')
 
-        self._canvas.tag_lower(obj._ref);
+        self._canvas.tag_lower(obj._ref)
 
     def _add(self, obj) -> None:
         """
@@ -524,7 +524,7 @@ class Screen:
         :return: None
         """
 
-        self._objects.append(obj);
+        self._objects.append(obj)
 
     def add(self, obj) -> None:
         """
@@ -534,22 +534,22 @@ class Screen:
         """
 
         if obj in self._objects:
-            raise PydrawError(f'Cannot re-add object that is already in the object cache! {obj}: {type(obj)}');
+            raise PydrawError(f'Cannot re-add object that is already in the object cache! {obj}: {type(obj)}')
 
-        self._add(obj);
+        self._add(obj)
 
     # noinspection PyProtectedMember
     def remove(self, obj):
-        # self._screen.cv.delete(obj._ref);
+        # self._screen.cv.delete(obj._ref)
         try:
             self._canvas.delete(obj._ref)
             if obj in self._objects:
-                self._objects.remove(obj);
+                self._objects.remove(obj)
             else:
                 # print('possible error here')
-                pass;
+                pass
         except tk.TclError:
-            pass;
+            pass
 
     def objects(self) -> tuple:
         """
@@ -557,7 +557,7 @@ class Screen:
         :return: A tuple (immutable list) of Objects (you will want to check types for certain methods!)
         """
 
-        return tuple(self._objects);
+        return tuple(self._objects)
 
     def contains(self, obj) -> bool:
         """
@@ -566,10 +566,10 @@ class Screen:
         :return: a boolean
         """
 
-        return obj in self._objects;
+        return obj in self._objects
 
     def __contains__(self, item):
-        return self.contains(item);
+        return self.contains(item)
 
     def clear(self) -> None:
         """
@@ -579,12 +579,12 @@ class Screen:
 
         try:
             for i in range(len(self._objects) - 1, -1, -1):
-                self._objects[i].remove();
+                self._objects[i].remove()
             # if self._gridstate:
-            #     self._redraw_grid();  # Redraw the grid if it was active.
-            self.color(self._color);  # Redraw the color of the screen.
+            #     self._redraw_grid()  # Redraw the grid if it was active.
+            self.color(self._color)  # Redraw the color of the screen.
         except (tk.TclError, AttributeError):
-            pass;
+            pass
 
     def scene(self, scene=None):
         """
@@ -594,28 +594,28 @@ class Screen:
         :param scene: The Scene to apply!
         :return: None
         """
-        from pydraw import Scene;
+        from pydraw import Scene
 
         if not isinstance(scene, Scene):
-            raise InvalidArgumentError('You must pass a an object that extends Scene!');
+            raise InvalidArgumentError('You must pass a an object that extends Scene!')
 
         if scene is None:
-            return self._scene;
+            return self._scene
 
         if self._scene is not None:
-            del self._scene;
+            del self._scene
 
-        self.reset();  # Clears screen and destroys all registered input handlers.
+        self.reset()  # Clears screen and destroys all registered input handlers.
 
         # Defines all input methods from the Scene.
         for (name, function) in inspect.getmembers(scene, predicate=inspect.ismethod):
             if name.lower() not in INPUT_TYPES:
-                continue;
+                continue
 
-            self.registry[name.lower()] = function;
+            self.registry[name.lower()] = function
 
-        self._scene = scene;
-        scene.activate(self);
+        self._scene = scene
+        scene.activate(self)
 
     def reset(self) -> None:
         """
@@ -623,18 +623,18 @@ class Screen:
         :return: None
         """
 
-        self.toggle_grid(False);
-        self._gridlines.clear();
+        self.toggle_grid(False)
+        self._gridlines.clear()
         for line in self._gridlines:
-            line.remove();
+            line.remove()
 
         for obj in self._helpers:
-            obj.remove();
-        self._helpers.clear();
-        self._helperstate = False;
+            obj.remove()
+        self._helpers.clear()
+        self._helperstate = False
 
-        self.clear();
-        self.registry.clear();
+        self.clear()
+        self.registry.clear()
 
     # @staticmethod
     def sleep(self, delay: float, delta: bool = False) -> None:
@@ -651,9 +651,9 @@ class Screen:
 
         if delta:
             if self._time is None:
-                self._time = time.time();
+                self._time = time.time()
             else:
-                delay_offset = time.time() - self._time;
+                delay_offset = time.time() - self._time
                 self._time = time.time()
 
                 # delay offset cases:
@@ -662,9 +662,9 @@ class Screen:
                 # x > delay = more time has passed than our frame limit allows for, set delay to 0
 
                 if delay_offset > 0:
-                    delay = delay - delay_offset if delay >= delay_offset else 0;
+                    delay = delay - delay_offset if delay >= delay_offset else 0
 
-        time.sleep(delay);
+        time.sleep(delay)
 
     def update(self) -> None:
         """
@@ -672,13 +672,13 @@ class Screen:
         :return: None
         """
         try:
-            # self._screen.update();
-            self._canvas.update();
+            # self._screen.update()
+            self._canvas.update()
         except (turtle.Terminator, tk.TclError, AttributeError):
             # If we experience the termination exception, we will print the termination of the program
             # and exit the python program.
-            print('Terminated.');
-            exit(0);
+            print('Terminated.')
+            exit(0)
 
     def stop(self) -> None:
         """
@@ -686,8 +686,8 @@ class Screen:
         :return: None
         """
 
-        self.update();
-        self._turtle.done();
+        self.update()
+        self._turtle.done()
 
     def loop(self) -> None:
         """
@@ -697,8 +697,8 @@ class Screen:
         :returns: None
         """
 
-        self.update();
-        self._turtle.done();
+        self.update()
+        self._turtle.done()
 
     def exit(self) -> None:
         """
@@ -707,9 +707,9 @@ class Screen:
         :return: None
         """
 
-        self._screen.clear();
-        self._root.destroy();
-        exit(0);
+        self._screen.clear()
+        self._root.destroy()
+        exit(0)
 
     def _colorstr(self, color: Color) -> str:
         """
@@ -722,10 +722,10 @@ class Screen:
         try:
             # noinspection PyProtectedMember
             # noinspection PyUnresolvedReferences
-            colorstr = self._screen._colorstr(color.__value__());
-            return colorstr;
+            colorstr = self._screen._colorstr(color.__value__())
+            return colorstr
         except (turtle.TurtleGraphicsError, tk.TclError):
-            pass;
+            pass
 
     # ------------------------------------------------------- #
 
@@ -744,57 +744,57 @@ class Screen:
         :return: None
         """
 
-        frm = inspect.stack()[1];
-        mod = inspect.getmodule(frm[0]);
+        frm = inspect.stack()[1]
+        mod = inspect.getmodule(frm[0])
         for (name, function) in inspect.getmembers(mod, inspect.isfunction):
             if name.lower() not in INPUT_TYPES:
-                continue;
+                continue
 
-            self.registry[name.lower()] = function;
-            # print('Registered input-function:', name);
+            self.registry[name.lower()] = function
+            # print('Registered input-function:', name)
 
-        self._listen();
+        self._listen()
 
     def _listen(self):
-        self._screen.listen();
+        self._screen.listen()
 
         # Keyboard
         # for key in KEYS:
-        #     self._screen.onkeypress(self._create_lambda('keydown', key), key);
-        #     self._screen.onkeyrelease(self._create_lambda('keyup', key), key);
+        #     self._screen.onkeypress(self._create_lambda('keydown', key), key)
+        #     self._screen.onkeyrelease(self._create_lambda('keyup', key), key)
         #
         #     # custom implemented keypress
-        #     self._onkeytype(self._create_lambda('keypress', key), key);
-        self._screen.cv.bind('<Key>', (lambda e: self._keyhandler(e)));
-        self._screen.cv.bind('<KeyRelease>', (lambda e: self._keyuphandler(e)));
+        #     self._onkeytype(self._create_lambda('keypress', key), key)
+        self._screen.cv.bind('<Key>', (lambda e: self._keyhandler(e)))
+        self._screen.cv.bind('<KeyRelease>', (lambda e: self._keyuphandler(e)))
 
         # Mouse
         for btn in BUTTONS:
-            self._screen.onclick(self._create_lambda('mousedown', btn), btn);  # mousedown
-            self._onrelease(self._create_lambda('mouseup', btn), btn);
-            self._ondrag(self._create_lambda('mousedrag', btn), btn);
+            self._screen.onclick(self._create_lambda('mousedown', btn), btn)  # mousedown
+            self._onrelease(self._create_lambda('mouseup', btn), btn)
+            self._ondrag(self._create_lambda('mousedrag', btn), btn)
 
             # custom implemented mouseclick
-            self._onmouseclick(self._create_lambda('mouseclick', btn), btn);
+            self._onmouseclick(self._create_lambda('mouseclick', btn), btn)
 
         self._screen.cv.bind("<Motion>", (self._create_lambda('mousemove', None)))
 
     class Key:
         def __init__(self, key: str):
-            self._key = key;
+            self._key = key
 
         def key(self) -> str:
             """
             Returns the string for the key.
             :return: the key in ascii
             """
-            return self._key;
+            return self._key
 
         def __repr__(self):
-            return self.key();
+            return self.key()
 
         def __str__(self):
-            return self.key();
+            return self.key()
 
         def __add__(self, other):
             return str(self) + other
@@ -809,11 +809,11 @@ class Screen:
             :return: if the key is equal to the object.
             """
             if type(obj) is self.__class__:
-                return obj.key() == self.key();
+                return obj.key() == self.key()
             elif type(obj) is str:
-                return obj.lower() == self.key().lower();
+                return obj.lower() == self.key().lower()
             else:
-                return False;
+                return False
 
     def _create_lambda(self, method: str, key):
         """
@@ -823,126 +823,126 @@ class Screen:
         """
 
         if method == 'keydown':
-            return lambda: (self._keydown(key));
+            return lambda: (self._keydown(key))
         elif method == 'keyup':
-            return lambda: (self._keyup(key));
+            return lambda: (self._keyup(key))
         elif method == 'mousedown':
-            return lambda x, y: (self._mousedown(key, self.create_location(x, y)));
+            return lambda x, y: (self._mousedown(key, self.create_location(x, y)))
         elif method == 'mouseup':
-            return lambda x, y: (self._mouseup(key, self.create_location(x, y)));
+            return lambda x, y: (self._mouseup(key, self.create_location(x, y)))
         elif method == 'mousedrag':
-            return lambda x, y: (self._mousedrag(key, self.create_location(x, y)));
+            return lambda x, y: (self._mousedrag(key, self.create_location(x, y)))
         elif method == 'mousemove':
-            return lambda event: (self._mousemove(Location(event.x, event.y)));
+            return lambda event: (self._mousemove(Location(event.x, event.y)))
         else:
-            return None;
+            return None
 
     def _keyhandler(self, event) -> None:
         if 'keydown' not in self.registry:
-            return;
+            return
 
-        key = str(event.char);
+        key = str(event.char)
         if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
-            key = event.keysym;
+            key = event.keysym
 
-        self.registry['keydown'](self.Key(key.lower()));
+        self.registry['keydown'](self.Key(key.lower()))
 
     def _keyuphandler(self, event) -> None:
         if 'keyup' not in self.registry:
-            return;
+            return
 
-        key = str(event.char);
+        key = str(event.char)
         if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
-            key = event.keysym;
+            key = event.keysym
 
-        self.registry['keyup'](self.Key(key.lower()));
+        self.registry['keyup'](self.Key(key.lower()))
 
     def _keydown(self, key) -> None:
         if 'keydown' not in self.registry:
-            return;
+            return
 
-        self.registry['keydown'](self.Key(key.lower()));
+        self.registry['keydown'](self.Key(key.lower()))
 
     def _keyup(self, key) -> None:
         if 'keyup' not in self.registry:
-            return;
+            return
 
-        self.registry['keyup'](self.Key(key.lower()));
+        self.registry['keyup'](self.Key(key.lower()))
 
     def _keypress(self, key) -> None:
         if 'keypress' not in self.registry:
-            return;
+            return
 
-        self.registry['keypress'](self.Key(key.lower()));
+        self.registry['keypress'](self.Key(key.lower()))
 
     def _mousedown(self, button, location) -> None:
         if 'mousedown' not in self.registry:
-            return;
+            return
 
-        signature = inspect.signature(self.registry['mousedown']);
-        keys = list(signature.parameters.keys());
+        signature = inspect.signature(self.registry['mousedown'])
+        keys = list(signature.parameters.keys())
 
         if keys[0] == "button" and keys[1] == "location":
-            self.registry['mousedown'](button, location);
+            self.registry['mousedown'](button, location)
             print("[WARNING] in `mousedown` | Argument Pattern: (button, location) has been deprecated, "
-                  "please use (location, button) instead.");
-            return;
+                  "please use (location, button) instead.")
+            return
         elif len(keys) == 1:
-            self.registry['mousedown'](location);
-            return;
+            self.registry['mousedown'](location)
+            return
 
-        self.registry['mousedown'](location, button);
+        self.registry['mousedown'](location, button)
 
     def _mouseup(self, button, location) -> None:
         if 'mouseup' not in self.registry:
-            return;
+            return
 
-        signature = inspect.signature(self.registry['mouseup']);
-        keys = list(signature.parameters.keys());
+        signature = inspect.signature(self.registry['mouseup'])
+        keys = list(signature.parameters.keys())
 
         if keys[0] == "button" and keys[1] == "location":
-            self.registry['mouseup'](button, location);
+            self.registry['mouseup'](button, location)
             print("[WARNING] in `mouseup` | Argument Pattern: (button, location) has been deprecated, "
-                  "please use (location, button) instead.");
-            return;
+                  "please use (location, button) instead.")
+            return
         elif len(keys) == 1:
-            self.registry['mouseup'](location);
-            return;
+            self.registry['mouseup'](location)
+            return
 
-        self.registry['mouseup'](location, button);
+        self.registry['mouseup'](location, button)
 
     def _mouseclick(self, button, location) -> None:
         if 'mouseclick' not in self.registry:
-            return;
+            return
 
-        self.registry['mouseclick'](button, location);
+        self.registry['mouseclick'](button, location)
 
     def _mousedrag(self, button, location) -> None:
         if 'mousedrag' not in self.registry:
-            return;
+            return
 
-        signature = inspect.signature(self.registry['mousedrag']);
-        keys = list(signature.parameters.keys());
+        signature = inspect.signature(self.registry['mousedrag'])
+        keys = list(signature.parameters.keys())
 
         if keys[0] == "button" and keys[1] == "location":
-            self.registry['mousedrag'](button, location);
+            self.registry['mousedrag'](button, location)
             print("[WARNING] in `mousedrag` | Argument Pattern: (button, location) has been deprecated, "
-                  "please use (location, button) instead.");
-            return;
+                  "please use (location, button) instead.")
+            return
         elif len(keys) == 1:
-            self.registry['mousedrag'](location);
-            return;
+            self.registry['mousedrag'](location)
+            return
 
-        self.registry['mousedrag'](location, button);
+        self.registry['mousedrag'](location, button)
 
     def _mousemove(self, location) -> None:
         # We will update our internal storage of the mouse-location no matter what
-        self._mouse = location;
+        self._mouse = location
 
         if 'mousemove' not in self.registry:
-            return;
+            return
 
-        self.registry['mousemove'](location);
+        self.registry['mousemove'](location)
 
     # --- Helper Methods --- #
     def create_location(self, x, y, canvas: bool = False) -> Location:
@@ -958,10 +958,10 @@ class Screen:
         if canvas:
             y = -y
 
-        return Location(x + (self.width() / 2), -y + (self.height() / 2));
+        return Location(x + (self.width() / 2), -y + (self.height() / 2))
 
     def canvas_location(self, x, y) -> Location:
-        return Location(x - self.width() / 2, y - self.height() / 2);
+        return Location(x - self.width() / 2, y - self.height() / 2)
 
     # -- Internals -- #
     def _onrelease(self, fun, btn, add=None):
@@ -978,7 +978,7 @@ class Screen:
                     -self._screen.cv.canvasy(event.y) / self._screen.yscale)
             fun(x, y)
 
-        self._screen.cv.bind("<Button%s-ButtonRelease>" % btn, eventfun, add);
+        self._screen.cv.bind("<Button%s-ButtonRelease>" % btn, eventfun, add)
 
     def _ondrag(self, fun, btn, add=None):
         """
@@ -995,10 +995,10 @@ class Screen:
                     -self._screen.cv.canvasy(event.y) / self._screen.yscale)
             fun(x, y)
 
-        self._screen.cv.bind("<Button%s-Motion>" % btn, eventfun, add);
+        self._screen.cv.bind("<Button%s-Motion>" % btn, eventfun, add)
 
     def _onmouseclick(self, fun, btn, add=None):
-        pass;
+        pass
 
     def _onkeytype(self, fun, btn, add=None):
-        pass;
+        pass

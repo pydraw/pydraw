@@ -1,6 +1,6 @@
-import turtle;
-import tkinter as tk;
-from pydraw.errors import *;
+import turtle
+import tkinter as tk
+from pydraw.errors import *
 
 
 class Color:
@@ -8,60 +8,60 @@ class Color:
     An immutable class that contains a color values, usually by name or RGB.
     """
 
-    NONE = None;
+    NONE = None
 
     def __init__(self, *args):
         if len(args) == 0 or len(args) == 2 or len(args) > 3:
-            raise NameError('Invalid arguments passed to color!');
+            raise NameError('Invalid arguments passed to color!')
 
-        self._name = None;
-        self._hex_value = None;
+        self._name = None
+        self._hex_value = None
 
         # we should expect three-four arguments for rgb or rgba
         if len(args) >= 3:
             for arg in args:
                 if type(arg) is not int:
-                    raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.');
+                    raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.')
 
-            self._r = args[0];
-            self._g = args[1];
-            self._b = args[2];
+            self._r = args[0]
+            self._g = args[1]
+            self._b = args[2]
 
-            self._mode = 0;
+            self._mode = 0
         elif len(args) == 1:
             if type(args[0]) is tuple:
                 for arg in args[0]:
                     if type(arg) is not int:
-                        raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.');
+                        raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.')
 
-                self._r = args[0][0];
-                self._g = args[0][1];
-                self._b = args[0][2];
+                self._r = args[0][0]
+                self._g = args[0][1]
+                self._b = args[0][2]
 
-                self._mode = 0;
+                self._mode = 0
             if type(args[0]) is not str:
-                raise NameError('Expected string but instead found: ' + str(args[0]));
+                raise NameError('Expected string but instead found: ' + str(args[0]))
 
-            string = str(args[0]);
+            string = str(args[0])
             if string.startswith('#'):
-                self._hex_value = string;
-                self._mode = 2;
+                self._hex_value = string
+                self._mode = 2
 
-                rgb = self._rgb(self);
-                self._r = int(rgb[0]);
-                self._g = int(rgb[1]);
-                self._b = int(rgb[2]);
+                rgb = self._rgb(self)
+                self._r = int(rgb[0])
+                self._g = int(rgb[1])
+                self._b = int(rgb[2])
             else:
-                self._name = string;
-                self._mode = 1;
+                self._name = string
+                self._mode = 1
 
                 if self._name != '':
-                    rgb = self._rgb(self);
-                    self._r = int(rgb[0] / 256);
-                    self._g = int(rgb[1] / 256);
-                    self._b = int(rgb[2] / 256);
+                    rgb = self._rgb(self)
+                    self._r = int(rgb[0] / 256)
+                    self._g = int(rgb[1] / 256)
+                    self._b = int(rgb[2] / 256)
                 else:
-                    self._r, self._g, self._b = -1, -1, -1;
+                    self._r, self._g, self._b = -1, -1, -1
 
     def __value__(self):
         """
@@ -69,39 +69,39 @@ class Color:
         :return:
         """
         if self._mode == 0:
-            return self.red(), self.green(), self.blue();
+            return self.red(), self.green(), self.blue()
         elif self._mode == 1:
-            return self._name;
+            return self._name
         else:
-            return self._hex_value;
+            return self._hex_value
 
     def red(self):
         """
         Get the red property.
         :return: r
         """
-        return self._r;
+        return self._r
 
     def green(self):
         """
         Get the green property
         :return: g
         """
-        return self._g;
+        return self._g
 
     def blue(self):
         """
         Get the blue property
         :return: b
         """
-        return self._b;
+        return self._b
 
     def rgb(self):
         """
         Get the RGB tuple
         :return: tuple (R, G, B)
         """
-        return self.red(), self.green(), self.blue();
+        return self.red(), self.green(), self.blue()
 
     def name(self):
         """
@@ -109,14 +109,14 @@ class Color:
         :return: color or None
         """
 
-        return self._name;
+        return self._name
 
     def hex(self):
         """
         Get the hex of the color (only if defined)
         :return: hex_value or None
         """
-        return self._hex_value;
+        return self._hex_value
 
     def clone(self):
         """
@@ -124,23 +124,23 @@ class Color:
         :return: a clone.
         """
 
-        return Color(self.__value__());
+        return Color(self.__value__())
 
     def __str__(self):
         if self._mode == 0:
-            string = f'({self._r, self._g, self._b})';
+            string = f'({self._r, self._g, self._b})'
         elif self._mode == 1:
-            string = self._name;
+            string = self._name
         else:
-            string = self._hex_value;
+            string = self._hex_value
 
-        return string;
+        return string
 
     def __eq__(self, other):
         if type(other) is not Color:
-            return False;
+            return False
 
-        return other.rgb() == self.rgb();
+        return other.rgb() == self.rgb()
 
     @staticmethod
     def _rgb(color) -> tuple:
@@ -152,26 +152,28 @@ class Color:
 
         if color.name() is not None:
             try:
-                rgb = turtle.getcanvas().winfo_rgb(color.name());
-            except tk.TclError:
-                raise PydrawError('Color-string does not exist: ', color.name());
+                rgb = turtle.getcanvas().winfo_rgb(color.name())
+            except tk.TclError as e:
+                if hasattr(e, 'message') and e.message == 'can\'t invoke "winfo" command: application has been destroyed':
+                    return 255, 255, 255
+                raise PydrawError('Color-string does not exist: ', color.name())
             except turtle.Terminator:
-                return 255, 255, 255;  # Just return black if Program is shutting down.
+                return 255, 255, 255  # Just return black if Program is shutting down.
         elif color.hex() is not None:
-            hexval = color.hex().replace('#', '');
+            hexval = color.hex().replace('#', '')
 
             if len(hexval) != 6:
                 if len(hexval) == 3:
-                    hexval = ''.join([char * 2 for char in hexval]);  # Optimized string manipulation.
+                    hexval = ''.join([char * 2 for char in hexval])  # Optimized string manipulation.
                 else:
                     raise InvalidArgumentError('A color hex must be six or three characers long. '
-                                               'Ex: "#FFFFFF" or "#FFF"');
+                                               'Ex: "#FFFFFF" or "#FFF"')
 
-            rgb = tuple(int(hexval[i:i + 2], 16) for i in (0, 2, 4));
+            rgb = tuple(int(hexval[i:i + 2], 16) for i in (0, 2, 4))
         else:
-            rgb = (color.red(), color.green(), color.blue());
+            rgb = (color.red(), color.green(), color.blue())
 
-        return rgb;
+        return rgb
     
     @staticmethod
     def all():
@@ -180,7 +182,7 @@ class Color:
         :return: a tuple (immutable list) of all Colors.
         """
 
-        return tuple(COLORS.copy());
+        return tuple(COLORS.copy())
 
     @staticmethod
     def random():
@@ -190,13 +192,13 @@ class Color:
         """
 
         import random
-        return random.choice(COLORS).clone();
+        return random.choice(COLORS).clone()
 
     def __repr__(self):
-        return self.__str__();
+        return self.__str__()
 
 
-Color.NONE = Color('');
+Color.NONE = Color('')
 
 COLORS = [Color('snow'), Color('ghost white'), Color('white smoke'), Color('gainsboro'), Color('floral white'),
           Color('old lace'),
@@ -333,4 +335,4 @@ COLORS = [Color('snow'), Color('ghost white'), Color('white smoke'), Color('gain
           Color('gray81'), Color('gray82'), Color('gray83'),
           Color('gray84'), Color('gray85'), Color('gray86'), Color('gray87'), Color('gray88'), Color('gray89'),
           Color('gray90'), Color('gray91'), Color('gray92'),
-          Color('gray93'), Color('gray94'), Color('gray95'), Color('gray97'), Color('gray98'), Color('gray99')];
+          Color('gray93'), Color('gray94'), Color('gray95'), Color('gray97'), Color('gray98'), Color('gray99')]

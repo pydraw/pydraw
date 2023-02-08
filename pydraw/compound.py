@@ -1,6 +1,6 @@
-from pydraw import Object;
-from pydraw import Location;
-from pydraw.errors import *;
+from pydraw import Object
+from pydraw import Location
+from pydraw.errors import *
 
 
 class CompoundObject(Object):
@@ -14,43 +14,43 @@ class CompoundObject(Object):
         :param args: the shapes/objects to use
         :param kwargs: shapes/objects to use that along with identifiers
         """
-        self._objects = {};
+        self._objects = {}
 
         for arg in args:
             if not isinstance(arg, Object):
-                raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg);
+                raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg)
 
-            self._objects[str(arg)] = arg;
+            self._objects[str(arg)] = arg
 
         for (name, arg) in kwargs:
             if not isinstance(arg, Object):
-                raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg);
+                raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg)
 
-            self._objects[name] = arg;
+            self._objects[name] = arg
 
         if len(self._objects) == 0:
-            raise InvalidArgumentError('You must pass at least one object to create a CompoundObject!');
+            raise InvalidArgumentError('You must pass at least one object to create a CompoundObject!')
 
-        values = list(self._objects.values());
+        values = list(self._objects.values())
 
-        x = values[0].x();
-        y = values[0].y();
-        endx = values[len(self._objects) - 1].x();
-        endy = values[len(self._objects) - 1].y();
+        x = values[0].x()
+        y = values[0].y()
+        endx = values[len(self._objects) - 1].x()
+        endy = values[len(self._objects) - 1].y()
 
-        self._location = Location(x, y);
-        self._end = Location(endx, endy);
+        self._location = Location(x, y)
+        self._end = Location(endx, endy)
 
         for obj in self._objects.values():
             if obj.x() < self._location.x():
-                self._location.x(obj.x());
+                self._location.x(obj.x())
             elif obj.x() > self._location.x():
-                self._end.x(obj.x());
+                self._end.x(obj.x())
 
             if obj.y() < self._location.y():
-                self._location.y(obj.y());
+                self._location.y(obj.y())
             elif obj.y() > self._location.y():
-                self._end.y(obj.y());
+                self._end.y(obj.y())
 
     def x(self, x: float = None) -> float:
         """
@@ -60,10 +60,10 @@ class CompoundObject(Object):
         """
 
         if x is not None:
-            dx = x - self._location.x();
-            self.move(dx=dx);
+            dx = x - self._location.x()
+            self.move(dx=dx)
 
-        return self._location.x();
+        return self._location.x()
 
     def y(self, y: float = None) -> float:
         """
@@ -73,10 +73,10 @@ class CompoundObject(Object):
         """
 
         if y is not None:
-            dy = y - self._location.y();
-            self.move(dy=dy);
+            dy = y - self._location.y()
+            self.move(dy=dy)
 
-        return self._location.y();
+        return self._location.y()
 
     def move(self, *args, **kwargs) -> None:
         """
@@ -85,9 +85,9 @@ class CompoundObject(Object):
         """
 
         for obj in self._objects.values():
-            obj.move(*args, **kwargs);
-            self._location.move(*args, **kwargs);
-            self._end.move(*args, **kwargs);
+            obj.move(*args, **kwargs)
+            self._location.move(*args, **kwargs)
+            self._end.move(*args, **kwargs)
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -95,12 +95,12 @@ class CompoundObject(Object):
         :return: None
         """
 
-        old = self._location.clone();
-        self._location.moveto(*args, **kwargs);
+        old = self._location.clone()
+        self._location.moveto(*args, **kwargs)
 
-        dx = self._location.x() - old.x();
-        dy = self._location.y() - old.y();
-        self.move(dx, dy);
+        dx = self._location.x() - old.x()
+        dy = self._location.y() - old.y()
+        self.move(dx, dy)
 
     def front(self) -> None:
         """
@@ -110,7 +110,7 @@ class CompoundObject(Object):
         """
 
         for obj in self._objects:
-            obj.front();
+            obj.front()
 
     def back(self) -> None:
         """
@@ -120,7 +120,7 @@ class CompoundObject(Object):
         """
 
         for obj in self._objects:
-            obj.back();
+            obj.back()
 
     def add(self, obj: Object, name=None) -> None:
         """
@@ -130,19 +130,19 @@ class CompoundObject(Object):
         """
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError('Argument passed to CompoundObject was not an Object.');
+            raise InvalidArgumentError('Argument passed to CompoundObject was not an Object.')
 
         if name is None:
-            name = str(obj);
+            name = str(obj)
 
-        self._objects[name] = obj;
+        self._objects[name] = obj
 
         # Now we must check if x and y need to change
         if obj.x() < self._location.x():
-            self._location.x(obj.x());
+            self._location.x(obj.x())
 
         if obj.y() < self._location.y():
-            self._location.y(obj.y());
+            self._location.y(obj.y())
 
     def remove(self, obj: Object = None, name=None) -> Object:
         """
@@ -152,14 +152,14 @@ class CompoundObject(Object):
         :return: the Object that got removed (or None)
         """
 
-        removed_obj = None;
+        removed_obj = None
 
         if obj is not None and name is None:
-            removed_obj = self._objects.pop(str(obj));
+            removed_obj = self._objects.pop(str(obj))
         elif name is not None:
-            removed_obj = self._objects.pop(name);
+            removed_obj = self._objects.pop(name)
 
-        return removed_obj;
+        return removed_obj
 
     def object(self, name) -> Object:
         """
@@ -168,7 +168,7 @@ class CompoundObject(Object):
         :return: Object
         """
 
-        return self._objects.get(name);
+        return self._objects.get(name)
 
     def objects(self) -> tuple:
         """
@@ -176,4 +176,4 @@ class CompoundObject(Object):
         :return: a tuple
         """
 
-        return tuple(self._objects.values());
+        return tuple(self._objects.values())

@@ -1,6 +1,6 @@
-import re;
+import re
 
-filename = 'colors.txt';
+filename = 'colors.txt'
 
 with open(filename, 'r') as file:
     with open('output.txt', 'w') as output:

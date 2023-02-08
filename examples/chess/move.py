@@ -170,7 +170,7 @@ class MoveGenerator:
         self.moves = []
 
         for square in Square:
-            piece = board.square(square);
+            piece = board.square(square)
 
             if piece.color != board.next:
                 continue
