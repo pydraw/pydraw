@@ -3134,7 +3134,7 @@ class Polygon(Renderable):
             tk_vertices,
             fill=self._screen._colorstr(self._color),
             outline=self._screen._screen._colorstr(self._border.__value__()),
-            width=self._borderwidth,
+            width=self._border_width,
             state=state
         )
 
