@@ -1,6 +1,5 @@
 from pydraw import *
 
-
 class GameScene(Scene):
     back_button = None
     back_button_text = None
