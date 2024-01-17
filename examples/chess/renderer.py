@@ -155,13 +155,16 @@ class Renderer:
         temp_pieces = {}
         count = 0
 
+        old_pieces = self.pieces
+
         for square in Square:
             piece = board.square(square)
             if piece.none():
                 piece = self.get_piece_by_square(square)
 
                 if piece is not None and piece in self.screen.objects():
-                    piece.remove()
+                    # piece.remove()
+                    pass
 
         for square in board.squares:
             piece = board.squares[square]
@@ -193,9 +196,9 @@ class Renderer:
         self.pieces = temp_pieces
 
         # Catch any weird issues where we do not remove when we should have (due to multithreading I believe)
-        for obj in self.screen.objects():
-            if obj not in self.squares.values() and obj not in self.pieces.values():
-                obj.remove()
+        for piece in old_pieces.values():
+            if piece not in self.squares.values() and piece not in self.pieces.values():
+                piece.remove()
 
     def render(self, board: Board, draw_squares=False) -> None:
         """

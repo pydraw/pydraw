@@ -5,7 +5,7 @@ from move import Move, MoveGenerator
 from ai import AIPlayer
 
 screen = Screen(800, 600, "Chess")
-screen.fullscreen(True)
+# screen.fullscreen(True)
 screen.color(Color('#303030'))
 
 board = Board()
@@ -33,7 +33,7 @@ dragged_square = None
 dragged_piece = None
 
 
-def mousedrag(button, location):
+def mousedrag(location, button):
     global dragging
     global dragged
     global dragged_square
@@ -63,7 +63,7 @@ def mousedrag(button, location):
             renderer.render_moves(board, dragged_square)
 
 
-def mouseup(button, location):
+def mouseup(location, button):
     from move import MoveResult
 
     global board
@@ -126,7 +126,7 @@ def mouseup(button, location):
                 update_board()
 
         if checkmate:
-            screen.prompt('Checkmate Ocurred! You win!\nPlay Again?', 'Game Over')
+            screen.prompt('Checkmate Occurred! You win!\nPlay Again?', 'Game Over')
             board = Board()
             renderer.render(board)
 

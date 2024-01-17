@@ -5,11 +5,11 @@ screen = Screen()
 text = Text(screen, "Press me!", 400, 300)
 
 
-def mousedown(button, location):
+def mousedown(location, button):
     text.text("I'm pressed!")
 
 
-def mouseup(button, location):
+def mouseup(location, button):
     text.text("Press me!");
 
 

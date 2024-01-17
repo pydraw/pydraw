@@ -137,6 +137,8 @@ class Screen:
         self._width = width;
         self._height = height;
 
+        self._time = None;
+
         # The only thing on the canvas is itself, so we prevent anything stupid from happening.
         # self._canvas.configure(scrollregion=self._canvas.bbox("all"));
         self._turtle.mode('logo');
@@ -634,13 +636,33 @@ class Screen:
         self.clear();
         self.registry.clear();
 
-    @staticmethod
-    def sleep(delay: float) -> None:
+    # @staticmethod
+    def sleep(self, delay: float, delta: bool = False) -> None:
         """
-        Cause the program to sleep by calling time.sleep(delay)
+        Cause the program to sleep by calling `time.sleep(delay)`
+
+        You can enable the 'deltaTime' feature by passing in the `delta` parameter is true, which will allow it
+        to calculate the time between `time.sleep(delay)`, and take that into account, reducing `delay` by that amount.
+
         :param delay: the delay in seconds to sleep by
+        :param delta: enable the deltaTime feature which will take processing time into account for sleep time
         :return: None
         """
+
+        if delta:
+            if self._time is None:
+                self._time = time.time();
+            else:
+                delay_offset = time.time() - self._time;
+                self._time = time.time()
+
+                # delay offset cases:
+                # 0 = no time has passed
+                # 0 < x < delay = some time has passed, subtract it from delay for deltaTime
+                # x > delay = more time has passed than our frame limit allows for, set delay to 0
+
+                if delay_offset > 0:
+                    delay = delay - delay_offset if delay >= delay_offset else 0;
 
         time.sleep(delay);
 
@@ -660,9 +682,19 @@ class Screen:
 
     def stop(self) -> None:
         """
-        Holds the screen and all objects and prevents the window from closing.
-        (Best used in place of a while loop if the program is simply drawing shapes with no change over time)
+        Deprecated. Use `screen.loop` instead.
         :return: None
+        """
+
+        self.update();
+        self._turtle.done();
+
+    def loop(self) -> None:
+        """
+        Holds the program open and calls screen.update() for you. Must be used at the end of any pyDraw program
+        unless there is a while loop with screen.update() in it instead.
+
+        :returns: None
         """
 
         self.update();
