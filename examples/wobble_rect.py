@@ -67,6 +67,7 @@ while running:
             foods.remove(food)
 
             score += 1
+            speed += 0.5
             score_text.text(f'Score: {score}')
             rect.rotate(5)
 
