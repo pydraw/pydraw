@@ -1233,7 +1233,8 @@ class Renderable(Object):
             if self._angle % 360 != 0:
                 self._update_coords()
             else:
-                self._screen._canvas.coords(self._ref, new_coords)
+                # self._screen._canvas.coords(self._ref, new_coords)
+                self._update_coords()
             # self.update()
 
         return self._width
@@ -1259,7 +1260,8 @@ class Renderable(Object):
             if self._angle % 360 != 0:
                 self._update_coords()
             else:
-                self._screen._canvas.coords(self._ref, new_coords)
+                # self._screen._canvas.coords(self._ref, new_coords)
+                self._update_coords()
             # self.update()
 
         return self._height
@@ -1681,9 +1683,15 @@ class Renderable(Object):
         if not isinstance(other, Renderable):
             raise TypeError('Passed non-renderable into Renderable#overlaps(), which takes only Renderables!')
 
+        if self._visible:
+            bounds = self.bounds()
+        else:
+            bounds = Location(self.x() - self.width() * .5, self.y() - self.height() * .5), self.width() * 1.5, self.height() * 1.5
 
-        bounds = self.bounds()
-        other_bounds = other.bounds()
+        if other._visible:
+            other_bounds = other.bounds()
+        else:
+            other_bounds = Location(other.x() - other.width() * .5, other.y() - other.height() * .5), other.width() * 1.5, other.height() * 1.5
 
         min_ax = bounds[0].x()
         max_ax = min_ax + bounds[1]
@@ -2837,6 +2845,34 @@ class Oval(Renderable):
         self._shape = vertices
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
+    def width(self, width: float = None) -> float:
+        """
+        Get or set the width of the object.
+        :param width: the width to set to in pixels, if any
+        :return: the width of the object
+        """
+
+        if width is not None:
+            verify(width, (float, int))
+            self._width = width
+            self._update_coords()
+
+        return self._width
+
+    def height(self, height: float = None) -> float:
+        """
+        Get or set the height of the object.
+        :param height: the width to set to in pixels, if any
+        :return: the height of the object
+        """
+
+        if height is not None:
+            verify(height, (float, int))
+            self._height = height
+            self._update_coords()
+
+        return self._height
+
     def wedges(self, wedges: int = None) -> int:
         verify(wedges, int)
         if wedges < 20:
@@ -3279,6 +3315,8 @@ class Image(Renderable):
 
         self._mask = 123
 
+        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
+
         # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
         self._patched = False
 
@@ -3683,6 +3721,19 @@ class Image(Renderable):
         self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
                                                       real_location.y() + self._height / 2, image=self._image)
 
+    # def moveto(self, *args, **kwargs) -> None:
+    #     """
+    #     Move to a new location takes a Location, tuple, or two numbers (x, y)
+    #     :return: None
+    #     """
+    #
+    #     self._location.moveto(*args, **kwargs)
+    #
+    #     # new_location = self._screen.canvas_location(self._location.x(), self._location.y())
+    #     # self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
+    #     # self._update_coords()
+    #     self.update()
+
     def width(self, width: float = None) -> float:
         """
         Get or set the width of the image (REQUIRES: PIL or Pillow)
@@ -3947,6 +3998,17 @@ class Image(Renderable):
             self._monkey_patch_del()  # If we do have PIL we need to monkey patch this immediately.
             self._patched = True
 
+    def _update_coords(self):
+        """
+        Usually used to update x/y or vertices, but in this case we just update our width and height
+        """
+        self._check()
+        self.update()
+
+        # self._width = true_width
+        # self._height = true_height * (self._text.count('\n') + 1)
+
+
     # noinspection PyProtectedMember
     def update(self, updated: bool = False):
         self._check()
@@ -3989,13 +4051,14 @@ class Image(Renderable):
                     image = ImageOps.expand(image, border=10, fill=self._border.rgb())
 
                 # Do the resizing last, so we can make sure the other manipulations work properly
-                image = image.resize((int(self.width()), int(self.height())), Image.ANTIALIAS)
+                image = image.resize((int(self.width()), int(self.height())), Image.LANCZOS)
 
                 if self._angle != 0:
                     image = image.rotate(-self._angle, resample=Image.BILINEAR, expand=1, fillcolor=None)
 
                 self._image = ImageTk.PhotoImage(image=image)
             except (RuntimeError, AttributeError) as e:
+                raise e
                 pass  # We are catching some stupid errors from Tkinter involving images and program exiting.
             except ImportError:
                 raise UnsupportedError('As PIL is not installed, you cannot modify images! '
@@ -4339,6 +4402,7 @@ class Text(CustomRenderable):
             except tk.TclError:
                 pass
             # self.update()
+            self._update_coords()  # update width and height
 
         return self._text
 
@@ -4440,7 +4504,7 @@ class Text(CustomRenderable):
                 raise PydrawError(f'Passed alignment ("{align}") is not a valid alignment. Options: left, center, right')
 
             self._align = align.lower()
-            self._screen._canvas.itemconfigure(self._ref, align=self._aligns[self._align])
+            self._screen._canvas.itemconfigure(self._ref, justify=self._aligns[self._align])
             # self.update()
 
         return self._align
@@ -4681,6 +4745,36 @@ class Text(CustomRenderable):
         font_data = (self.font(), -self.size(), decorations)
 
         self._screen._canvas.itemconfigure(self._ref, font=font_data)
+
+    def _update_coords(self):
+        """
+        Usually used to update x/y or vertices, but in this case we just update our width and height
+        """
+        self._check()
+
+        # Handle font and decorations
+        decorations = ''
+        if self.bold():
+            decorations += 'bold '
+        if self.italic():
+            decorations += 'italic '
+        if self.underline():
+            decorations += 'underline '
+        if self.strikethrough():
+            decorations += 'overstrike '
+
+        # we use negative font size to change from point font-size to pixel font-size.
+        font_data = (self.font(), -self.size(), decorations)
+
+        try:
+            true_width, true_height = self._calculate_transform(font_data)
+        except RuntimeError:
+            return
+
+        self._width = true_width
+        self._height = true_height * (self._text.count('\n') + 1)
+
+
 
     # noinspection PyProtectedMember
     def update(self) -> None:
