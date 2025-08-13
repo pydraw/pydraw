@@ -227,6 +227,8 @@ class Screen:
 
     def resize(self, width: int, height: int) -> None:
         """
+        @deprecated (does not work on all OSes)
+
         Resize the screen to new dimensions
         :param width: the width to resize to
         :param height: the height to resize to
@@ -235,10 +237,15 @@ class Screen:
 
         verify(width, int, height, int)
         # noinspection PyBroadException
-        try:
-            self._screen.screensize(width, height)
-        except:
-            pass
+        print(f'{width}, {height}')
+        self._screen.screensize(width, height)
+        # self._root.wm_geometry("%dx%d" % (width, height))
+
+        self._screen.update()
+        # try:
+        #
+        # except:
+        #     pass
 
     def size(self) -> (int, int):
         """
