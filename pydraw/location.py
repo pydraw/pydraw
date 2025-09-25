@@ -46,7 +46,7 @@ class Location:
         diff = (0, 0)
 
         # Basically we don't have an empty tuple at the start.
-        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is diff or
+        if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
             if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
                 diff = (args[0][0], args[0][1])
