@@ -1595,8 +1595,8 @@ class Renderable(Object):
         try:
             x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref)
             location = self._screen.create_location(x0, y0, canvas=True)
-        except tk.TclError:
-            return self.location(), self.width(), self.height()
+        except (tk.TclError, TypeError):
+            return self.location().clone().move(-self.width() * .05, -self.height() * 0.5), self.width() * 1.5, self.height() * 1.5
 
         return location, (x1 - x0), (y1 - y0)
 
@@ -5281,7 +5281,7 @@ class Line(Object):
 
         if type(obj) == Line:
             shape2 = (obj.pos1(), obj.pos2())
-        elif type(obj) == Renderable:
+        elif isinstance(obj, Renderable):
             shape2 = obj.vertices()
         elif type(obj) == list or type(obj) == tuple:
             shape2 = obj
