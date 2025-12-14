@@ -38,7 +38,7 @@ def fire(location):
     projectiles.append(projectile)
 
 
-def mousedown(button, location):
+def mousedown(location, button):
     fire(location)
 
 
