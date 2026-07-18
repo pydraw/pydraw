@@ -840,7 +840,18 @@ class Screen:
         elif method == 'mousedrag':
             return lambda x, y: (self._mousedrag(key, self.create_location(x, y)))
         elif method == 'mousemove':
-            return lambda event: (self._mousemove(Location(event.x, event.y)))
+            # return lambda event: (self._mousemove(Location(event.x, event.y)))
+
+            # Mirror the click-family transform (see _onrelease/_ondrag and
+            # turtle's onclick): convert raw widget pixels -> turtle world
+            # coords (canvasx/canvasy remove scroll offset, /xscale,/yscale
+            # remove scaling), then create_location recenters + flips into
+            # pydraw space. Without this, mousemove -> screen.mouse() lived in
+            # raw-pixel space while mousedown lived in pydraw space, so the two
+            # only agreed when xscale==yscale==1 and the canvas was unscrolled.
+            return lambda event: (self._mousemove(self.create_location(
+                self._screen.cv.canvasx(event.x) / self._screen.xscale,
+                -self._screen.cv.canvasy(event.y) / self._screen.yscale)))
         else:
             return None
 
