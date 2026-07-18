@@ -35,30 +35,34 @@ class Scene:
     def mousedown(self, location: Location, button: int) -> None:
         """
         Mouse event, called when a mouse button is pressed down.
-        :param button: the button pressed (0-2)
+
         :param location: the location that was clicked
+        :param button: the button pressed (0-2)
         :return: None
         """
 
     def mouseup(self, location: Location, button: int) -> None:
         """
         Mouse event, called when a mouse button is released.
-        :param button: the button released (0-2)
+
         :param location: the location that was clicked
+        :param button: the button released (0-2)
         :return: None
         """
 
     def mousedrag(self, location: Location, button: int) -> None:
         """
         Mouse event, called when the mouse moves after a mousedown event (without a mouseup event)
-        :param button: the button being held (0-2)
+
         :param location: the Location the mouse has moved to
+        :param button: the button being held (0-2)
         :return: None
         """
 
     def mousemove(self, location: Location) -> None:
         """
         Mouse event called when the mouse moves over the Screen
+
         :param location: the Location the mouse moved to
         :return: None
         """
@@ -66,6 +70,7 @@ class Scene:
     def keydown(self, key: Screen.Key) -> None:
         """
         Key event called when a key is pressed
+
         :param key: the Key that was pressed
         :return: None
         """
