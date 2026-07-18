@@ -4,6 +4,7 @@ from pydraw.errors import *
 def verify_type(obj, required_type):
     """
     Verifies an objects type is the passed type
+
     :param obj: the object to check
     :param required_type: the expected type
     :return: True if required type is present or obj is None, else False
@@ -23,6 +24,7 @@ def verify_type(obj, required_type):
 def verify(*args):
     """
     Takes a list of values and expected types and returns if all objects meet their expected types.
+
     :param args: a list of objects and types, ex: (some_number, float, some_location, Location)
     :return: True if all args meet their expected types, throws an error if not.
     """

@@ -16,6 +16,7 @@ class Scene:
     def screen(self):
         """
         Retrieve the screen that the scene is tied to
+
         :return: a Screen
         """
         return self._screen
@@ -23,12 +24,14 @@ class Scene:
     def start(self) -> None:
         """
         Run as the initializer for the scene
+
         :return: None
         """
 
     def run(self) -> None:
         """
         Run the scene (the loop should go here)
+
         :return: None
         """
 
@@ -78,6 +81,7 @@ class Scene:
     def keyup(self, key: Screen.Key) -> None:
         """
         Key event called when a key is released
+
         :param key: the Key that was released
         :return: None
         """
@@ -85,6 +89,7 @@ class Scene:
     def activate(self, screen: Screen) -> None:
         """
         Activates the Scene with a Screen (called internally)
+
         :param screen: the Screen to display the Scene on
         :return: None
         """
