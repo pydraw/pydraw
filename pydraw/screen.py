@@ -191,6 +191,7 @@ class Screen:
     def title(self, title: str = None) -> str:
         """
         Get or set the title of the screen.
+
         :param title: the title to set to, if any
         :return: the title
         """
@@ -205,6 +206,7 @@ class Screen:
     def color(self, color: Color = None) -> Color:
         """
         Set the background color of the screen.
+
         :param color: the color to set the background to
         :return: None
         """
@@ -218,6 +220,7 @@ class Screen:
     def picture(self, pic: str) -> None:
         """
         Set the background picture of the screen.
+
         :param pic: the path to said picture from the file
         :return: None
         """
@@ -230,6 +233,7 @@ class Screen:
         @deprecated (does not work on all OSes)
 
         Resize the screen to new dimensions
+
         :param width: the width to resize to
         :param height: the height to resize to
         :return: None
@@ -251,6 +255,7 @@ class Screen:
         """
         Get the size of the WINDOW (please note this is not the canvas, and those attributes should be
         retrieved using the width() and height() methods respectively)
+
         :return: a tuple containing the width and height of the WINDOW
         """
 
@@ -263,6 +268,7 @@ class Screen:
     def width(self) -> int:
         """
         Returns the width of the CANVAS within the screen. Important.
+
         :return: an integer representing the width of the canvas
         """
 
@@ -275,6 +281,7 @@ class Screen:
     def height(self) -> int:
         """
         Returns the height of the CANVAS within the screen. Important.
+
         :return:
         """
 
@@ -295,6 +302,7 @@ class Screen:
     def top_left(self) -> Location:
         """
         Returns the top left corner of the screen
+
         :return: Location
         """
 
@@ -303,6 +311,7 @@ class Screen:
     def top_right(self) -> Location:
         """
         Returns the top right corner of the screen
+
         :return: Location
         """
 
@@ -311,6 +320,7 @@ class Screen:
     def bottom_left(self) -> Location:
         """
         Returns the bottom left corner of the screen
+
         :return: Location
         """
 
@@ -319,6 +329,7 @@ class Screen:
     def bottom_right(self) -> Location:
         """
         Returns the bottom right corner of the screen
+
         :return: Location
         """
 
@@ -327,6 +338,7 @@ class Screen:
     def mouse(self) -> Location:
         """
         Get the current mouse-position
+
         :return: the mouse-position in the form of a Location
         """
 
@@ -336,6 +348,7 @@ class Screen:
     def alert(self, text: str, title: str = 'Alert', accept_text: str = 'Ok', cancel_text: str = 'Cancel') -> bool:
         """
         Displays a dialog-box alert, and returns
+
         :param text: The text to display in the body of the dialog
         :param title: The title of the dialog-box
         :param accept_text: The text displayed on the accept button, defaults to 'Ok'
@@ -357,6 +370,7 @@ class Screen:
     def prompt(self, text: str, title: str = 'Prompt') -> str:
         """
         Prompts the user for keyboard input
+
         :param: text the text to prompt the user with
         :param: title the title of the dialog box
         :return: None
@@ -427,6 +441,7 @@ class Screen:
     def gridlines(self) -> tuple:
         """
         Allows you to retrieve the lines of the grid, but note that you cannot modify them!
+
         :return: a tuple (immutable list) of the gridlines.
         """
 
@@ -462,6 +477,7 @@ class Screen:
         """
         Grabs a screenshot of the image and saves it to the directory with the specified filename!
         Note that if no filename is specified the file will be given a name based on the epoch time.
+
         :param filename: the name of the file to save the screenshot to.
         :return: the name of the file.
         """
@@ -496,6 +512,7 @@ class Screen:
         will it REPOSITION them. It is highly recommended that you call this method before creating any shapes!
 
         !!! EXPERIMENTAL !!!
+
         :param fullscreen: the new fullscreen state, if any
         :return: the current fullscreen state of the Screen
         """
@@ -527,6 +544,7 @@ class Screen:
     def _add(self, obj) -> None:
         """
         Internal method which adds object to a list upon construction.
+
         :param obj: the object to add.
         :return: None
         """
@@ -536,6 +554,7 @@ class Screen:
     def add(self, obj) -> None:
         """
         Add an object back to the Screen after having removed it (with Object.remove() or Screen.remove(object)
+
         :param obj: the Object to add back.
         :return: None
         """
@@ -561,6 +580,7 @@ class Screen:
     def objects(self) -> tuple:
         """
         Retrieves all objects on the Screen!
+
         :return: A tuple (immutable list) of Objects (you will want to check types for certain methods!)
         """
 
@@ -569,6 +589,7 @@ class Screen:
     def contains(self, obj) -> bool:
         """
         Returns whether or not the passed object exists on the Screen (is in the objects cache)
+
         :param obj: the Object to check
         :return: a boolean
         """
@@ -581,6 +602,7 @@ class Screen:
     def clear(self) -> None:
         """
         Clears the screen.
+
         :return: None
         """
 
@@ -598,6 +620,7 @@ class Screen:
         Apply a new scene to the screen!
 
         Note that this will override ALL previously registered input handlers.
+
         :param scene: The Scene to apply!
         :return: None
         """
@@ -627,6 +650,7 @@ class Screen:
     def reset(self) -> None:
         """
         Resets the screen, removing all objects and input methods.
+
         :return: None
         """
 
@@ -676,6 +700,7 @@ class Screen:
     def update(self) -> None:
         """
         Updates the screen.
+
         :return: None
         """
         try:
@@ -690,6 +715,7 @@ class Screen:
     def stop(self) -> None:
         """
         Deprecated. Use `screen.loop` instead.
+
         :return: None
         """
 
@@ -711,6 +737,7 @@ class Screen:
         """
         Called at the end of pydraw programs as an event for succesful program execution and termination.
         For something similar to turtle.done() see Screen.stop()
+
         :return: None
         """
 
@@ -722,6 +749,7 @@ class Screen:
         """
         Takes a pydraw Color and returns a tkinter-friendly string, while also preventing errors
         from occurring after tkinter has shut down.
+
         :param color: the Color to convert
         :return: the converted color (tkinter-str)
         """
@@ -748,6 +776,7 @@ class Screen:
           - keydown
           - keyup
           - keypress (deprecated)
+
         :return: None
         """
 
@@ -793,6 +822,7 @@ class Screen:
         def key(self) -> str:
             """
             Returns the string for the key.
+
             :return: the key in ascii
             """
             return self._key
@@ -812,6 +842,7 @@ class Screen:
         def __eq__(self, obj) -> bool:
             """
             Overrides the equals operator so that we can compare with strings! Fantastic!
+
             :param obj: the object to compare to
             :return: if the key is equal to the object.
             """
@@ -825,6 +856,7 @@ class Screen:
     def _create_lambda(self, method: str, key):
         """
         A super-cool method to create lambdas for key-event registration.
+
         :param key: the key to create the lambda for
         :return: A lambda (😻) [ignore the cat]
         """
@@ -966,6 +998,7 @@ class Screen:
     def create_location(self, x, y, canvas: bool = False) -> Location:
         """
         Is passed turtle-based coordinates and converts them into normal coordinates
+
         :param x: the x component
         :param y: the y component
         :param canvas: whether or not the supplied coordinates are from the canvas or input
@@ -985,6 +1018,7 @@ class Screen:
     def _onrelease(self, fun, btn, add=None):
         """
         An internal method hooking into the TKinter canvas.
+
         :param fun: the function to call upon mouse release
         :param btn: the mouse button to bind to
         :param add: i have no clue what this does
@@ -1001,6 +1035,7 @@ class Screen:
     def _ondrag(self, fun, btn, add=None):
         """
         An internal method hooking into the TKinter canvas.
+
         :param fun: the function to call upon drag
         :param btn: the mouse button to bind to
         :param add: i have no clue

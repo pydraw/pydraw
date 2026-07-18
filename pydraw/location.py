@@ -38,6 +38,7 @@ class Location:
         Moves the location by a specified difference.
 
         Can take two numbers (dx, dy), a tuple, or a Location
+
         :param dx: the dx to move by
         :param dy: the dy to move by
         :return: the location (after change)
@@ -79,6 +80,7 @@ class Location:
         Moves the location to a new location!
 
         Can take two coordinates (x, y), a tuple, or a Location
+
         :param x: the x to move to
         :param y: the y to move to
         :return: the location (after change)
@@ -130,6 +132,7 @@ class Location:
     def distance(self, location) -> float:
         """
         Returns the distance between this location and another
+
         :param location: the Location to get the distance to
         :return: a float
         """
@@ -139,6 +142,7 @@ class Location:
     def clone(self):
         """
         Clone the Location
+
         :return: a new Location with the same x and y as this one.
         """
 

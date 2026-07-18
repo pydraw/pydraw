@@ -66,6 +66,7 @@ class Color:
     def __value__(self):
         """
         Retrieves the value to be interpreted internally by Turtle
+
         :return:
         """
         if self._mode == 0:
@@ -78,6 +79,7 @@ class Color:
     def red(self):
         """
         Get the red property.
+
         :return: r
         """
         return self._r
@@ -85,6 +87,7 @@ class Color:
     def green(self):
         """
         Get the green property
+
         :return: g
         """
         return self._g
@@ -92,6 +95,7 @@ class Color:
     def blue(self):
         """
         Get the blue property
+
         :return: b
         """
         return self._b
@@ -99,6 +103,7 @@ class Color:
     def rgb(self):
         """
         Get the RGB tuple
+
         :return: tuple (R, G, B)
         """
         return self.red(), self.green(), self.blue()
@@ -106,6 +111,7 @@ class Color:
     def name(self):
         """
         Get the name of the color (only if defined)
+
         :return: color or None
         """
 
@@ -114,6 +120,7 @@ class Color:
     def hex(self):
         """
         Get the hex of the color (only if defined)
+
         :return: hex_value or None
         """
         return self._hex_value
@@ -121,6 +128,7 @@ class Color:
     def clone(self):
         """
         Clone this color!
+
         :return: a clone.
         """
 
@@ -146,6 +154,7 @@ class Color:
     def _rgb(color) -> tuple:
         """
         Convert a color to an rgb tuple.
+
         :param color: the color to convert
         :return: a tuple representing RGB
         """
@@ -179,6 +188,7 @@ class Color:
     def all():
         """
         Get all color values that have a string-name.
+
         :return: a tuple (immutable list) of all Colors.
         """
 
@@ -188,6 +198,7 @@ class Color:
     def random():
         """
         Retrieve a random Color.
+
         :return: returns
         """
 

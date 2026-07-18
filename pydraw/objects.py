@@ -52,6 +52,7 @@ class Pen:
         Requires coordinates to be len > 0.
 
         Can take two numbers (dx, dy), a tuple, or a Location
+
         :param dx: the dx to move by
         :param dy: the dy to move by
         :return: the location (after change)
@@ -99,6 +100,7 @@ class Pen:
         Adds a new coordinate to the pen line.
 
         Can take two coordinates (x, y), a tuple, or a Location
+
         :param x: the x to move to
         :param y: the y to move to
         :return: the location (after change)
@@ -307,6 +309,7 @@ class Object:
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
+
         :return: None
         """
 
@@ -316,6 +319,7 @@ class Object:
     def moveto(self, *args, **kwargs) -> None:
         """
         Move to a new location takes a Location, tuple, or two numbers (x, y)
+
         :return: None
         """
 
@@ -333,6 +337,7 @@ class Object:
         """
         Brings the object to the front of the Screen
         (Imagine moving forward on the Z axis)
+
         :return: None
         """
 
@@ -343,6 +348,7 @@ class Object:
         """
         Brings the object to the back of the Screen
         (Imagine moving backward on the Z axis)
+
         :return: None
         """
 
@@ -1190,6 +1196,7 @@ class Renderable(Object):
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
+
         :return: None
         """
 
@@ -1203,6 +1210,7 @@ class Renderable(Object):
     def moveto(self, *args, **kwargs) -> None:
         """
         Move to a new location takes a Location, tuple, or two numbers (x, y)
+
         :return: None
         """
 
@@ -1216,6 +1224,7 @@ class Renderable(Object):
     def width(self, width: float = None) -> float:
         """
         Get or set the width of the object.
+
         :param width: the width to set to in pixels, if any
         :return: the width of the object
         """
@@ -1242,6 +1251,7 @@ class Renderable(Object):
     def height(self, height: float = None) -> float:
         """
         Get or set the height of the object
+
         :param height: the height to set to in pixels, if any
         :return: the height of the object
         """
@@ -1269,6 +1279,7 @@ class Renderable(Object):
     def center(self, *args, **kwargs) -> Location:
         """
         Returns the location of the center
+
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
         :param x: if defined, move the center x-coordinate to the specified value
         :param y: if defined, move the center y-coordinate to the specified value
@@ -1355,6 +1366,7 @@ class Renderable(Object):
     def rotation(self, angle: float = None) -> float:
         """
         Get or set the rotation of the object.
+
         :param angle: the angle to set the rotation to in degrees, if any
         :return: the angle of the object's rotation in degrees
         """
@@ -1370,6 +1382,7 @@ class Renderable(Object):
     def rotate(self, angle_diff: float = 0) -> None:
         """
         Rotate the angle of the object by a difference, in degrees
+
         :param angle_diff: the angle difference to rotate by
         :return: None
         """
@@ -1380,6 +1393,7 @@ class Renderable(Object):
     def angleto(self, obj) -> float:
         """
         Retrieve the angle between this object and another (based on 0 degrees at 12 o'clock)
+
         :param obj: the Object/Location to get the angle to.
         :return: the angle in degrees as a float
         """
@@ -1400,6 +1414,7 @@ class Renderable(Object):
     def lookat(self, obj) -> None:
         """
         Look at another object (Objects or Locations)
+
         :param obj: the Object/Location to look at.
         :return: None
         """
@@ -1410,6 +1425,7 @@ class Renderable(Object):
     def forward(self, distance: float) -> None:
         """
         Move the Renderable forward by distance at its current heading (rotation/angle)
+
         :param distance: the distance to move forward (hypotenuse)
         :return: None
         """
@@ -1422,6 +1438,7 @@ class Renderable(Object):
     def backward(self, distance: float) -> None:
         """
         Move the Renderable backward by distance at its current heading (rotation/angle)
+
         :param distance: the distance to move backward (hypotenuse)
         :return: None
         """
@@ -1431,6 +1448,7 @@ class Renderable(Object):
     def color(self, color: Color = None) -> Color:
         """
         Get or set the color of the object
+
         :param color: the color to set to, if any
         :return: the color of the object
         """
@@ -1449,6 +1467,7 @@ class Renderable(Object):
     def border(self, color: Color = None, width: float = None, fill: bool = None) -> Color:
         """
         Add or get the border of the object
+
         :param color: the color to set the border too, set to Color.NONE to remove border
         :param width: the width of the border
         :param fill: whether to fill the polygon.
@@ -1482,6 +1501,7 @@ class Renderable(Object):
     def border_width(self, width: float = None) -> float:
         """
         Gets or sets the border width
+
         :param width: the border width to set to
         :return: the border width
         """
@@ -1497,6 +1517,7 @@ class Renderable(Object):
     def fill(self, fill: bool = None) -> bool:
         """
         Returns or sets the current fill boolean
+
         :param fill: a new fill value, whether to fill the polygon
         :return: the fill value
         """
@@ -1514,6 +1535,7 @@ class Renderable(Object):
     def distance(self, obj) -> float:
         """
         Returns the distance between two objs or locations in pixels (center to center)
+
         :param obj: the Renderable/location to check distance between
         :return: the distance between this obj and the passed Renderable/Location.
         """
@@ -1529,6 +1551,7 @@ class Renderable(Object):
     def visible(self, visible: bool = None) -> bool:
         """
         Get or set the visibility of the renderable.
+
         :param visible: the new visibility value, if any
         :return: the visibility value
         """
@@ -1549,6 +1572,7 @@ class Renderable(Object):
         Transforms represent the width, height, and rotation of Renderables.
 
         You can retrieve a Transform from a Renderable with this method and set the transform the same way.
+
         :param transform: the transform to set to, if any.
         :return: the transform
         """
@@ -1568,6 +1592,7 @@ class Renderable(Object):
     def clone(self):
         """
         Clone this renderable!
+
         :return: a Renderable
         """
 
@@ -1579,6 +1604,7 @@ class Renderable(Object):
         """
         Returns the list of vertices for the Renderable.
         (The vertices will be returned clockwise, starting from the top-leftmost point)
+
         :return: a list of Locations representing the vertices
         """
 
@@ -1588,6 +1614,7 @@ class Renderable(Object):
     def bounds(self) -> (Location, float, float):
         """
         Get the location and dimensions of a bounding box that contains the entire shape
+
         :return: a tuple containing the Location, width, and height.
         """
 
@@ -1603,6 +1630,7 @@ class Renderable(Object):
     def contains(self, *args) -> bool:
         """
         Returns whether a Location is contained within the object.
+
         :param args: You may pass in either two numbers, a Location, or a tuple containing and x and y point.
         :return: a boolean value representing whether the point is within the vertices of the object.
         """
@@ -1676,6 +1704,7 @@ class Renderable(Object):
     def overlaps(self, other: 'Renderable') -> bool:
         """
         Returns if this object is overlapping with the passed object.
+
         :param other: another Renderable instance.
         :return: true if they are overlapping, false if not.
         """
@@ -1778,6 +1807,7 @@ class Renderable(Object):
             """
             Internal method that will determine the orientation of three points. They can be a clockwise triangle,
             counterclockwise triangle, or a co-linear line segment.
+
             :param point1: the first point of the main line segment
             :param point2: the second point of the main line segment
             :param point3: the third point to check from another line segment
@@ -2136,6 +2166,7 @@ class RoundedRectangle(CustomRenderable):
     def radius(self, radius: float = None) -> float:
         """
         Set the border radius of the rounded shape.
+
         :param radius: the radius to set to (not pixel accurate)
         :return: the radius
         """
@@ -2317,6 +2348,7 @@ class CustomPolygon(CustomRenderable):
     def move(self, *args, **kwargs):
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
+
         :return: None
         """
 
@@ -2334,6 +2366,7 @@ class CustomPolygon(CustomRenderable):
     def moveto(self, *args, **kwargs):
         """
         Move to a new location takes a Location, tuple, or two numbers (x, y)
+
         :return: None
         """
 
@@ -2345,6 +2378,7 @@ class CustomPolygon(CustomRenderable):
     def width(self, width: float = None) -> float:
         """
         Get the width of the CustomPolygon
+
         :param width: Unsupported.
         :return: the width of the object
         """
@@ -2363,6 +2397,7 @@ class CustomPolygon(CustomRenderable):
     def height(self, height: float = None) -> float:
         """
         Get the height of the Polygon
+
         :param height: Unsupported.
         :return: the height of the object
         """
@@ -2398,6 +2433,7 @@ class CustomPolygon(CustomRenderable):
     def center(self, *args, **kwargs) -> Location:
         """
         Returns the location of the center
+
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
         :param x: if defined, move the center x-coordinate to the specified value
         :param y: if defined, move the center y-coordinate to the specified value
@@ -2480,6 +2516,7 @@ class CustomPolygon(CustomRenderable):
     def clone(self):
         """
         Clone this CustomPolygon!
+
         :return: a CustomPolygon
         """
         return CustomPolygon(self._screen, self._vertices, self._color, self._border, self._fill, self._angle,
@@ -2848,6 +2885,7 @@ class Oval(Renderable):
     def width(self, width: float = None) -> float:
         """
         Get or set the width of the object.
+
         :param width: the width to set to in pixels, if any
         :return: the width of the object
         """
@@ -2862,6 +2900,7 @@ class Oval(Renderable):
     def height(self, height: float = None) -> float:
         """
         Get or set the height of the object.
+
         :param height: the width to set to in pixels, if any
         :return: the height of the object
         """
@@ -2890,6 +2929,7 @@ class Oval(Renderable):
         """
         Gets the slices of the Oval based on wedges. Note that this generates slices that are not tied to the oval,
         these are simply slices of the oval based on its wedges. You can use them how you see fit.
+
         :return: a tuple (immutable list) of CustomPolygons
         """
 
@@ -3737,6 +3777,7 @@ class Image(Renderable):
     def width(self, width: float = None) -> float:
         """
         Get or set the width of the image (REQUIRES: PIL or Pillow)
+
         :param width: the width to set to, if any
         :return: None
         """
@@ -3751,6 +3792,7 @@ class Image(Renderable):
     def height(self, height: float = None) -> float:
         """
         Get or set the height of the image
+
         :param height: the height to set to, if any
         :return: the height
         """
@@ -3765,6 +3807,7 @@ class Image(Renderable):
     def color(self, color: Color = None, alpha: int = 123) -> Color:
         """
         Retrieves or applies a color-mask to the image
+
         :param color: the color to mask to, if any
         :param alpha: The alpha level of the mask, defaults to 123 (half of 255)
         :return: the mask-color of the object
@@ -3781,6 +3824,7 @@ class Image(Renderable):
     def rotation(self, angle: float = None) -> float:
         """
         Get or set the rotation of the image.
+
         :param angle: the angle to set the rotation to in degrees, if any
         :return: the angle of the image's rotation in degrees
         """
@@ -3796,6 +3840,7 @@ class Image(Renderable):
     def rotate(self, angle_diff: float) -> None:
         """
         Rotate the angle of the image by a difference, in degrees
+
         :param angle_diff: the angle difference to rotate by
         :return: None
         """
@@ -3808,6 +3853,7 @@ class Image(Renderable):
     def center(self, *args, **kwargs) -> Location:
         """
         Returns the location of the center
+
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
         :param x: if defined, move the center x-coordinate to the specified value
         :param y: if defined, move the center y-coordinate to the specified value
@@ -3862,6 +3908,7 @@ class Image(Renderable):
     def border(self, color: Color = None) -> Color:
         """
         Add or get the border of the image
+
         :param color: the color to set the border too, set to Color.NONE to remove border
         :return: The Color of the border
         """
@@ -3884,6 +3931,7 @@ class Image(Renderable):
         """
         Returns the list of vertices for the Renderable.
         (The vertices will be returned clockwise, starting from the top-leftmost point)
+
         :return: a list of Locations representing the vertices
         """
 
@@ -3922,6 +3970,7 @@ class Image(Renderable):
     def load(self) -> None:
         """
         Load animated GIF (reads frames)
+
         :return: None
         """
 
@@ -3938,6 +3987,7 @@ class Image(Renderable):
     def next(self) -> None:
         """
         Changes frame to the next frame (Can only be used with animated GIFs)
+
         :return:
         """
         self._frame += 1
@@ -3950,6 +4000,7 @@ class Image(Renderable):
     def frame(self, frame: int = None) -> int:
         """
         Set the current frame.
+
         :param frame: the frame-index to set to
         :return: the current frame
         """
@@ -3963,6 +4014,7 @@ class Image(Renderable):
     def frames(self) -> int:
         """
         Returns how many frames there are, returns -1 if not animated, 0 if corrupted file.
+
         :return:
         """
 
@@ -3977,6 +4029,7 @@ class Image(Renderable):
     def _monkey_patch_del():
         """
         We monkey patch the del function for PIL, so it doesn't do stupid things.
+
         :return:
         """
         from PIL import ImageTk
@@ -4390,6 +4443,7 @@ class Text(CustomRenderable):
     def text(self, text: str = None) -> str:
         """
         Get or set the text. Use '\n' to separate lines
+
         :param text: text to set to (str), if any
         :return: the text
         """
@@ -4409,6 +4463,7 @@ class Text(CustomRenderable):
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
+
         :return: None
         """
 
@@ -4420,6 +4475,7 @@ class Text(CustomRenderable):
     def moveto(self, *args, **kwargs) -> None:
         """
         Move to a new location takes a Location, tuple, or two numbers (x, y)
+
         :return: None
         """
 
@@ -4432,6 +4488,7 @@ class Text(CustomRenderable):
     def width(self) -> float:
         """
         Get the width of the text (cannot be modified)
+
         :return the width of the text
         """
 
@@ -4441,6 +4498,7 @@ class Text(CustomRenderable):
     def height(self) -> float:
         """
         Get the height of the text, (cannot be modified, although technically the font-size is the text's height)
+
         :return: the height of the text.
         """
 
@@ -4449,6 +4507,7 @@ class Text(CustomRenderable):
     def color(self, color: Color = None) -> Color:
         """
         Get or set the color of the text
+
         :param color: the color to set to, if any
         :return: the color of the text
         """
@@ -4464,6 +4523,7 @@ class Text(CustomRenderable):
     def font(self, font: str = None) -> str:
         """
         Get or set the font of the text
+
         :param font: the font to set to, if any
         :return: the font of the text
         """
@@ -4479,6 +4539,7 @@ class Text(CustomRenderable):
     def size(self, size: int = None) -> int:
         """
         Get or set the size of the text
+
         :param size: the size to set to, if any
         :return: the size of the text
         """
@@ -4494,6 +4555,7 @@ class Text(CustomRenderable):
     def align(self, align: str = None) -> str:
         """
         Get or set the alignment of the text, if a new value is passed it must be 'left', 'center', or 'right'.
+
         :param align: the alignment to set to, if any
         :return: the alignment of the text
         """
@@ -4512,6 +4574,7 @@ class Text(CustomRenderable):
     def bold(self, bold: bool = None) -> bool:
         """
         Get or set the bold status of the text
+
         :param bold: the bold status to set to, if any
         :return: the bold status of the text
         """
@@ -4527,6 +4590,7 @@ class Text(CustomRenderable):
     def italic(self, italic: bool = None) -> bool:
         """
         Get or set the italic status of the text
+
         :param italic: the italic status to set to, if any
         :return: the italic status of the text
         """
@@ -4542,6 +4606,7 @@ class Text(CustomRenderable):
     def underline(self, underline: bool = None) -> bool:
         """
         Get or set the underline status of the text
+
         :param underline: the underline status to set to, if any
         :return: the underline status of the text
         """
@@ -4557,6 +4622,7 @@ class Text(CustomRenderable):
     def strikethrough(self, strikethrough: bool = None) -> bool:
         """
         Get or set the strikethrough status of the text
+
         :param strikethrough: the strikethrough status to set to, if any
         :return: the strikethrough status of the text
         """
@@ -4572,6 +4638,7 @@ class Text(CustomRenderable):
     def rotation(self, rotation: float = None) -> float:
         """
         Get or set the rotation of the text
+
         :param rotation: the strikethrough to set to, if any
         :return: the rotation of the text
         """
@@ -4587,6 +4654,7 @@ class Text(CustomRenderable):
     def rotate(self, angle_diff: float = 0) -> None:
         """
         Rotate the angle of the text by a difference, in degrees
+
         :param angle_diff: the angle difference to rotate by
         :return: Nonea
         """
@@ -4610,6 +4678,7 @@ class Text(CustomRenderable):
     def center(self, *args, **kwargs) -> Location:
         """
         Returns the location of the center
+
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
         :param x: if defined, move the center x-coordinate to the specified value
         :param y: if defined, move the center y-coordinate to the specified value
@@ -4663,6 +4732,7 @@ class Text(CustomRenderable):
     def vertices(self) -> list:
         """
         Get the vertices of a Rectangle superposed in the same transform of the Text
+
         :return: a list of Locations
         """
 
@@ -4694,6 +4764,7 @@ class Text(CustomRenderable):
     def visible(self, visible: bool = None) -> bool:
         """
         Get or set the visibility of the text
+
         :param visible: the visibility to set to, if any
         :return: the visibility of the text
         """
@@ -4711,6 +4782,7 @@ class Text(CustomRenderable):
     def transform(self, transform: tuple = None) -> tuple:
         """
         Retrieve the transform of the text
+
         :param transform: Unsupported.
         :return: a tuple with representing: (width, height, angle)
         """
@@ -4723,6 +4795,7 @@ class Text(CustomRenderable):
     def clone(self):
         """
         Clone this text!
+
         :return: A cloned text object!
         """
 
@@ -4917,6 +4990,7 @@ class Line(Object):
     def pos1(self, *args) -> Location:
         """
         Get or set the position of the first endpoint.
+
         :param args: Either a location or two numbers (x, y) may be passed here.
         :return: the position of the first endpoint.
         """
@@ -4939,6 +5013,7 @@ class Line(Object):
     def pos2(self, *args) -> Location:
         """
         Get or set the position of the second endpoint.
+
         :param args: Either a location or two numbers (x, y) may be passed here.
         :return: the position of the second endpoint.
         """
@@ -5016,6 +5091,7 @@ class Line(Object):
     def moveto(self, *args, **kwargs) -> None:
         """
         Move both of the endpoints to new locations.
+
         :param args: Either two locations, tuples, or four numbers (x1, y1, x2, y2).
         :return: None
         """
@@ -5063,6 +5139,7 @@ class Line(Object):
     def lookat(self, *args, **kwargs) -> None:
         """
         Make the line look at the given point by moving the second point.
+
         :return: None
         """
 
@@ -5113,6 +5190,7 @@ class Line(Object):
     def rotation(self, angle: float = None):
         """
         Get or set the rotation of the line (works via pos2()).
+
         :param angle: the angle in degrees to rotate by, if any
         :return: the angle of the line
         """
@@ -5128,6 +5206,7 @@ class Line(Object):
     def rotate(self, angle_diff: float, point: int = 1) -> float:
         """
         Rotate the line around one of its vertices (1 by default)
+
         :param angle_diff: the angle to rotate by
         :param point: the point to serve as the origin.
         :return: the new angle
@@ -5159,6 +5238,7 @@ class Line(Object):
     def location(self) -> tuple:
         """
         Returns the locations of both the endpoints
+
         :return: the locations of both the endpoints
         """
 
@@ -5167,6 +5247,7 @@ class Line(Object):
     def length(self) -> float:
         """
         Get the length of the line
+
         :return: the length of the line
         """
 
@@ -5179,6 +5260,7 @@ class Line(Object):
     def color(self, color: Color = None) -> Color:
         """
         Get or set the color of the line
+
         :param color: the color to set to, if any
         :return: the color of the line
         """
@@ -5195,6 +5277,7 @@ class Line(Object):
     def thickness(self, thickness: int = None) -> int:
         """
         Get or set the thickness of the line
+
         :param thickness: the thickness to set to, if any
         :return: the thickness of the line
         """
@@ -5235,6 +5318,7 @@ class Line(Object):
     def visible(self, visible: bool = None) -> bool:
         """
         Get or set the visibility of the line
+
         :param visible: the visibility to set to, if any
         :return: the visibility of the line
         """
@@ -5252,6 +5336,7 @@ class Line(Object):
     def transform(self, transform: tuple = None):
         """
         Copy the line's length and angle!
+
         :param transform:
         :return:
         """
@@ -5264,6 +5349,7 @@ class Line(Object):
     def clone(self):
         """
         Clone a new line!
+
         :return: A clone of this line
         """
 
@@ -5273,6 +5359,7 @@ class Line(Object):
     def intersects(self, obj) -> bool:
         """
         Check if a line intersects with another line or Renderable
+
         :param obj: Line, Renderable, or List/Tuple
         :return: Whether the line intersects with the object
         """
@@ -5296,6 +5383,7 @@ class Line(Object):
             """
             Internal method that will determine the orientation of three points. They can be a clockwise triangle,
             counterclockwise triangle, or a co-linear line segment.
+
             :param point1: the first point of the main line segment
             :param point2: the second point of the main line segment
             :param point3: the third point to check from another line segment

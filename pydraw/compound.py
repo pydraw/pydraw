@@ -15,6 +15,7 @@ class CompoundObject(Object):
     def __init__(self, *args, **kwargs):
         """
         Pass in the shapes/objects to be used to create the CompoundObject
+
         :param args: the shapes/objects to use
         :param kwargs: shapes/objects to use that along with identifiers
         """
@@ -61,6 +62,7 @@ class CompoundObject(Object):
     def x(self, x: float = None) -> float:
         """
         Get the x coordinate of the compound system.
+
         :param x: a new x, if provided
         :return: a float
         """
@@ -74,6 +76,7 @@ class CompoundObject(Object):
     def y(self, y: float = None) -> float:
         """
         Get the y coordinate of the compound system.
+
         :param y: a new y, if provided
         :return: a float
         """
@@ -87,6 +90,7 @@ class CompoundObject(Object):
     def move(self, *args, **kwargs) -> None:
         """
         Move the compound shape by a certain distance (dx, dy)
+
         :return: None
         """
 
@@ -98,6 +102,7 @@ class CompoundObject(Object):
     def moveto(self, *args, **kwargs) -> None:
         """
         Move the compound shape to a new location (x, y)
+
         :return: None
         """
 
@@ -112,6 +117,7 @@ class CompoundObject(Object):
     def width(self, width: float = None) -> float:
         """
         Get the width of the compound object
+
         :param width: a new width, if provided
         :return: a float
         """
@@ -124,6 +130,7 @@ class CompoundObject(Object):
     def height(self, height: float = None) -> float:
         """
         Get the height of the compound object
+
         :param height: a new height, if provided
         :return: a float
         """
@@ -136,6 +143,7 @@ class CompoundObject(Object):
     def rotate(self, angle_diff: float, pivot: Location = None) -> None:
         """
         Rotate the angle of the compound object by a difference, around a pivot point, in degrees
+
         :param angle_diff: the angle difference to rotate by
         :param pivot: the pivot point to rotate around
         :return: None
@@ -169,6 +177,7 @@ class CompoundObject(Object):
     def rotation(self, angle: float = None) -> float:
         """
         Get the rotation of the compound object
+
         :param angle: a new rotation, if provided
         :return: a float
         """
@@ -181,6 +190,7 @@ class CompoundObject(Object):
     def center(self, centroid: bool = True) -> Location:
         """
         Calculate the center point of the CompoundObject
+
         :centroid: whether to use the centroid or the center of the bounding box
         :return: Location of the center
         """
@@ -204,6 +214,7 @@ class CompoundObject(Object):
     def contains(self, *args) -> bool:
         """
         Check if the CompoundObject contains a certain Location
+
         :param args: the Location to check
         :return: True if the CompoundObject contains the Location, False otherwise
         """
@@ -241,6 +252,7 @@ class CompoundObject(Object):
     def overlaps(self, other: 'Renderable') -> bool:
         """
         Returns if this compound object is overlapping with the passed object.
+
         :param other: another Renderable instance.
         :return: true if they are overlapping, false if not.
         """
@@ -261,6 +273,7 @@ class CompoundObject(Object):
         """
         Brings the compound object to the front of the Screen
         (Imagine moving forward on the Z axis)
+
         :return: None
         """
 
@@ -271,6 +284,7 @@ class CompoundObject(Object):
         """
         Brings the compound object to the back of the Screen
         (Imagine moving backward on the Z axis)
+
         :return: None
         """
 
@@ -280,6 +294,7 @@ class CompoundObject(Object):
     def add(self, obj: Object, name=None) -> None:
         """
         Add another Object to the CompoundObject
+
         :param obj: the Object to add
         :return: None
         """
@@ -308,6 +323,7 @@ class CompoundObject(Object):
     def remove(self, obj: Object = None, name=None) -> Object:
         """
         Remove an object from the Compound Object
+
         :param obj: the object to remove
         :param name: the name the object is registered under
         :return: the Object that got removed (or None)
@@ -325,6 +341,7 @@ class CompoundObject(Object):
     def object(self, name) -> Object:
         """
         Retrieve a specific object
+
         :param name: the name of the object (can be a str, or another type of object)
         :return: Object
         """
@@ -334,6 +351,7 @@ class CompoundObject(Object):
     def objects(self) -> tuple:
         """
         Retrieve a tuple of all objects in the compound shape.
+
         :return: a tuple
         """
 
