@@ -1,0 +1,11 @@
+# Distribution / build artifacts
+dist/
+build/
+*.egg-info/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
