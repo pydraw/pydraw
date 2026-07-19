@@ -27,7 +27,7 @@ class CompoundObject(Object):
 
             self._objects[str(arg)] = arg
 
-        for (name, arg) in kwargs:
+        for (name, arg) in kwargs.items():
             if not isinstance(arg, Object):
                 raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg)
 
@@ -96,8 +96,11 @@ class CompoundObject(Object):
 
         for obj in self._objects.values():
             obj.move(*args, **kwargs)
-            self._location.move(*args, **kwargs)
-            self._end.move(*args, **kwargs)
+
+        # Shift the tracked bounds once (not once per child, which would
+        # multiply the delta by the number of objects).
+        self._location.move(*args, **kwargs)
+        self._end.move(*args, **kwargs)
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -277,7 +280,7 @@ class CompoundObject(Object):
         :return: None
         """
 
-        for obj in self._objects:
+        for obj in self._objects.values():
             obj.front()
 
     def back(self) -> None:
@@ -288,7 +291,7 @@ class CompoundObject(Object):
         :return: None
         """
 
-        for obj in self._objects:
+        for obj in self._objects.values():
             obj.back()
 
     def add(self, obj: Object, name=None) -> None:
