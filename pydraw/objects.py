@@ -1200,12 +1200,9 @@ class Renderable(Object):
         :return: None
         """
 
+        before = self._location.clone()
         self._location.move(*args, **kwargs)
-
-        new_location = self._screen.canvas_location(self._location.x(), self._location.y())
-        self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
-        self._update_coords()
-        # self.update()
+        self._translate(self._location.x() - before.x(), self._location.y() - before.y())
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -1214,12 +1211,27 @@ class Renderable(Object):
         :return: None
         """
 
+        before = self._location.clone()
         self._location.moveto(*args, **kwargs)
+        self._translate(self._location.x() - before.x(), self._location.y() - before.y())
 
-        new_location = self._screen.canvas_location(self._location.x(), self._location.y())
-        self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
-        self._update_coords()
-        # self.update()
+    def _translate(self, dx: float, dy: float) -> None:
+        """
+        Shift the object by (dx, dy) without rebuilding its geometry.
+
+        A translation moves every vertex by the same delta and leaves the
+        rotation untouched, so we can shift the canvas item relatively (a
+        single C-level canvas op) and shift the cached vertices in place,
+        rather than re-deriving them from the shape via _update_coords().
+        """
+
+        if dx == 0 and dy == 0:
+            return
+
+        self._screen._canvas.move(self._ref, dx, dy)
+        for vertex in self._vertices:
+            vertex._x += dx
+            vertex._y += dy
 
     def width(self, width: float = None) -> float:
         """
