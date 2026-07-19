@@ -1228,7 +1228,11 @@ class Renderable(Object):
         if dx == 0 and dy == 0:
             return
 
-        self._screen._canvas.move(self._ref, dx, dy)
+        try: 
+            self._screen._canvas.move(self._ref, dx, dy)
+        except tk.TclError:
+            pass # pass on TclError as this is likely on program shutdown.
+
         for vertex in self._vertices:
             vertex._x += dx
             vertex._y += dy
