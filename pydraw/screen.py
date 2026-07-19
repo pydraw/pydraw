@@ -188,6 +188,15 @@ class Screen:
 
         self.registry = {}  # The input function registry (stores input callbacks)
 
+        # Memoized canvas size. width()/height() are called extremely often (e.g.
+        # per-vertex in Renderable._update_coords), and each was a live winfo/Tcl
+        # round-trip. The size only changes on a resize, so we cache it and clear
+        # the cache whenever the canvas is actually reconfigured.
+        self._cached_size = None
+        self._canvas.bind('<Configure>',
+                          lambda event: setattr(self, '_cached_size', None),
+                          add='+')
+
     def title(self, title: str = None) -> str:
         """
         Get or set the title of the screen.
@@ -265,6 +274,29 @@ class Screen:
         except:
             return -1, -1  # Again, trying to avoid showing errors due to tkinter shutting down.
 
+    def _dims(self) -> tuple:
+        """
+        Returns the (width, height) of the CANVAS, memoized. The cache is cleared
+        by the <Configure> binding installed in __init__ whenever the canvas is
+        resized, so this stays correct for resizable/fullscreen windows too.
+        :return: a (width, height) tuple, or (-1, -1) while tkinter is shutting down
+        """
+
+        if self._cached_size is not None:
+            return self._cached_size
+
+        # noinspection PyBroadException
+        try:
+            canvas = self._screen.getcanvas()
+            width = canvas.winfo_width() - BORDER_CONSTANT
+            height = canvas.winfo_height() - BORDER_CONSTANT
+        except:
+            return -1, -1  # tkinter is shutting down
+
+        if width > 1 and height > 1:  # only cache once the window is realized
+            self._cached_size = (width, height)
+        return width, height
+
     def width(self) -> int:
         """
         Returns the width of the CANVAS within the screen. Important.
@@ -272,11 +304,7 @@ class Screen:
         :return: an integer representing the width of the canvas
         """
 
-        # noinspection PyBroadException
-        try:
-            return self._screen.getcanvas().winfo_width() - BORDER_CONSTANT
-        except:
-            return -1  # Just return -1 because tkinter is shutting down
+        return self._dims()[0]
 
     def height(self) -> int:
         """
@@ -285,11 +313,7 @@ class Screen:
         :return:
         """
 
-        # noinspection PyBroadException
-        try:
-            return self._screen.getcanvas().winfo_height() - BORDER_CONSTANT
-        except:
-            return -1  # Just return -1 because tkinter is shutting down
+        return self._dims()[1]
 
     def center(self) -> Location:
         """
