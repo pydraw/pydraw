@@ -1288,15 +1288,18 @@ class Renderable(Object):
 
         centroid = False
         if len(args) == 0:
-            if len(kwargs) > 0:
-                if 'centroid' in kwargs:
-                    if type(kwargs['centroid']) is bool:
-                        centroid = kwargs['centroid']
-                    else:
-                        raise InvalidArgumentError(
-                            ".center() requires a boolean for centroid (whether to return a bounds "
-                            "center or a calculated centroid).")
-            return self._center(centroid=centroid)
+            if 'centroid' in kwargs:
+                if type(kwargs['centroid']) is bool:
+                    centroid = kwargs['centroid']
+                else:
+                    raise InvalidArgumentError(
+                        ".center() requires a boolean for centroid (whether to return a bounds "
+                        "center or a calculated centroid).")
+
+            # centroid is only a getter modifier; without an actual move request
+            # (positional args or move_to/x/y) this is a pure getter.
+            if not any(key in kwargs for key in ('move_to', 'x', 'y')):
+                return self._center(centroid=centroid)
 
         location = Location(self._center(centroid=centroid))
 
@@ -2350,16 +2353,14 @@ class CustomPolygon(CustomRenderable):
         :return: None
         """
 
+        before = self._location.clone()
         self._location.move(*args, **kwargs)
 
-        new_location = self._screen.canvas_location(self._location.x(), self._location.y())
-        self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
-
-        # for vertice in self._vertices:
-        #     vertice.move(*args, **kwargs)
-
-        # self._location.move(*args, **kwargs)
-        # self.update()
+        # Use a relative canvas move (exact) rather than moveto(), which
+        # positions by the item's bounding box and lands 1px off because the
+        # outline inflates the bbox beyond the geometry coordinates.
+        self._screen._canvas.move(self._ref, self._location.x() - before.x(),
+                                  self._location.y() - before.y())
 
     def moveto(self, *args, **kwargs):
         """
@@ -2368,10 +2369,12 @@ class CustomPolygon(CustomRenderable):
         :return: None
         """
 
+        before = self._location.clone()
         self._location.moveto(*args, **kwargs)
 
-        new_location = self._screen.canvas_location(self._location.x(), self._location.y())
-        self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
+        # Relative canvas move by the delta (see move() for why not moveto()).
+        self._screen._canvas.move(self._ref, self._location.x() - before.x(),
+                                  self._location.y() - before.y())
 
     def width(self, width: float = None) -> float:
         """
@@ -2384,7 +2387,6 @@ class CustomPolygon(CustomRenderable):
         if width is not None:
             verify(width, (float, int))
             # self._width = width
-            print(f'updating coords')
             self._update_coords(width=width)
 
             # self.update()
@@ -2488,7 +2490,7 @@ class CustomPolygon(CustomRenderable):
         # Sorry for those of you that get weird rotations..
         x_list = []
         y_list = []
-        for vertex in self._vertices:
+        for vertex in self.vertices():
             x_list.append(vertex.x())
             y_list.append(vertex.y())
 
@@ -2511,7 +2513,7 @@ class CustomPolygon(CustomRenderable):
         self._current_vertices = self._get_ref_vertices()  # update vertices during a non-intensive call, typically
         return self._current_vertices
 
-    def clone(self):
+    def clone(self) -> 'CustomPolygon':
         """
         Clone this CustomPolygon!
 
@@ -2553,7 +2555,6 @@ class CustomPolygon(CustomRenderable):
     def _get_ref_vertices(self) -> list:
         new_vertices = []
         tk_coords = self._screen._canvas.coords(self._ref)
-        print(len(tk_coords), tk_coords)
         last = None
 
         for j in range(0, len(tk_coords), 2):
@@ -2590,7 +2591,6 @@ class CustomPolygon(CustomRenderable):
             tk_vertices.append(vertex.x() - (self._screen.width() / 2))
             tk_vertices.append((vertex.y() - (self._screen.height() / 2)))
 
-        print('new coords', self._current_vertices)
         self._screen._canvas.coords(self._ref, tk_vertices)
 
     def update(self):
@@ -3234,6 +3234,14 @@ class Polygon(Renderable):
             width=self._border_width,
             state=state
         )
+    
+    def clone(self) -> 'Polygon':
+        """
+        Clone this Polygon!
+
+        :return a Polygon
+        """
+        return Polygon(self._screen, self._num_sides, self.x(), self.y(), self.width(), self.height(), self.color(), self.border(), self.fill(), self.rotation(), self.visible())
 
     # noinspection PyProtectedMember
     def update(self):
