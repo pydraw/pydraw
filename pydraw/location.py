@@ -3,7 +3,32 @@ import math
 
 
 class Location:
+    __slots__ = ('_x', '_y')
+
+    @classmethod
+    def _raw(cls, x, y):
+        """
+        Fast internal constructor: build a Location from two numbers without any
+        argument parsing. For hot paths (e.g. per-vertex construction in
+        Renderable._update_coords) where the inputs are already known to be
+        numbers. Not part of the public API.
+        """
+        location = cls.__new__(cls)
+        location._x = x
+        location._y = y
+        return location
+
     def __init__(self, *args, **kwargs):
+        # Fast path: Location(x, y) with two numbers is by far the most common
+        # (and hottest) construction, so handle it before the general parsing.
+        if len(args) == 2 and not kwargs:
+            x, y = args
+            if (type(x) is float or type(x) is int) and \
+                    (type(y) is float or type(y) is int):
+                self._x = x
+                self._y = y
+                return
+
         location = (0, 0)
 
         # Basically we don't have an empty tuple at the start.
