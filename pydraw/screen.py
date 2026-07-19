@@ -728,7 +728,11 @@ class Screen:
         :return: None
         """
         try:
-            # self._screen.update()
+            if Screen._TERMINATING:
+                print('Terminated.')
+                exit(0)
+
+            # self._screen._screenupdate()
             self._canvas.update()
         except (turtle.Terminator, tk.TclError, AttributeError):
             # If we experience the termination exception, we will print the termination of the program
