@@ -1973,8 +1973,8 @@ class Renderable(Object):
 
         # Build the final vertices directly, instead of creating each Location
         # and then re-parsing args through moveto()/move() per vertex.
-        vertices = [Location(scale_x * vertex[0] + offset_x,
-                             -scale_y * vertex[1] + offset_y) for vertex in shape]
+        vertices = [Location._raw(scale_x * vertex[0] + offset_x,
+                                  -scale_y * vertex[1] + offset_y) for vertex in shape]
 
         if self._angle % 360 != 0:
             vertices = self._rotate(vertices, self._angle)
