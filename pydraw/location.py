@@ -34,9 +34,9 @@ class Location:
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+            if len(args) == 1 and (type(args[0]) is tuple or type(args[0]) is Location):
                 location = (args[0][0], args[0][1])
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+            elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 location = (args[0], args[1])
             else:
                 raise InvalidArgumentError('Location constructor takes a tuple/location '
@@ -74,9 +74,9 @@ class Location:
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+            if len(args) == 1 and (type(args[0]) is tuple or type(args[0]) is Location):
                 diff = (args[0][0], args[0][1])
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+            elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 diff = (args[0], args[1])
             else:
                 raise InvalidArgumentError('move() takes a tuple/Location '
@@ -116,9 +116,9 @@ class Location:
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+            if len(args) == 1 and (type(args[0]) is tuple or type(args[0]) is Location):
                 location = (args[0][0], args[0][1])
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+            elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 location = (args[0], args[1])
             else:
                 raise InvalidArgumentError('moveto() takes a tuple/Location '

@@ -63,9 +63,9 @@ class Pen:
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+            if len(args) == 1 and (type(args[0]) is tuple or type(args[0]) is Location):
                 diff = (args[0][0], args[0][1])
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+            elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 diff = (args[0], args[1])
             else:
                 raise InvalidArgumentError('move() takes a tuple/Location '
@@ -111,9 +111,9 @@ class Pen:
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+            if len(args) == 1 and (type(args[0]) is tuple or type(args[0]) is Location):
                 location = (args[0][0], args[0][1])
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+            elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 location = (args[0], args[1])
             else:
                 raise InvalidArgumentError('move() takes a tuple/Location '
@@ -3305,9 +3305,19 @@ class Image(Renderable):
         :return: a list of Locations representing the vertices
         """
 
-        vertices = [self.location(), Location(self.x() + self.width(), self.y()),
-                    Location(self.x() + self.width(), self.y() + self.height()),
-                    Location(self.x(), self.y() + self.height())]
+        # Note: the first vertex is a clone of the location, not self.location()
+        # itself - _setup() caches vertices() into self._vertices, and
+        # _translate() shifts every cached vertex in place. Aliasing the live
+        # location here would let a move shift it twice (once via _location.move,
+        # once via the vertex loop), doubling the displacement. The remaining
+        # vertices are built from known numbers, so we use the _raw fast path.
+        x = self.x()
+        y = self.y()
+        w = self.width()
+        h = self.height()
+        vertices = [self.location().clone(), Location._raw(x + w, y),
+                    Location._raw(x + w, y + h),
+                    Location._raw(x, y + h)]
 
         if self._angle != 0:
 
@@ -3316,8 +3326,8 @@ class Image(Renderable):
             cosine = math.cos(theta)
             sine = math.sin(theta)
 
-            center_x = self.x() + self.width() / 2
-            center_y = self.y() + self.width() / 2
+            center_x = x + w / 2
+            center_y = y + w / 2
 
             new_vertices = []
             for vertex in vertices:
@@ -3327,7 +3337,7 @@ class Image(Renderable):
 
                 new_x = (old_x * cosine - old_y * sine) + center_x
                 new_y = (old_x * sine + old_y * cosine) + center_y
-                new_vertices.append(Location(new_x, new_y))
+                new_vertices.append(Location._raw(new_x, new_y))
 
             vertices = new_vertices
 
@@ -3392,7 +3402,7 @@ class Image(Renderable):
 
     def clone(self) -> 'Image':
         constructor = type(self)
-        return constructor(self._screen, self._image_name, self.x(), self.y(), self.height(), self.width(),
+        return constructor(self._screen, self._image_name, self.x(), self.y(), self.width(), self.height(),
                            self.color(), self.border(), self.rotation(), self.visible())
 
     @staticmethod
@@ -3837,10 +3847,9 @@ class Text(CustomRenderable):
         :return: None
         """
 
+        before = self._location.clone()
         self._location.move(*args, **kwargs)
-
-        new_location = self._screen.canvas_location(self._location.x(), self._location.y())
-        self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
+        self._translate(self._location.x() - before.x(), self._location.y() - before.y())
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -3849,10 +3858,27 @@ class Text(CustomRenderable):
         :return: None
         """
 
+        before = self._location.clone()
         self._location.moveto(*args, **kwargs)
+        self._translate(self._location.x() - before.x(), self._location.y() - before.y())
 
-        new_location = self._screen.canvas_location(self._location.x(), self._location.y())
-        self._screen._canvas.moveto(self._ref, new_location.x(), new_location.y())
+    def _translate(self, dx: float, dy: float) -> None:
+        """
+        Shift the text by (dx, dy) using a single relative canvas move.
+
+        The text item's canvas position tracks (x, y) one-to-one, so a relative
+        move by the pydraw delta is exact - unlike moveto(), which positions by
+        the bounding box (landing 1px off) and needs a winfo-backed
+        canvas_location() conversion on every call.
+        """
+
+        if dx == 0 and dy == 0:
+            return
+
+        try:
+            self._screen._canvas.move(self._ref, dx, dy)
+        except tk.TclError:
+            pass  # pass on TclError as this is likely on program shutdown.
 
     # noinspection PyMethodOverriding
     def width(self) -> float:
@@ -4301,15 +4327,14 @@ class Line(Object):
         super().__init__(screen)
         self._screen = screen
 
-        if len(args) >= 2:
-            if len(args) >= 4 and [type(arg) is float or type(arg) is int for arg in args[0:4]]:
-                self._pos1 = Location(args[0], args[1])
-                self._pos2 = Location(args[2], args[3])
-                excess = args[4:]
-            elif [type(arg) is tuple or type(arg) is Location for arg in args[0:2]]:
-                self._pos1 = Location(args[0][0], args[0][1])
-                self._pos2 = Location(args[1][0], args[1][1])
-                excess = args[2:]
+        if len(args) >= 4 and all(type(arg) is float or type(arg) is int for arg in args[0:4]):
+            self._pos1 = Location(args[0], args[1])
+            self._pos2 = Location(args[2], args[3])
+            excess = args[4:]
+        elif len(args) >= 2 and all(type(arg) is tuple or type(arg) is Location for arg in args[0:2]):
+            self._pos1 = Location(args[0][0], args[0][1])
+            self._pos2 = Location(args[1][0], args[1][1])
+            excess = args[2:]
         else:
             raise InvalidArgumentError(
                 'Incorrect Argumentation: Line requires either two Locations, tuples, or four '
@@ -4366,9 +4391,9 @@ class Line(Object):
         """
 
         if len(args) != 0:
-            if len(args) == 1 and type(args[0]) is Location or type(args[0]) is tuple:
+            if len(args) == 1 and (type(args[0]) is Location or type(args[0]) is tuple):
                 self._pos1 = Location(args[0][0], args[0][1])
-            elif len(args) == 2 and [(type(arg) is float or type(arg) is int for arg in args)]:
+            elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 self._pos1 = Location(args[0], args[1])
             else:
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.')
@@ -4389,10 +4414,10 @@ class Line(Object):
         """
 
         if len(args) != 0:
-            if len(args) == 1 and type(args[0]) is Location or type(args[0]) is tuple:
+            if len(args) == 1 and (type(args[0]) is Location or type(args[0]) is tuple):
                 self._pos2 = Location(args[0][0], args[0][1])
                 self.update()
-            elif len(args) == 2 and (type(arg) is float or type(arg) is int for arg in args):
+            elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 self._pos2 = Location(args[0], args[1])
                 self.update()
             else:
@@ -4422,9 +4447,9 @@ class Line(Object):
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and type(args[0]) is tuple or type(args[0]) is Location:
+            if len(args) == 1 and (type(args[0]) is tuple or type(args[0]) is Location):
                 diff = (args[0][0], args[0][1])
-            elif len(args) == 2 and [type(arg) is float or type(arg) is int for arg in args]:
+            elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 diff = (args[0], args[1])
             else:
                 raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!')
@@ -4466,10 +4491,10 @@ class Line(Object):
         :return: None
         """
 
-        if len(args) == 2 and (type(arg) is tuple or type(arg) is Location for arg in args):
+        if len(args) == 2 and all(type(arg) is tuple or type(arg) is Location for arg in args):
             self._pos1.moveto(args[0][0], args[0][1])
             self._pos2.moveto(args[1][0], args[1][1])
-        elif len(args) == 4 and (type(arg) is int or type(arg) is float for arg in args):
+        elif len(args) == 4 and all(type(arg) is int or type(arg) is float for arg in args):
             self._pos1.moveto(args[0], args[1])
             self._pos2.moveto(args[2], args[3])
         elif len(kwargs) == 0:
@@ -4478,21 +4503,21 @@ class Line(Object):
 
         if len(kwargs.keys()) > 0:
             for key, value in kwargs.items():
-                if key.lower() == 'pos1' and type(value) is tuple or type(value) is Location:
+                if key.lower() == 'pos1' and (type(value) is tuple or type(value) is Location):
                     pos1 = value
                     verify(pos1[0], (float, int), pos1[1], (float, int))
                     self._pos1 = Location(pos1[0], pos1[1])
-                elif key.lower() == 'pos2' and type(value) is tuple or type(value) is Location:
+                elif key.lower() == 'pos2' and (type(value) is tuple or type(value) is Location):
                     pos2 = value
                     verify(pos2[0], (float, int), pos2[1], (float, int))
                     self._pos2 = Location(pos2[0], pos2[1])
-                elif key.lower() == 'x1' and type(value) is float or type(value) is int:
+                elif key.lower() == 'x1' and (type(value) is float or type(value) is int):
                     self._pos1.x(value)
-                elif key.lower() == 'y1' and type(value) is float or type(value) is int:
+                elif key.lower() == 'y1' and (type(value) is float or type(value) is int):
                     self._pos1.y(value)
-                elif key.lower() == 'x2' and type(value) is float or type(value) is int:
+                elif key.lower() == 'x2' and (type(value) is float or type(value) is int):
                     self._pos2.x(value)
-                elif key.lower() == 'y2' and type(value) is float or type(value) is int:
+                elif key.lower() == 'y2' and (type(value) is float or type(value) is int):
                     self._pos2.y(value)
         elif len(args) == 0:
             raise TypeError('Incorrect Argumentation: Requires either two locations, tuples, or four numbers (x1, y1, '
@@ -4520,7 +4545,7 @@ class Line(Object):
 
             if len(args) > 1 and type(args[1]) is int:
                 point = args[1]
-        elif len(args) >= 2 and (type(arg) is float or type(arg) is int for arg in args[:2]):
+        elif len(args) >= 2 and all(type(arg) is float or type(arg) is int for arg in args[:2]):
             location = Location(args[0], args[1])
 
             if len(args) > 2 and type(args[2]) is int:
