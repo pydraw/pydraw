@@ -1,115 +1,130 @@
 from pydraw import *
+import math
 import random
 
-GRAVITY = 1
+
+GRAVITY = 0.02
+MAX_GRAVITY = 0.1
+THRUST = 0.05
+MAX_SPEED = 6
+FPS = 60
 
 screen = Screen(800, 600, "Gravity")
 screen.color(Color(8, 18, 32))
 
-class World:
-    def __init__(self, bounds=None):
-        self.objects = {}  # key: type, value: list of objects
-        if bounds is None:
-            self.bounds = [0, 0, screen.width(), screen.height()]
 
-    def add(self, o_type, obj):
-        if o_type not in self.objects:
-            self.objects[o_type] = []
+# Create a world that is three screens wide and three screens tall.
+left = -screen.width()
+top = -screen.height()
+right = screen.width() * 2
+bottom = screen.height() * 2
 
-        self.objects[o_type].append(obj)
+stars = []
+for i in range(1500):
+    size = random.randint(1, 3)
+    star = Oval(
+        screen,
+        random.randint(left, right),
+        random.randint(top, bottom),
+        size,
+        size,
+        Color("white"),
+    )
+    stars.append(star)
 
-    def remove(self, obj):
-        flist: list = None
-        for objs in self.objects.values():
-            for other in objs:
-                if obj == other:
-                    flist = objs
+planets = []
+for i in range(45):
+    size = random.randint(20, 60)
+    color = Color(
+        random.randint(0, 255),
+        random.randint(0, 255),
+        random.randint(0, 255),
+    )
+    planet = Oval(
+        screen,
+        random.randint(left, right),
+        random.randint(top, bottom),
+        size,
+        size,
+        color,
+    )
+    planets.append(planet)
 
-        if flist is not None:
-            flist.remove(obj)
+ship = Image(screen, "images/ship.png", screen.center().x(), screen.center().y(), 45, 30)
+ship.move(-ship.width() / 2, -ship.height() / 2)
 
-    def move(self, dx, dy):
-        for o_type, objs in self.objects.items():
-            for obj in objs:
-                obj.move(dx, dy)
-
-    def move_type(self, o_type, dx, dy):
-        for obj in self.objects.get(o_type):
-            obj.move(dx, dy)
-
-
-class Planet:
-    MASS_MULTIPLIER = 1000
-    def __init__(self, screen, x, y, size, color, mass=None):
-        self.size = size
-        self.ref = Oval(screen, x, y, size, size, color)
-        self.mass = mass if mass is not None else size * self.MASS_MULTIPLIER
-
-
-class Ship:
-    SPEED = 5
-    def __init__(self, screen, x, y):
-        self.ref = Image(screen, "images/ship.png", x, y, 45, 30)  # stretch to 45x30
-        self.dx = 0
-        self.dy = 0
+dx = 0
+dy = 0
+keys = set()
 
 
-
-
-
-
-
-def create_stars(world, bounds=None):
-    coverage = random.randint(5, 8)
-    bounds = [0, 0, screen.width(), screen.height()]
-    # create stars covering x percentage of the screen
-    for i in range(coverage * bounds[2] * bounds[3] // 10000):
-        x = random.randint(0, bounds[2])
-        y = random.randint(0, bounds[3])
-        size = random.randint(1, 3)
-        star = Oval(screen, x, y, size, size, Color(255, 255, 255))
-        world.add("star", star)
-
-
-def create_planets(world, bounds=None):
-    for i in range(5):
-        x = random.randint(0, screen.width())
-        y = random.randint(0, screen.height())
-        size = random.randint(20, 60)
-        color = Color(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        planet = Planet(screen, x, y, size, color)
-        world.add("planet", planet)
-
-
-
-world = World()
-create_stars(world)
-create_planets(world)
-
-ship = Ship(screen, screen.center().x(), screen.center().y())
-world.add("ship", ship)
-
-
-### INPUT
-
-# the keydown event from pydraw will naturally rate limit our velocity changes unless the user spams the keys
 def keydown(key):
-    if key == 'w' or key == 'up':
-        ship.dy -= Ship.SPEED
-    elif key == 's' or key == 'down':
-        ship.dy += Ship.SPEED
-    elif key == 'a' or key == 'left':
-        ship.dx -= Ship.SPEED
-    elif key == 'd' or key == 'right':
-        ship.dx += Ship.SPEED
+    keys.add(str(key))
 
+
+def keyup(key):
+    keys.discard(str(key))
 
 
 screen.listen()
 
-running = True
-FPS = 60
-while running:
+while True:
+    ship_center = ship.center()
+    gravity_x = 0
+    gravity_y = 0
+
+    # Add the pull from every planet.
+    for planet in planets:
+        planet_center = planet.center()
+        distance_x = planet_center.x() - ship_center.x()
+        distance_y = planet_center.y() - ship_center.y()
+        distance = math.hypot(distance_x, distance_y)
+
+        if distance > 0:
+            distance = max(distance, planet.width() / 2)
+            pull = GRAVITY * planet.width() * 1000 / distance ** 2
+            gravity_x += distance_x / distance * pull
+            gravity_y += distance_y / distance * pull
+
+    # Keep gravity from overpowering the controls.
+    gravity = math.hypot(gravity_x, gravity_y)
+    if gravity > MAX_GRAVITY:
+        gravity_x *= MAX_GRAVITY / gravity
+        gravity_y *= MAX_GRAVITY / gravity
+
+    dx += gravity_x
+    dy += gravity_y
+
+    # Holding a movement key gradually changes the ship's velocity.
+    input_x = 0
+    input_y = 0
+
+    if "d" in keys or "right" in keys:
+        input_x += 1
+    if "a" in keys or "left" in keys:
+        input_x -= 1
+    if "s" in keys or "down" in keys:
+        input_y += 1
+    if "w" in keys or "up" in keys:
+        input_y -= 1
+
+    input_length = math.hypot(input_x, input_y)
+
+    if input_length > 0:
+        dx += input_x / input_length * THRUST
+        dy += input_y / input_length * THRUST
+
+    speed = math.hypot(dx, dy)
+    if speed > MAX_SPEED:
+        dx *= MAX_SPEED / speed
+        dy *= MAX_SPEED / speed
+
+    # Keep the ship centered and move the world in the opposite direction.
+    for star in stars:
+        star.move(-dx, -dy)
+    for planet in planets:
+        planet.move(-dx, -dy)
+
     screen.update()
     screen.sleep(1 / FPS)
 
