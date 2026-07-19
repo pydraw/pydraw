@@ -60,7 +60,7 @@ def unselect_poly():
     last_selected = selected
 
 
-def mousedown(button, location):
+def mousedown(location, button):
     global cursor_line
 
     if button == 1 and drawing:

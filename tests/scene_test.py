@@ -13,7 +13,7 @@ scene: Scene = Scene(800, 600)
 box = Rectangle(scene, 10, 10, 50, 50, Color('red'))
 
 
-def mousedown(button, location):
+def mousedown(location, button):
     box.center(location)
 
 

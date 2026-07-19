@@ -84,7 +84,7 @@ test_color = Color('red2')
 print(f'Color RGB: {test_color.red()}, {test_color.green()}, {test_color.blue()}')
 
 
-def mousedown(button, location):
+def mousedown(location, button):
     global state
     print('Mousedown detected', button, location)
     crazy_waffle.rotate(5)

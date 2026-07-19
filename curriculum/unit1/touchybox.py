@@ -7,7 +7,7 @@ box2 = Rectangle(screen, 350, 200, 100, 100, Color('green'))
 box3 = Rectangle(screen, 550, 200, 100, 100, Color('blue'))
 
 
-def mousedown(button, location):
+def mousedown(location, button):
     if box1.contains(location):
         box1.color(Color('orange'))
 
@@ -18,7 +18,7 @@ def mousedown(button, location):
         box3.color(Color('aqua'))
 
 
-def mouseup(button, location):
+def mouseup(location, button):
     if box1.contains(location):
         box1.color(Color('red'))
 

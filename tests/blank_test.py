@@ -56,7 +56,7 @@ def keydown(key):
         comp.move(5, 5)
 
 
-def mousedown(button, location):
+def mousedown(location, button):
     print('click')
     if button == 3:
         text.front()
