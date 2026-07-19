@@ -1964,30 +1964,28 @@ class Renderable(Object):
     def _update_coords(self):
         shape = self._shape  # List of normal vertices.
 
-        width = self._width
-        height = self._height
+        # Hoist per-object constants out of the vertex loops. (cx/cy were always
+        # 0, so the old `(v - c) + c` was a no-op.)
+        scale_x = self._width / PIXEL_RATIO
+        scale_y = self._height / PIXEL_RATIO
+        offset_x = self.x() + self._width / 2
+        offset_y = self.y() + self._height / 2
 
-        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO)
-
-        cx = 0
-        cy = 0
-
-        vertices = [Location(vertex[0], vertex[1]) for vertex in shape]
-
-        for vertex in vertices:
-            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy)
-
-            vertex.move(self.x() + width / 2, self.y() + height / 2)
-
-        self._vertices = vertices
+        # Build the final vertices directly, instead of creating each Location
+        # and then re-parsing args through moveto()/move() per vertex.
+        vertices = [Location(scale_x * vertex[0] + offset_x,
+                             -scale_y * vertex[1] + offset_y) for vertex in shape]
 
         if self._angle % 360 != 0:
-            self._vertices = self._rotate(self._vertices, self._angle)
+            vertices = self._rotate(vertices, self._angle)
+        self._vertices = vertices
 
-        tk_vertices = []  # we need to convert to tk's coordinate system.
-        for vertex in self._vertices:
-            tk_vertices.append(vertex.x() - (self._screen.width() / 2))
-            tk_vertices.append((vertex.y() - (self._screen.height() / 2)))
+        # Convert to tk's coordinate system; the canvas size is read once here
+        # rather than twice per vertex.
+        half_w = self._screen.width() / 2
+        half_h = self._screen.height() / 2
+        tk_vertices = [coord for vertex in vertices
+                       for coord in (vertex._x - half_w, vertex._y - half_h)]
 
         self._screen._canvas.coords(self._ref, tk_vertices)
 
