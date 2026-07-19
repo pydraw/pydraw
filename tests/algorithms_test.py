@@ -2,8 +2,11 @@
 Algorithms Test: Tests all algorithms (IE: overlaps(), contains(), etc).
 """
 
+import os
 import unittest
 from pydraw import Screen, Color, Location, Rectangle, Triangle, Oval, Line, CustomPolygon, Image
+
+IMAGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'images', 'cool_barry.jpg')
 
 
 class AlgorithmsTest(unittest.TestCase):
@@ -30,7 +33,7 @@ class AlgorithmsTest(unittest.TestCase):
                                          [(150, 150), (250, 150), (300, 200), (300, 250), (250, 230), (150, 300)],
                                          Color('black'), Color('red'))
 
-            image = Image(self.screen, '../images/cool_barry.jpg', 250, 250, 150, 150)
+            image = Image(self.screen, IMAGE_PATH, 250, 250, 150, 150)
             self.assertTrue(image.overlaps(custom_shape))
             self.assertTrue(custom_shape.overlaps(shape2))
             self.screen.clear()
