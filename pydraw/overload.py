@@ -454,7 +454,7 @@ class Dispatcher(object):
     >>> f(3.0)
     2.0
     """
-    __slots__ = '__name__', 'name', 'funcs', '_ordering', '_cache', 'doc'
+    __slots__ = '__name__', 'name', 'funcs', '_ordering', '_cache', 'doc', '_min_args'
 
     def __init__(self, name, doc=None):
         self.name = self.__name__ = name
@@ -462,6 +462,10 @@ class Dispatcher(object):
         self.doc = doc
 
         self._cache = {}
+        # signature -> number of leading required (non-default) parameters,
+        # so a call with fewer args can still match when the omitted trailing
+        # parameters are optional. See dispatch_iter().
+        self._min_args = {}
 
     def register(self, *types, **kwargs):
         """ register dispatcher with new implementation
@@ -515,6 +519,27 @@ class Dispatcher(object):
 
             if all(ann is not Parameter.empty for ann in annotations):
                 return annotations
+
+    @classmethod
+    def _required_arg_count(cls, func):
+        """ Count leading positional parameters that have no default.
+
+        These are the arguments a caller must supply; parameters after them are
+        optional, which lets a shorter call match a longer signature. Returns
+        None if the function's signature can't be introspected.
+        """
+        params = cls.get_func_params(func)
+        if params is None:
+            return None
+
+        Parameter = inspect.Parameter
+        count = 0
+        for param in params:
+            if param.kind in (Parameter.POSITIONAL_ONLY,
+                              Parameter.POSITIONAL_OR_KEYWORD):
+                if param.default is Parameter.empty:
+                    count += 1
+        return count
 
     def add(self, signature, func):
         """ Add new types/method pair to dispatcher
@@ -571,7 +596,12 @@ class Dispatcher(object):
             else:
                 new_signature.append(typ)
 
-        self.funcs[tuple(new_signature)] = func
+        sig = tuple(new_signature)
+        self.funcs[sig] = func
+        required = self._required_arg_count(func)
+        # Fall back to the full length (exact-match only) when introspection
+        # fails, so an un-inspectable func never gains looser matching.
+        self._min_args[sig] = required if required is not None else len(sig)
         self._cache.clear()
 
         try:
@@ -664,6 +694,19 @@ class Dispatcher(object):
                     result = self.funcs[signature]
                     yield result
 
+        # Default-honoring fallback: allow a call to match a *longer* signature
+        # when the omitted trailing parameters are optional (have defaults) and
+        # the supplied prefix matches. This is strictly additive -- it only ever
+        # considers signatures longer than the call (len > n), which the passes
+        # above never match, so no existing dispatch result changes.
+        for signature in self.ordering:
+            m = len(signature)
+            if m <= n or isvariadic(signature[-1]):
+                continue
+            if self._min_args.get(signature, m) <= n and \
+                    all(issubclass(typ, sig) for typ, sig in zip(types, signature)):
+                yield self.funcs[signature]
+
     def resolve(self, types):
         """ Deterimine appropriate implementation for this type signature
         .. deprecated:: 0.4.4
@@ -683,6 +726,10 @@ class Dispatcher(object):
         self.funcs = d['funcs']
         self._ordering = ordering(self.funcs)
         self._cache = dict()
+        self._min_args = {}
+        for sig, func in self.funcs.items():
+            required = self._required_arg_count(func)
+            self._min_args[sig] = required if required is not None else len(sig)
 
     @property
     def __doc__(self):
