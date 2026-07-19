@@ -3054,7 +3054,7 @@ class Triangle(Renderable):
 
 class Polygon(Renderable):
     # Full constructor for cloning
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
