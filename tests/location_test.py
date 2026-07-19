@@ -37,6 +37,29 @@ class LocationTest(unittest.TestCase):
         location1.moveto(x=500)
         self.assertEqual(location1, (500, 300))
 
+    def test_move_forms(self):
+        # move()/moveto() accept two numbers, a tuple, or a Location.
+        loc = Location(0, 0)
+        loc.move(2, 3)
+        self.assertEqual(loc, (2, 3))
+        loc.move((1, 1))
+        self.assertEqual(loc, (3, 4))
+        loc.move(Location(-3, -4))
+        self.assertEqual(loc, (0, 0))
+
+        loc.moveto(5, 6)
+        self.assertEqual(loc, (5, 6))
+        loc.moveto(Location(7, 8))
+        self.assertEqual(loc, (7, 8))
+
+    def test_rejects_bad_types(self):
+        # Regression: the two-number branch guard used to be a dead
+        # list-wrapped generator, so non-numeric pairs slipped through.
+        self.assertRaises(InvalidArgumentError, Location, 'a', 'b')
+        loc = Location(0, 0)
+        self.assertRaises(InvalidArgumentError, loc.move, 'a', 'b')
+        self.assertRaises(InvalidArgumentError, loc.moveto, 'a', 'b')
+
 
 if __name__ == '__main__':
     unittest.main()

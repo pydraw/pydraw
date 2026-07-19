@@ -31,79 +31,215 @@ class ConstructorTest(unittest.TestCase):
     def setUp(self) -> None:
         self.screen.clear()
 
-    def test_simple_numeric_forms(self):
-        loc = Location(150, 150)
+    def test_xy_forms(self):
+        # (x, y) constructor at every positional arity from 5 to 10. Rectangle,
+        # Oval and Triangle share this exact signature, so one loop covers all
+        # three. Each arity asserts both the supplied values and that the omitted
+        # trailing arguments fall back to their defaults.
         for Shape in SIMPLE_SHAPES:
-            # (screen, x, y, w, h)
-            obj = Shape(self.screen, 150, 150, 50, 50)
-            self.assertIsInstance(obj, Renderable)
-            self.assertEqual(obj.location(), loc)
-            self.assertEqual(obj.width(), 50)
-            self.assertEqual(obj.height(), 50)
+            self.screen.clear()
 
-            # (screen, x, y, w, h, color)
-            obj = Shape(self.screen, 150, 150, 50, 50, Color('blue'))
+            # 5: (screen, x, y, w, h) -- everything after height defaults
+            obj = Shape(self.screen, 10, 20, 50, 60)
+            self.assertIsInstance(obj, Renderable)
+            self.assertEqual(obj.location(), Location(10, 20))
+            self.assertEqual(obj.width(), 50)
+            self.assertEqual(obj.height(), 60)
+            self.assertEqual(obj.color(), Color('black'))
+            self.assertEqual(obj.fill(), True)
+            self.assertEqual(obj.rotation(), 0)
+            self.assertEqual(obj.visible(), True)
+
+            # 6: + color
+            obj = Shape(self.screen, 10, 20, 50, 60, Color('blue'))
             self.assertEqual(obj.color(), Color('blue'))
 
-            # (screen, x, y, w, h, color, border)
-            obj = Shape(self.screen, 150, 150, 50, 50, Color('blue'), Color('green'))
+            # 7: + border
+            obj = Shape(self.screen, 10, 20, 50, 60, Color('blue'), Color('green'))
             self.assertEqual(obj.border(), Color('green'))
 
-            # (screen, x, y, w, h, color, border, fill, rotation, visible)
-            obj = Shape(self.screen, 150, 150, 50, 50, Color('blue'), Color('green'), False, 45, False)
+            # 8: + fill (rotation, visible still default)
+            obj = Shape(self.screen, 10, 20, 50, 60, Color('blue'), Color('green'), False)
+            self.assertEqual(obj.fill(), False)
+            self.assertEqual(obj.rotation(), 0)
+            self.assertEqual(obj.visible(), True)
+
+            # 9: + rotation (visible still default)
+            obj = Shape(self.screen, 10, 20, 50, 60, Color('blue'), Color('green'), True, 30)
+            self.assertEqual(obj.rotation(), 30)
+            self.assertEqual(obj.visible(), True)
+
+            # 10: + visible (full form)
+            obj = Shape(self.screen, 10, 20, 50, 60, Color('blue'), Color('green'), False, 45, False)
             self.assertEqual(obj.fill(), False)
             self.assertEqual(obj.rotation(), 45)
             self.assertEqual(obj.visible(), False)
 
-    def test_simple_location_forms(self):
-        loc = Location(150, 150)
+    def test_kwargs_forms(self):
+        # Dispatch is on positional args only; keyword arguments bind to the
+        # optional tail of the selected overload afterwards. This must hold for
+        # every positional arity, including the ones the default-honoring
+        # dispatcher newly unlocked.
         for Shape in SIMPLE_SHAPES:
-            # (screen, location, w, h)
-            obj = Shape(self.screen, loc, 50, 50)
-            self.assertIsInstance(obj, Renderable)
-            self.assertEqual(obj.location(), loc)
+            # 5 positional + color kwarg
+            obj = Shape(self.screen, 43, 43, 50, 50, color=Color('blue'))
+            self.assertEqual(obj.color(), Color('blue'))
+            self.assertEqual(obj.location(), Location(43, 43))
 
-            # (screen, location, w, h, color)
-            obj = Shape(self.screen, loc, 50, 50, Color('blue'))
+            # 6 positional (color) + visible kwarg
+            obj = Shape(self.screen, 150, 75, 50, 50, Color('red'), visible=False)
+            self.assertEqual(obj.color(), Color('red'))
+            self.assertEqual(obj.visible(), False)
+
+            # 7 positional (color, border) + fill kwarg
+            obj = Shape(self.screen, 10, 10, 50, 50, Color('red'), Color('green'), fill=False)
+            self.assertEqual(obj.border(), Color('green'))
+            self.assertEqual(obj.fill(), False)
+
+            # 5 positional + entire tail as kwargs
+            obj = Shape(self.screen, 10, 10, 50, 50, color=Color('blue'),
+                        border=Color('red'), rotation=30, visible=False)
+            self.assertEqual(obj.color(), Color('blue'))
+            self.assertEqual(obj.rotation(), 30)
+            self.assertEqual(obj.visible(), False)
+
+            # 8 positional (a newly-unlocked gap arity) + visible kwarg
+            obj = Shape(self.screen, 10, 10, 50, 50, Color('red'), Color('green'), True, visible=False)
+            self.assertEqual(obj.fill(), True)
+            self.assertEqual(obj.visible(), False)
+
+            # Location form + color kwarg
+            obj = Shape(self.screen, Location(30, 40), 50, 50, color=Color('blue'))
+            self.assertEqual(obj.location(), Location(30, 40))
             self.assertEqual(obj.color(), Color('blue'))
 
-            # (screen, location, w, h, color, border)
-            obj = Shape(self.screen, loc, 50, 50, Color('blue'), Color('green'))
+            # Location form, 8 positional + visible kwarg
+            obj = Shape(self.screen, Location(30, 40), 50, 50,
+                        Color('red'), Color('green'), True, 30, visible=False)
+            self.assertEqual(obj.rotation(), 30)
+            self.assertEqual(obj.visible(), False)
+
+    def test_required_args_must_be_positional(self):
+        # Dispatch counts only positional args, so passing the required geometry
+        # arguments as keywords leaves nothing to match on. (Pre-existing
+        # behavior, unchanged by default-honoring.)
+        self.assertRaises(NotImplementedError, Rectangle, self.screen,
+                          x=43, y=43, width=50, height=50)
+
+    def test_location_forms(self):
+        # (location) constructor at every positional arity from 4 to 9, across
+        # all three shapes. The 7/8/9-arg forms are only reachable once a shape
+        # has a full Location overload (Phase 2 consolidation).
+        for Shape in SIMPLE_SHAPES:
+            self.screen.clear()
+            loc = Location(10, 20)
+
+            # 4: (screen, location, w, h)
+            obj = Shape(self.screen, loc, 50, 60)
+            self.assertIsInstance(obj, Renderable)
+            self.assertEqual(obj.location(), loc)
+            self.assertEqual(obj.width(), 50)
+            self.assertEqual(obj.height(), 60)
+            self.assertEqual(obj.color(), Color('black'))
+            self.assertEqual(obj.rotation(), 0)
+            self.assertEqual(obj.visible(), True)
+
+            # 5: + color
+            obj = Shape(self.screen, loc, 50, 60, Color('blue'))
+            self.assertEqual(obj.color(), Color('blue'))
+
+            # 6: + border
+            obj = Shape(self.screen, loc, 50, 60, Color('blue'), Color('green'))
             self.assertEqual(obj.border(), Color('green'))
 
+            # 7: + fill
+            obj = Shape(self.screen, loc, 50, 60, Color('blue'), Color('green'), False)
+            self.assertEqual(obj.fill(), False)
+
+            # 8: + rotation
+            obj = Shape(self.screen, loc, 50, 60, Color('blue'), Color('green'), True, 30)
+            self.assertEqual(obj.rotation(), 30)
+
+            # 9: + visible (full form)
+            obj = Shape(self.screen, loc, 50, 60, Color('blue'), Color('green'), True, 30, False)
+            self.assertEqual(obj.visible(), False)
+
     def test_polygon_numeric_forms(self):
-        loc = Location(150, 150)
-
-        obj = Polygon(self.screen, 6, 150, 150, 50, 50)
+        # Polygon's (num_sides, x, y) form at every positional arity from 6 to 11.
+        # 6: (screen, sides, x, y, w, h)
+        obj = Polygon(self.screen, 6, 10, 20, 50, 60)
         self.assertIsInstance(obj, Renderable)
-        self.assertEqual(obj.location(), loc)
+        self.assertEqual(obj.location(), Location(10, 20))
         self.assertEqual(len(obj.vertices()), 6)
+        self.assertEqual(obj.color(), Color('black'))
+        self.assertEqual(obj.rotation(), 0)
+        self.assertEqual(obj.visible(), True)
 
-        obj = Polygon(self.screen, 5, 150, 150, 50, 50, Color('blue'))
+        # 7: + color
+        obj = Polygon(self.screen, 5, 10, 20, 50, 60, Color('blue'))
         self.assertEqual(obj.color(), Color('blue'))
         self.assertEqual(len(obj.vertices()), 5)
 
-        obj = Polygon(self.screen, 6, 150, 150, 50, 50, Color('blue'), Color('green'))
+        # 8: + border
+        obj = Polygon(self.screen, 6, 10, 20, 50, 60, Color('blue'), Color('green'))
         self.assertEqual(obj.border(), Color('green'))
 
-        # Full form (screen, sides, x, y, w, h, color, border, fill, rotation, visible)
-        obj = Polygon(self.screen, 8, 150, 150, 50, 50, Color('blue'), Color('green'), False, 45, False)
+        # 9: + fill
+        obj = Polygon(self.screen, 6, 10, 20, 50, 60, Color('blue'), Color('green'), False)
+        self.assertEqual(obj.fill(), False)
+        self.assertEqual(obj.rotation(), 0)
+
+        # 10: + rotation
+        obj = Polygon(self.screen, 6, 10, 20, 50, 60, Color('blue'), Color('green'), True, 30)
+        self.assertEqual(obj.rotation(), 30)
+        self.assertEqual(obj.visible(), True)
+
+        # 11: + visible (full form)
+        obj = Polygon(self.screen, 8, 10, 20, 50, 60, Color('blue'), Color('green'), False, 45, False)
         self.assertEqual(obj.fill(), False)
         self.assertEqual(obj.rotation(), 45)
         self.assertEqual(obj.visible(), False)
         self.assertEqual(len(obj.vertices()), 8)
 
     def test_polygon_location_forms(self):
-        loc = Location(150, 150)
+        # Polygon's (num_sides, location) form at every positional arity 5 to 10.
+        loc = Location(10, 20)
 
-        obj = Polygon(self.screen, 6, loc, 50, 50)
+        # 5: (screen, sides, location, w, h)
+        obj = Polygon(self.screen, 6, loc, 50, 60)
         self.assertEqual(obj.location(), loc)
+        self.assertEqual(len(obj.vertices()), 6)
 
-        obj = Polygon(self.screen, 6, loc, 50, 50, Color('blue'))
+        # 6: + color
+        obj = Polygon(self.screen, 6, loc, 50, 60, Color('blue'))
         self.assertEqual(obj.color(), Color('blue'))
 
-        obj = Polygon(self.screen, 6, loc, 50, 50, Color('blue'), Color('green'))
+        # 7: + border
+        obj = Polygon(self.screen, 6, loc, 50, 60, Color('blue'), Color('green'))
         self.assertEqual(obj.border(), Color('green'))
+
+        # 8: + fill
+        obj = Polygon(self.screen, 6, loc, 50, 60, Color('blue'), Color('green'), False)
+        self.assertEqual(obj.fill(), False)
+
+        # 9: + rotation
+        obj = Polygon(self.screen, 6, loc, 50, 60, Color('blue'), Color('green'), True, 30)
+        self.assertEqual(obj.rotation(), 30)
+
+        # 10: + visible (full form)
+        obj = Polygon(self.screen, 6, loc, 50, 60, Color('blue'), Color('green'), True, 30, False)
+        self.assertEqual(obj.visible(), False)
+
+    def test_polygon_kwargs_forms(self):
+        # num_sides is positional; the optional tail binds by keyword.
+        obj = Polygon(self.screen, 6, 10, 20, 50, 60, color=Color('blue'))
+        self.assertEqual(obj.color(), Color('blue'))
+        self.assertEqual(len(obj.vertices()), 6)
+
+        obj = Polygon(self.screen, 5, Location(10, 20), 50, 60, Color('red'), visible=False)
+        self.assertEqual(obj.color(), Color('red'))
+        self.assertEqual(obj.visible(), False)
+        self.assertEqual(len(obj.vertices()), 5)
 
     def test_invalid_constructor(self):
         # A bogus argument type finds no matching signature.
@@ -488,39 +624,6 @@ class CustomPolygonTest(unittest.TestCase):
     def test_transform_set_unsupported(self):
         p = self.make()
         self.assertRaises(UnsupportedError, p.transform, (50, 50, 45))
-
-
-class KnownGapsTest(unittest.TestCase):
-    """
-    Signatures that are intended to work but currently do not.
-
-    These are marked expectedFailure so they document the desired behavior
-    without failing the suite; each should flip to an unexpected success
-    (and can then be promoted to a normal test) once fixed:
-
-      * 8/9-arg constructor forms -> requires the overload dispatcher to
-        honor default arguments.
-    """
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.screen = Screen(800, 600)
-
-    def setUp(self) -> None:
-        self.screen.clear()
-
-    @unittest.expectedFailure
-    def test_numeric_8_arg_form(self):
-        # (screen, x, y, w, h, color, border, fill, rotation) -- omits visible
-        obj = Rectangle(self.screen, 150, 150, 50, 50, Color('blue'), Color('green'), True, 30)
-        self.assertEqual(obj.rotation(), 30)
-
-    @unittest.expectedFailure
-    def test_location_full_form(self):
-        # (screen, location, w, h, color, border, fill, rotation, visible)
-        obj = Rectangle(self.screen, Location(150, 150), 50, 50,
-                        Color('blue'), Color('green'), True, 30, True)
-        self.assertEqual(obj.rotation(), 30)
 
 
 if __name__ == '__main__':

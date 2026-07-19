@@ -1,54 +1,91 @@
-from pydraw import Scene, Rectangle, Color
+"""
+Scene Test: End-to-end coverage of the Scene abstraction - subclassing a Scene,
+applying it to a Screen via Screen.scene(), the start()/run() lifecycle, and
+input handlers registered from the Scene's methods.
 
-scene: Scene = Scene(800, 600)
+(Rewritten from an old design-exploration script into real assertions.)
+"""
 
-# Okay now we place objects in the scene?
-
-# Another issue is input. We are presumably going
-# import this scene and then set the screen to it,
-# so we will need some input. Perhaps the default
-# listener registration actually will work, because
-# the entire file gets run when you import it.
-
-box = Rectangle(scene, 10, 10, 50, 50, Color('red'))
+import unittest
+from pydraw import Screen, Scene, Location, Color, Rectangle
+from pydraw.errors import *
 
 
-def mousedown(location, button):
-    box.center(location)
+class RecordingScene(Scene):
+    """A Scene that records its lifecycle and every input event it receives."""
+
+    def __init__(self):
+        super().__init__()
+        self.started = False
+        self.ran = False
+        self.box = None
+        self.events = []
+
+    def start(self):
+        # start() runs after the Scene is bound to a Screen, so screen() is live.
+        self.box = Rectangle(self.screen(), 10, 10, 50, 50, Color('red'))
+        self.started = True
+
+    def run(self):
+        self.ran = True
+
+    def mousedown(self, location, button):
+        self.events.append(('mousedown', location, button))
+
+    def mousemove(self, location):
+        self.events.append(('mousemove', location))
+
+    def keydown(self, key):
+        self.events.append(('keydown', key))
 
 
-scene.listen()
+class SceneTest(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.screen = Screen(800, 600)
+
+    def setUp(self) -> None:
+        self.screen.reset()
+
+    def test_apply_runs_lifecycle(self):
+        scene = RecordingScene()
+        self.screen.scene(scene)
+
+        self.assertIs(scene.screen(), self.screen)
+        self.assertTrue(scene.started, 'start() should have been called')
+        self.assertTrue(scene.ran, 'run() should have been called')
+        # The object created in start() is registered on the screen.
+        self.assertIn(scene.box, self.screen.objects())
+
+    def test_scene_receives_input(self):
+        scene = RecordingScene()
+        self.screen.scene(scene)
+
+        self.screen._mousedown(0, Location(30, 40))
+        self.screen._mousemove(Location(15, 25))
+        self.screen._keydown('a')
+
+        self.assertEqual(scene.events[0], ('mousedown', Location(30, 40), 0))
+        self.assertEqual(scene.events[1], ('mousemove', Location(15, 25)))
+        self.assertEqual(scene.events[2][0], 'keydown')
+        self.assertEqual(scene.events[2][1], 'a')  # Key compares equal to its string
+
+    def test_switching_scenes_replaces_handlers(self):
+        first = RecordingScene()
+        self.screen.scene(first)
+
+        second = RecordingScene()
+        self.screen.scene(second)
+
+        # Events now go to the second scene only.
+        self.screen._keydown('b')
+        self.assertEqual(len(first.events), 0)
+        self.assertEqual(second.events[0][1], 'b')
+
+    def test_rejects_non_scene(self):
+        self.assertRaises(InvalidArgumentError, self.screen.scene, 'not a scene')
 
 
-# Okay so turns out the above code will work. We can
-# register events just fine for the scene. But what about
-# some sort of loop?
-
-# If we add a while loop here it will not work because
-# it will block the main thread. We need to "store" a
-# loop rather than create one.
-
-def run():
-    # Put loop code here
-    running = True
-    fps = 30
-    while running:
-        scene.update()
-        scene.sleep(1 / fps)
-
-
-# ^ The scene functions as a screen object but will
-# not actually render anything.
-
-# It's worth noting that you can also register individual
-# event methods rather than using the automatic feature:
-def some_keydown_method(key):
-    print(key)
-
-
-scene.register('keydown', some_keydown_method)
-
-# The idea behind the feature above would be to allow for
-# the creation of a scene and registration of input
-# methods within a file that is already registering input
-# to a screen or another scene.
+if __name__ == '__main__':
+    unittest.main()
