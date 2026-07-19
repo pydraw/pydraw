@@ -171,7 +171,7 @@ class Location:
         :return: a new Location with the same x and y as this one.
         """
 
-        return Location(self._x, self._y)
+        return Location._raw(self._x, self._y)
 
     def __str__(self):
         return f'(X: {self._x}, Y: {self._y})'
