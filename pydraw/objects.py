@@ -2228,7 +2228,6 @@ class RoundedRectangle(CustomRenderable):
         state = tk.NORMAL if self._visible else tk.HIDDEN
         color_state = self._color if self._fill else Color.NONE
 
-        print(self._border_width)
         # noinspection PyProtectedMember
         self._ref = self._screen._canvas.create_polygon(
             tk_vertices,

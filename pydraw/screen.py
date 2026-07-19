@@ -250,7 +250,6 @@ class Screen:
 
         verify(width, int, height, int)
         # noinspection PyBroadException
-        print(f'{width}, {height}')
         self._screen.screensize(width, height)
         # self._root.wm_geometry("%dx%d" % (width, height))
 
