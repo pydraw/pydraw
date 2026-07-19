@@ -2672,7 +2672,9 @@ class CustomPolygon(CustomRenderable):
 
 
 class Rectangle(Renderable):
-    # Full constructor for cloning
+    # Two constructor forms: (x, y) and (location). The dispatcher honors
+    # default arguments, so each full signature also covers every shorter call
+    # that omits trailing optional args (color, border, fill, rotation, visible).
     @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
@@ -2682,75 +2684,10 @@ class Rectangle(Renderable):
                  visible: bool = True):
         self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
                           Location(x, y + height)]
-        # self._shape = ((10, -10), (10, 10), (-10, 10), (-10, -10))
         self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height), Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float))
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
-                          Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
-                          Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float), Color, Color)
+    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -2774,7 +2711,8 @@ class Oval(Renderable):
                 (-3.09, -9.51), (-0.00, -10.00), (3.09, -9.51),
                 (5.88, -8.09), (8.09, -5.88), (9.51, -3.09))
 
-    # Full constructor for cloning
+    # Two constructor forms: (x, y) and (location). The dispatcher honors
+    # default arguments, so each full signature also covers every shorter call.
     @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
@@ -2791,93 +2729,7 @@ class Oval(Renderable):
         self._shape = vertices
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._width = width
-        self._height = height
-
-        self._wedges = PIXEL_RATIO
-
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._width = width
-        self._height = height
-
-        self._wedges = PIXEL_RATIO
-
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._width = width
-        self._height = height
-
-        self._wedges = PIXEL_RATIO
-
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float))
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-        self._width = width
-        self._height = height
-
-        self._wedges = PIXEL_RATIO
-
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-        self._width = width
-        self._height = height
-
-        self._wedges = PIXEL_RATIO
-
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float), Color, Color)
+    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -2987,7 +2839,8 @@ class Oval(Renderable):
 
 
 class Triangle(Renderable):
-    # Full constructor for cloning
+    # Two constructor forms: (x, y) and (location). The dispatcher honors
+    # default arguments, so each full signature also covers every shorter call.
     @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
@@ -2998,63 +2851,7 @@ class Triangle(Renderable):
         self._shape = ((10, -10), (0, 10), (-10, -10))
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float))
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, Location, (int, float), (int, float), Color, Color)
+    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -3069,7 +2866,9 @@ class Triangle(Renderable):
 
 
 class Polygon(Renderable):
-    # Full constructor for cloning
+    # Two constructor forms: (num_sides, x, y) and (num_sides, location). The
+    # dispatcher honors default arguments, so each full signature also covers
+    # every shorter call.
     @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
@@ -3087,98 +2886,7 @@ class Polygon(Renderable):
 
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
-    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float))
-    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
-
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
-
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color)
-    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
-
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, int, Location, (int, float), (int, float))
-    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
-
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, int, Location, (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
-
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
-
-    @overload(Screen, int, Location, (int, float), (int, float), Color, Color)
+    @overload(Screen, int, Location, (int, float), (int, float), Color, Color, bool, int, bool)
     def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
                  color: Color = Color('black'),
                  border: Color = None,
@@ -3334,6 +3042,9 @@ class Image(Renderable):
 
     # (x, y) INITIALIZERS
 
+    # Two constructor forms: (x, y) and (location). The dispatcher honors default
+    # arguments, so each full signature also covers every shorter call. Only the
+    # screen and image path are required; x, y, width and height all default.
     @overload(Screen, str, (int, float), (int, float), (int, float), (int, float), Color, Color, int, bool)
     def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
                  width: float = None,
@@ -3342,6 +3053,20 @@ class Image(Renderable):
                  border: Color = Color.NONE,
                  rotation: float = 0,
                  visible: bool = True):
+        self._init_image(screen, image, x, y, width, height, color, border, rotation, visible)
+
+    @overload(Screen, str, Location, (int, float), (int, float), Color, Color, int, bool)
+    def __init__(self, screen: Screen, image: str, location: Location,
+                 width: float = None,
+                 height: float = None,
+                 color: Color = None,
+                 border: Color = Color.NONE,
+                 rotation: float = 0,
+                 visible: bool = True):
+        self._init_image(screen, image, location.x(), location.y(),
+                         width, height, color, border, rotation, visible)
+
+    def _init_image(self, screen, image, x, y, width, height, color, border, rotation, visible):
         self._image_name = image
         self._original = None
 
@@ -3378,383 +3103,6 @@ class Image(Renderable):
         self._mask = 123
 
         self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-
-        # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
-        self._patched = False
-
-        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
-                         rotation=rotation, visible=visible)
-        self._setup()
-
-        if width is not None and width != self._width:
-            self.width(width)
-        if height is not None and height != self._height:
-            self.height(height)
-
-        if color is not None:
-            self.color(color)
-
-        if border is not None:
-            self.border(border)
-
-    @overload(Screen, str, (int, float), (int, float))
-    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._image_name = image
-        self._original = None
-
-        # Filetype Checking
-        split = image.split('.')
-        if len(split) <= 1:
-            raise PydrawError('File must have extension filetype:', self._image_name)
-
-        filetype = split[len(split) - 1]
-
-        import os
-        if not os.path.isfile(image):
-            raise InvalidArgumentError(f'Image does not exist or is directory: {image}')
-
-        if filetype in self.TKINTER_TYPES:
-            self._image = tk.PhotoImage(name=image, file=image)
-        else:
-            try:
-                from PIL import Image, ImageTk
-                image = Image.open(self._image_name)
-                self._original = image  # We save the originally loaded image for easy modification
-
-                self._image = ImageTk.PhotoImage(image)
-            except:
-                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
-                                       'Install Pillow via: \'pip install pillow\'.')
-
-        self._width = self._image.width()
-        self._height = self._image.height()
-
-        self._frame = -1
-        self._frames = -1
-
-        self._mask = 123
-
-        # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
-        self._patched = False
-
-        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
-                         rotation=rotation, visible=visible)
-        self._setup()
-
-        if width is not None and width != self._width:
-            self.width(width)
-        if height is not None and height != self._height:
-            self.height(height)
-
-        if color is not None:
-            self.color(color)
-
-        if border is not None:
-            self.border(border)
-
-    @overload(Screen, str, (int, float), (int, float), (int, float), (int, float))
-    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._image_name = image
-        self._original = None
-
-        # Filetype Checking
-        split = image.split('.')
-        if len(split) <= 1:
-            raise PydrawError('File must have extension filetype:', self._image_name)
-
-        filetype = split[len(split) - 1]
-
-        import os
-        if not os.path.isfile(image):
-            raise InvalidArgumentError(f'Image does not exist or is directory: {image}')
-
-        if filetype in self.TKINTER_TYPES:
-            self._image = tk.PhotoImage(name=image, file=image)
-        else:
-            try:
-                from PIL import Image, ImageTk
-                image = Image.open(self._image_name)
-                self._original = image  # We save the originally loaded image for easy modification
-
-                self._image = ImageTk.PhotoImage(image)
-            except:
-                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
-                                       'Install Pillow via: \'pip install pillow\'.')
-
-        self._width = self._image.width()
-        self._height = self._image.height()
-
-        self._frame = -1
-        self._frames = -1
-
-        self._mask = 123
-
-        # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
-        self._patched = False
-
-        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
-                         rotation=rotation, visible=visible)
-        self._setup()
-
-        if width is not None and width != self._width:
-            self.width(width)
-        if height is not None and height != self._height:
-            self.height(height)
-
-        if color is not None:
-            self.color(color)
-
-        if border is not None:
-            self.border(border)
-
-    @overload(Screen, str, (int, float), (int, float), (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._image_name = image
-        self._original = None
-
-        # Filetype Checking
-        split = image.split('.')
-        if len(split) <= 1:
-            raise PydrawError('File must have extension filetype:', self._image_name)
-
-        filetype = split[len(split) - 1]
-
-        import os
-        if not os.path.isfile(image):
-            raise InvalidArgumentError(f'Image does not exist or is directory: {image}')
-
-        if filetype in self.TKINTER_TYPES:
-            self._image = tk.PhotoImage(name=image, file=image)
-        else:
-            try:
-                from PIL import Image, ImageTk
-                image = Image.open(self._image_name)
-                self._original = image  # We save the originally loaded image for easy modification
-
-                self._image = ImageTk.PhotoImage(image)
-            except:
-                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
-                                       'Install Pillow via: \'pip install pillow\'.')
-
-        self._width = self._image.width()
-        self._height = self._image.height()
-
-        self._frame = -1
-        self._frames = -1
-
-        self._mask = 123
-
-        # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
-        self._patched = False
-
-        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
-                         rotation=rotation, visible=visible)
-        self._setup()
-
-        if width is not None and width != self._width:
-            self.width(width)
-        if height is not None and height != self._height:
-            self.height(height)
-
-        if color is not None:
-            self.color(color)
-
-        if border is not None:
-            self.border(border)
-
-    # Location INITIALIZERS
-
-    @overload(Screen, str, Location)
-    def __init__(self, screen: Screen, image: str, location: Location,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._image_name = image
-        self._original = None
-
-        x = location.x()
-        y = location.y()
-
-        # Filetype Checking
-        split = image.split('.')
-        if len(split) <= 1:
-            raise PydrawError('File must have extension filetype:', self._image_name)
-
-        filetype = split[len(split) - 1]
-
-        import os
-        if not os.path.isfile(image):
-            raise InvalidArgumentError(f'Image does not exist or is directory: {image}')
-
-        if filetype in self.TKINTER_TYPES:
-            self._image = tk.PhotoImage(name=image, file=image)
-        else:
-            try:
-                from PIL import Image, ImageTk
-                image = Image.open(self._image_name)
-                self._original = image  # We save the originally loaded image for easy modification
-
-                self._image = ImageTk.PhotoImage(image)
-            except:
-                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
-                                       'Install Pillow via: \'pip install pillow\'.')
-
-        self._width = self._image.width()
-        self._height = self._image.height()
-
-        self._frame = -1
-        self._frames = -1
-
-        self._mask = 123
-
-        # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
-        self._patched = False
-
-        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
-                         rotation=rotation, visible=visible)
-        self._setup()
-
-        if width is not None and width != self._width:
-            self.width(width)
-        if height is not None and height != self._height:
-            self.height(height)
-
-        if color is not None:
-            self.color(color)
-
-        if border is not None:
-            self.border(border)
-
-    @overload(Screen, str, Location, (int, float), (int, float))
-    def __init__(self, screen: Screen, image: str, location: Location,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._image_name = image
-        self._original = None
-
-        x = location.x()
-        y = location.y()
-
-        # Filetype Checking
-        split = image.split('.')
-        if len(split) <= 1:
-            raise PydrawError('File must have extension filetype:', self._image_name)
-
-        filetype = split[len(split) - 1]
-
-        import os
-        if not os.path.isfile(image):
-            raise InvalidArgumentError(f'Image does not exist or is directory: {image}')
-
-        if filetype in self.TKINTER_TYPES:
-            self._image = tk.PhotoImage(name=image, file=image)
-        else:
-            try:
-                from PIL import Image, ImageTk
-                image = Image.open(self._image_name)
-                self._original = image  # We save the originally loaded image for easy modification
-
-                self._image = ImageTk.PhotoImage(image)
-            except:
-                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
-                                       'Install Pillow via: \'pip install pillow\'.')
-
-        self._width = self._image.width()
-        self._height = self._image.height()
-
-        self._frame = -1
-        self._frames = -1
-
-        self._mask = 123
-
-        # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
-        self._patched = False
-
-        super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
-                         rotation=rotation, visible=visible)
-        self._setup()
-
-        if width is not None and width != self._width:
-            self.width(width)
-        if height is not None and height != self._height:
-            self.height(height)
-
-        if color is not None:
-            self.color(color)
-
-        if border is not None:
-            self.border(border)
-
-    @overload(Screen, str, Location, (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, image: str, location: Location,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._image_name = image
-        self._original = None
-
-        x = location.x()
-        y = location.y()
-
-        # Filetype Checking
-        split = image.split('.')
-        if len(split) <= 1:
-            raise PydrawError('File must have extension filetype:', self._image_name)
-
-        filetype = split[len(split) - 1]
-
-        import os
-        if not os.path.isfile(image):
-            raise InvalidArgumentError(f'Image does not exist or is directory: {image}')
-
-        if filetype in self.TKINTER_TYPES:
-            self._image = tk.PhotoImage(name=image, file=image)
-        else:
-            try:
-                from PIL import Image, ImageTk
-                image = Image.open(self._image_name)
-                self._original = image  # We save the originally loaded image for easy modification
-
-                self._image = ImageTk.PhotoImage(image)
-            except:
-                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
-                                       'Install Pillow via: \'pip install pillow\'.')
-
-        self._width = self._image.width()
-        self._height = self._image.height()
-
-        self._frame = -1
-        self._frames = -1
-
-        self._mask = 123
 
         # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
         self._patched = False
