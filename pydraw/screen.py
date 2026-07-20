@@ -452,6 +452,9 @@ class Screen:
                 self._objects.remove(helper)
 
     def toggle_grid(self, value=None):
+        if value == False && len(self._gridlines) == 0: # If we don't have a grid and are resetting, no need to call grid()
+            return
+
         if value is None:
             value = not self._gridstate
 
