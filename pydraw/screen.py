@@ -681,9 +681,9 @@ class Screen:
         """
 
         self.toggle_grid(False)
-        self._gridlines.clear()
         for line in self._gridlines:
             line.remove()
+        self._gridlines.clear()
 
         for obj in self._helpers:
             obj.remove()
