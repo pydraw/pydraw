@@ -1881,16 +1881,38 @@ class Renderable(Object):
             shape2_edges.append((shape2_point1, shape2_point2))
             shape2_point1 = shape2_point2
 
-        # Now we are going to test the four orientations that the segments form
+        # Now we are going to test the four orientations that the segments form.
+        # For each edge of shape1 we compute its bounding box once, then skip any
+        # edge of shape2 whose bounding box cannot touch it -- this prunes the vast
+        # majority of the O(n*m) pairs when the shapes only meet (or miss) in a
+        # small region, which is the common case.
         for edge1 in shape1_edges:
+            p1, p2 = edge1
+            e1_min_x = p1[0] if p1[0] < p2[0] else p2[0]
+            e1_max_x = p1[0] if p1[0] > p2[0] else p2[0]
+            e1_min_y = p1[1] if p1[1] < p2[1] else p2[1]
+            e1_max_y = p1[1] if p1[1] > p2[1] else p2[1]
+
             for edge2 in shape2_edges:
+                p3, p4 = edge2
+
+                # Reject this pair if the two edges' bounding boxes don't overlap;
+                # disjoint boxes can neither cross nor share a co-linear point.
+                if e1_max_x < (p3[0] if p3[0] < p4[0] else p4[0]) or \
+                        (p3[0] if p3[0] > p4[0] else p4[0]) < e1_min_x or \
+                        e1_max_y < (p3[1] if p3[1] < p4[1] else p4[1]) or \
+                        (p3[1] if p3[1] > p4[1] else p4[1]) < e1_min_y:
+                    continue
+
                 orientation1 = orientation(edge1[0], edge1[1], edge2[0])
                 orientation2 = orientation(edge1[0], edge1[1], edge2[1])
                 orientation3 = orientation(edge2[0], edge2[1], edge1[0])
                 orientation4 = orientation(edge2[0], edge2[1], edge1[1])
 
-                # If orientations 1 and 2 are different as well as 3 and 4 then they intersect!
-                if orientation1 != orientation2 and orientation3 != orientation4:
+                # If orientations 1 and 2 are strictly opposite as well as 3 and 4 then they intersect!
+                # (Strict opposite signs -- a plain != would count a co-linear 0 as a crossing and
+                # mis-fire on floating-point-collinear edges that don't actually touch.)
+                if orientation1 * orientation2 < 0 and orientation3 * orientation4 < 0:
                     return True
 
                 # There's some special cases we should check where a point from one segment is on the other segment
@@ -4877,8 +4899,11 @@ class Line(Object):
                 orientation3 = orientation(edge2[0], edge2[1], edge1[0])
                 orientation4 = orientation(edge2[0], edge2[1], edge1[1])
 
-                # If orientations 1 and 2 are different as well as 3 and 4 then they intersect!
-                if orientation1 != orientation2 and orientation3 != orientation4:
+                # If orientations 1 and 2 are strictly opposite (both non-co-linear) as well as 3 and 4,
+                # then the segments cross. A plain != would treat a co-linear result as a crossing and
+                # mis-fire on floating-point-collinear edges that don't actually touch.
+                if orientation1 != orientation2 and orientation1 != 'co-linear' and orientation2 != 'co-linear' \
+                        and orientation3 != orientation4 and orientation3 != 'co-linear' and orientation4 != 'co-linear':
                     return True
 
                 # There's some special cases we should check where a point from one segment is on the other segment
