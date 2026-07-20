@@ -39,7 +39,7 @@ class Color:
                 self._b = args[0][2]
 
                 self._mode = 0
-            if type(args[0]) is not str:
+            elif type(args[0]) is not str:
                 raise NameError('Expected string but instead found: ' + str(args[0]))
 
             string = str(args[0])
@@ -149,6 +149,9 @@ class Color:
             return False
 
         return other.rgb() == self.rgb()
+
+    def __hash__(self):
+        return hash(self.rgb())
 
     @staticmethod
     def _rgb(color) -> tuple:
