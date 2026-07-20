@@ -1156,6 +1156,13 @@ class Renderable(Object):
     the item to be remade)
     """
 
+    # bounds() cache. Class-level defaults so every subclass inherits them, even
+    # ones like CustomPolygon that build their state without calling __init__.
+    # Keyed on the transform parameters (see bounds()); the first compute on an
+    # instance shadows these with per-instance values.
+    _bounds_sig = None
+    _bounds_cache = None
+
     def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
                  color: Color = Color('black'),
                  border: Color = Color.NONE,
@@ -1637,14 +1644,29 @@ class Renderable(Object):
         :return: a tuple containing the Location, width, and height.
         """
 
+        # Bounds only change when the object is moved/rotated/resized, so key a
+        # cache on those transform parameters. Repeated queries between moves --
+        # e.g. the same object across an all-pairs or one-vs-many overlaps() sweep
+        # -- then reuse the result instead of re-querying the canvas each time.
+        loc = self._location
+        sig = (loc._x, loc._y, self._angle, self._width, self._height)
+        if sig == self._bounds_sig:
+            return self._bounds_cache
+
         x0 = y0 = x1 = y1 = 0
         try:
             x0, y0, x1, y1 = self._screen._screen.cv.bbox(self._ref)
-            location = self._screen.create_location(x0, y0, canvas=True)
         except (tk.TclError, TypeError):
             return self.location().clone().move(-self.width() * .05, -self.height() * 0.5), self.width() * 1.5, self.height() * 1.5
 
-        return location, (x1 - x0), (y1 - y0)
+        # Inline of create_location(x0, y0, canvas=True): convert the canvas-space
+        # corner to screen space without the extra call/branch on this hot path.
+        location = Location(x0 + self._screen.width() / 2, y0 + self._screen.height() / 2)
+        result = (location, x1 - x0, y1 - y0)
+
+        self._bounds_sig = sig
+        self._bounds_cache = result
+        return result
 
     def contains(self, *args) -> bool:
         """
