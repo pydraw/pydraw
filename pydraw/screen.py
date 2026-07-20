@@ -645,18 +645,18 @@ class Screen:
         Note that this will override ALL previously registered input handlers.
 
         :param scene: The Scene to apply!
-        :return: None
+        :return: the new scene that was set, the existing scene if no args passed, or None
         """
         from pydraw import Scene
+        
+        if scene is None:
+            return self._scene
 
         if not isinstance(scene, Scene):
             raise InvalidArgumentError('You must pass a an object that extends Scene!')
 
-        if scene is None:
-            return self._scene
-
         if self._scene is not None:
-            del self._scene
+            del self._scene # calls our delete handler
 
         self.reset()  # Clears screen and destroys all registered input handlers.
 
