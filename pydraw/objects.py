@@ -1685,38 +1685,41 @@ class Renderable(Object):
         # the contains algorithm uses the line-intersects algorithm to determine if a point is within a polygon.
         # we are going to cast a ray from our point to the positive x. (left to right)
 
-        shape = self.vertices()
-        shape = tuple(shape[:]) + (shape[0],)  # Add the first vertex back again to get the last edge.
+        # Pre-extract raw (x, y) floats once so the ray-cast loop does pure
+        # float math instead of calling Location.x()/.y() on every vertex, every
+        # pass. This is the single biggest cost for high-vertex shapes.
+        verts = self.vertices()
+        n = len(verts)
+        pts = [(v.x(), v.y()) for v in verts]
 
-        point1 = shape[0]
-        for i in range(1, len(shape)):
+        p1x, p1y = pts[0]
+        for i in range(1, n + 1):
             # A cool trick that gets the next index in an array, or the first index if i is the last index.
             # (since we start at index 1)
-            point2 = shape[i % len(shape)]
+            p2x, p2y = pts[i % n]
 
             # make sure we're in the ballpark on the y-axis (actually able to intersect on the x-axis)
-            if y > min(point1.y(), point2.y()):
+            if y > (p1y if p1y < p2y else p2y):
 
                 # Same thing as above
-                if y <= max(point1.y(), point2.y()):
+                if y <= (p1y if p1y > p2y else p2y):
 
                     # Make sure our x is at least less than the max x of this line. (since we're travelling right)
-                    if x <= max(point1.x(), point2.x()):
+                    if x <= (p1x if p1x > p2x else p2x):
 
                         # If our y's are equal, that means this line is flat on the x, which makes us tricked until now.
                         # We now realize we were never in the ballpark in the first place.
-                        if point1.y() != point2.y():
+                        if p1y != p2y:
 
                             # Now we get a possible intersection point from left to right.
-                            intersects_x = (y - point1.y()) * (point2.x() - point1.x()) / \
-                                           (point2.y() - point1.y()) + point1.x()
+                            intersects_x = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
 
                             # if the line was vertical or we actually intersected it
-                            if point1.x() == point2.x() or x <= intersects_x:
+                            if p1x == p2x or x <= intersects_x:
                                 count += 1
 
             # move up the ladder next vertices and edge
-            point1 = point2
+            p1x, p1y = p2x, p2y
 
         return not (count % 2 == 0)
 
@@ -1821,8 +1824,14 @@ class Renderable(Object):
         # noinspection PyProtectedMember
         shape2 = other.vertices()
 
+        # Pre-extract raw (x, y) floats once. The edge-vs-edge test below is
+        # O(n*m) and previously called Location.x()/.y() millions of times on
+        # high-vertex shapes; from here on we work on plain float tuples instead.
+        shape1 = [(vertex.x(), vertex.y()) for vertex in shape1]
+        shape2 = [(vertex.x(), vertex.y()) for vertex in shape2]
+
         # Orientation method that will determine if it is a triangle (and in what direction [cc or ccw]) or a line.
-        def orientation(point1: Location, point2: Location, point3: Location) -> str:
+        def orientation(point1, point2, point3) -> int:
             """
             Internal method that will determine the orientation of three points. They can be a clockwise triangle,
             counterclockwise triangle, or a co-linear line segment.
@@ -1830,25 +1839,25 @@ class Renderable(Object):
             :param point1: the first point of the main line segment
             :param point2: the second point of the main line segment
             :param point3: the third point to check from another line segment
-            :return: the orientation of the passed points
+            :return: the orientation of the passed points (1 clockwise, -1 counter-clockwise, 0 co-linear)
             """
-            result = (float(point2.y() - point1.y()) * (point3.x() - point2.x())) - \
-                     (float(point2.x() - point1.x()) * (point3.y() - point2.y()))
+            result = (float(point2[1] - point1[1]) * (point3[0] - point2[0])) - \
+                     (float(point2[0] - point1[0]) * (point3[1] - point2[1]))
 
             if result > 0:
-                return 'clockwise'
+                return 1
             elif result < 0:
-                return 'counter-clockwise'
+                return -1
             else:
-                return 'co-linear'
+                return 0
 
-        def point_on_segment(point1: Location, point2: Location, point3: Location) -> bool:
+        def point_on_segment(point1, point2, point3) -> bool:
             """
             Returns if point3 lies on the segment formed by point1 and point2.
             """
 
-            return max(point1.x(), point3.x()) >= point2.x() >= min(point1.x(), point3.x()) \
-                   and max(point1.y(), point3.y()) >= point2.y() >= min(point1.y(), point3.y())
+            return max(point1[0], point3[0]) >= point2[0] >= min(point1[0], point3[0]) \
+                   and max(point1[1], point3[1]) >= point2[1] >= min(point1[1], point3[1])
 
         # Okay to begin actually detecting orientations, we want to loop through some edges. But only ones that are
         # relevant. In order to do this we will first have to turn the list of vertices into a list of edges.
@@ -1880,27 +1889,24 @@ class Renderable(Object):
                 orientation3 = orientation(edge2[0], edge2[1], edge1[0])
                 orientation4 = orientation(edge2[0], edge2[1], edge1[1])
 
-                # print(orientation1, orientation2, orientation3, orientation4)
-
                 # If orientations 1 and 2 are different as well as 3 and 4 then they intersect!
                 if orientation1 != orientation2 and orientation3 != orientation4:
                     return True
 
                 # There's some special cases we should check where a point from one segment is on the other segment
-                if orientation1 == 'co-linear' and point_on_segment(edge1[0], edge2[0], edge1[1]):
+                if orientation1 == 0 and point_on_segment(edge1[0], edge2[0], edge1[1]):
                     return True
 
-                if orientation2 == 'co-linear' and point_on_segment(edge1[0], edge2[1], edge1[1]):
+                if orientation2 == 0 and point_on_segment(edge1[0], edge2[1], edge1[1]):
                     return True
 
-                if orientation3 == 'co-linear' and point_on_segment(edge2[0], edge1[0], edge2[1]):
+                if orientation3 == 0 and point_on_segment(edge2[0], edge1[0], edge2[1]):
                     return True
 
-                if orientation4 == 'co-linear' and point_on_segment(edge2[0], edge1[1], edge2[1]):
+                if orientation4 == 0 and point_on_segment(edge2[0], edge1[1], edge2[1]):
                     return True
 
         # If none of the above conditions were ever met we just return False. Hopefully we are correct xD.
-        # print('no conditions met')
         return False
 
     def _get_vertices(self):
@@ -2337,7 +2343,14 @@ class CustomPolygon(CustomRenderable):
 
         self._num_sides = len(real_vertices)
         self._vertices = real_vertices
-        self._current_vertices = self._vertices
+        # _current_vertices holds the live on-screen vertices. We clone so that
+        # translating them in place never mutates the pristine _vertices shape
+        # definition (which update() rebuilds from).
+        self._current_vertices = [vertex.clone() for vertex in real_vertices]
+        # Pending translation not yet folded into _current_vertices. move() just
+        # accumulates the delta here (O(1)); vertices() applies it once, lazily,
+        # collapsing any run of moves into a single pass. See _flush_vertices().
+        self._vertex_offset = [0.0, 0.0]
         self._location = Location(xmin, ymin)
         self._width = xmax - xmin
         self._height = ymax - ymin
@@ -2374,8 +2387,11 @@ class CustomPolygon(CustomRenderable):
         # Use a relative canvas move (exact) rather than moveto(), which
         # positions by the item's bounding box and lands 1px off because the
         # outline inflates the bbox beyond the geometry coordinates.
-        self._screen._canvas.move(self._ref, self._location.x() - before.x(),
-                                  self._location.y() - before.y())
+        dx = self._location.x() - before.x()
+        dy = self._location.y() - before.y()
+        self._screen._canvas.move(self._ref, dx, dy)
+        self._vertex_offset[0] += dx
+        self._vertex_offset[1] += dy
 
     def moveto(self, *args, **kwargs):
         """
@@ -2388,8 +2404,11 @@ class CustomPolygon(CustomRenderable):
         self._location.moveto(*args, **kwargs)
 
         # Relative canvas move by the delta (see move() for why not moveto()).
-        self._screen._canvas.move(self._ref, self._location.x() - before.x(),
-                                  self._location.y() - before.y())
+        dx = self._location.x() - before.x()
+        dy = self._location.y() - before.y()
+        self._screen._canvas.move(self._ref, dx, dy)
+        self._vertex_offset[0] += dx
+        self._vertex_offset[1] += dy
 
     def width(self, width: float = None) -> float:
         """
@@ -2524,8 +2543,23 @@ class CustomPolygon(CustomRenderable):
 
         return Location(centroid_x + diff_x, centroid_y + diff_y)
 
+    def _flush_vertices(self) -> None:
+        # Fold any pending translation into the cached vertices. Called by every
+        # path that reads live geometry, so a run of moves collapses into a
+        # single O(n) pass here instead of one pass per move.
+        dx, dy = self._vertex_offset
+        if dx or dy:
+            for vertex in self._current_vertices:
+                vertex._x += dx
+                vertex._y += dy
+            self._vertex_offset[0] = 0.0
+            self._vertex_offset[1] = 0.0
+
     def vertices(self) -> list:
-        self._current_vertices = self._get_ref_vertices()  # update vertices during a non-intensive call, typically
+        # Collision loops (contains/overlaps) call this repeatedly. Moves only
+        # accumulate an offset; we apply it here, once, then reuse the cached
+        # list until the object moves again.
+        self._flush_vertices()
         return self._current_vertices
 
     def clone(self) -> 'CustomPolygon':
@@ -2545,6 +2579,7 @@ class CustomPolygon(CustomRenderable):
 
     def _rotate(self, angle: float) -> list:
         # We have to update here since we cannot remember previous rotations (update method call won't cut it)!
+        self._flush_vertices()  # rotate from the true current positions, not a stale pre-move snapshot
         vertices = self._current_vertices
 
         # First get some values that we are going to use later
@@ -2590,7 +2625,11 @@ class CustomPolygon(CustomRenderable):
         scale_factor = (width / self._width, height / self._height)
 
         # self._current_vertices = self._vertices.copy()
+        # _get_ref_vertices() reads the canvas, which already reflects every
+        # move(), so any pending translation is now folded in — drop the offset.
         self._current_vertices = self._get_ref_vertices()
+        self._vertex_offset[0] = 0.0
+        self._vertex_offset[1] = 0.0
         for vertex in self._current_vertices:
             vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, scale_factor[1] * (vertex.y() - cy) + cy)
             vertex.move(dx=(self._width - width) / 2)
@@ -2610,6 +2649,11 @@ class CustomPolygon(CustomRenderable):
 
     def update(self):
         self._check()
+
+        # update() rebuilds geometry from the pristine _vertices definition, so
+        # any pending translation of the old cached vertices no longer applies.
+        self._vertex_offset[0] = 0.0
+        self._vertex_offset[1] = 0.0
 
         old_ref = self._ref
 
@@ -2641,7 +2685,9 @@ class CustomPolygon(CustomRenderable):
         # calculate the scaling factor
         scale_factor = (self._width / width, self._height / height)
 
-        self._current_vertices = self._vertices.copy()
+        # Clone (not .copy(), which is shallow) so scaling these in place does
+        # not mutate the pristine _vertices shape definition.
+        self._current_vertices = [vertex.clone() for vertex in self._vertices]
         for vertex in self._current_vertices:
             vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, scale_factor[1] * (vertex.y() - cy) + cy)
             vertex.move(dx=(self._width - width) / 2)
