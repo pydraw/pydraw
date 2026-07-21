@@ -3619,239 +3619,39 @@ class Text(CustomRenderable):
     _anchor = 'nw'  # sw technically means southwest, but it means bottom left anchor. (we change to top left in code)
     _aligns = {'left': tk.LEFT, 'center': tk.CENTER, 'right': tk.RIGHT}
 
+    # Four constructor forms ((x, y)/(location), each with optional Color) defer to _init_text.
     # noinspection PyProtectedMember
     @overload(Screen, str, (int, float), (int, float))
     def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
                  font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
                  underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._screen = screen
-        self._location = Location(x, y)
-        self._screen._add(self)
-
-        self._text = text if text is not None else ''
-        self._color = color
-        self._font = font
-        self._size = size
-        self._align = align
-        self._bold = bold
-        self._italic = italic
-        self._underline = underline
-        self._strikethrough = strikethrough
-        self._angle = rotation
-        self._visible = visible
-
-        verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
-               align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
-               visible, bool)
-
-        # Handle font and decorations
-        decorations = ''
-        if self.bold():
-            decorations += 'bold '
-        if self.italic():
-            decorations += 'italic '
-        if self.underline():
-            decorations += 'underline '
-        if self.strikethrough():
-            decorations += 'overstrike '
-
-        # we use negative font size to change from point font-size to pixel font-size.
-        font_data = (self.font(), -self.size(), decorations)
-
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-
-        # import tkinter.font as tkfont
-        #
-        # font = tkfont.Font(font=font_data)
-        # true_width = font.measure(self._text)
-        # true_height = font.metrics('linespace')
-
-        true_width, true_height = self._calculate_transform(font_data)
-
-        hypotenuse = true_width / 2
-        radians = math.radians(self._angle)
-
-        dx = math.cos(radians) * hypotenuse
-        dy = math.sin(radians) * hypotenuse
-
-        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx
-        real_y = (self.y() - (self._screen.height() / 2)) - dy
-
-        self._ref = self._screen._screen.cv.create_text(real_x,
-                                                        real_y,
-                                                        text=self.text(),
-                                                        anchor=Text._anchor,
-                                                        justify=Text._aligns[self.align()],
-                                                        fill=self._screen._screen._colorstr(self.color().__value__()),
-                                                        font=font_data,
-                                                        state=state,
-                                                        angle=-self._angle)
-
-        # x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref)
-        # self._width = x1 - x0
-        # self._height = y1 - y0
-
-        self._width = true_width
-        self._height = true_height * (self._text.count('\n') + 1)
+        self._init_text(screen, text, x, y, color, font, size, align,
+                        bold, italic, underline, strikethrough, rotation, visible)
 
     @overload(Screen, str, (int, float), (int, float), Color)
     def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
                  font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
                  underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._screen = screen
-        self._location = Location(x, y)
-        self._screen._add(self)
-
-        self._text = text if text is not None else ''
-        self._color = color
-        self._font = font
-        self._size = size
-        self._align = align
-        self._bold = bold
-        self._italic = italic
-        self._underline = underline
-        self._strikethrough = strikethrough
-        self._angle = rotation
-        self._visible = visible
-
-        verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
-               align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
-               visible, bool)
-
-        # Handle font and decorations
-        decorations = ''
-        if self.bold():
-            decorations += 'bold '
-        if self.italic():
-            decorations += 'italic '
-        if self.underline():
-            decorations += 'underline '
-        if self.strikethrough():
-            decorations += 'overstrike '
-
-        # we use negative font size to change from point font-size to pixel font-size.
-        font_data = (self.font(), -self.size(), decorations)
-
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-
-        # import tkinter.font as tkfont
-        #
-        # font = tkfont.Font(font=font_data)
-        # true_width = font.measure(self._text)
-        # true_height = font.metrics('linespace')
-
-        true_width, true_height = self._calculate_transform(font_data)
-
-        hypotenuse = true_width / 2
-        radians = math.radians(self._angle)
-
-        dx = math.cos(radians) * hypotenuse
-        dy = math.sin(radians) * hypotenuse
-
-        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx
-        real_y = (self.y() - (self._screen.height() / 2)) - dy
-
-        self._ref = self._screen._screen.cv.create_text(real_x,
-                                                        real_y,
-                                                        text=self.text(),
-                                                        anchor=Text._anchor,
-                                                        justify=Text._aligns[self.align()],
-                                                        fill=self._screen._screen._colorstr(self.color().__value__()),
-                                                        font=font_data,
-                                                        state=state,
-                                                        angle=-self._angle)
-
-        # x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref)
-        # self._width = x1 - x0
-        # self._height = y1 - y0
-
-        self._width = true_width
-        self._height = true_height * (self._text.count('\n') + 1)
+        self._init_text(screen, text, x, y, color, font, size, align,
+                        bold, italic, underline, strikethrough, rotation, visible)
 
     @overload(Screen, str, Location)
     def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
                  font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
                  underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        x = location.x()
-        y = location.y()
-
-        self._screen = screen
-        self._location = Location(x, y)
-        self._screen._add(self)
-
-        self._text = text if text is not None else ''
-        self._color = color
-        self._font = font
-        self._size = size
-        self._align = align
-        self._bold = bold
-        self._italic = italic
-        self._underline = underline
-        self._strikethrough = strikethrough
-        self._angle = rotation
-        self._visible = visible
-
-        verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
-               align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
-               visible, bool)
-
-        # Handle font and decorations
-        decorations = ''
-        if self.bold():
-            decorations += 'bold '
-        if self.italic():
-            decorations += 'italic '
-        if self.underline():
-            decorations += 'underline '
-        if self.strikethrough():
-            decorations += 'overstrike '
-
-        # we use negative font size to change from point font-size to pixel font-size.
-        font_data = (self.font(), -self.size(), decorations)
-
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-
-        # import tkinter.font as tkfont
-        #
-        # font = tkfont.Font(font=font_data)
-        # true_width = font.measure(self._text)
-        # true_height = font.metrics('linespace')
-
-        true_width, true_height = self._calculate_transform(font_data)
-
-        hypotenuse = true_width / 2
-        radians = math.radians(self._angle)
-
-        dx = math.cos(radians) * hypotenuse
-        dy = math.sin(radians) * hypotenuse
-
-        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx
-        real_y = (self.y() - (self._screen.height() / 2)) - dy
-
-        self._ref = self._screen._screen.cv.create_text(real_x,
-                                                        real_y,
-                                                        text=self.text(),
-                                                        anchor=Text._anchor,
-                                                        justify=Text._aligns[self.align()],
-                                                        fill=self._screen._screen._colorstr(self.color().__value__()),
-                                                        font=font_data,
-                                                        state=state,
-                                                        angle=-self._angle)
-
-        # x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref)
-        # self._width = x1 - x0
-        # self._height = y1 - y0
-
-        self._width = true_width
-        self._height = true_height * (self._text.count('\n') + 1)
+        self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
+                        bold, italic, underline, strikethrough, rotation, visible)
 
     @overload(Screen, str, Location, Color)
     def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
                  font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
                  underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        x = location.x()
-        y = location.y()
+        self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
+                        bold, italic, underline, strikethrough, rotation, visible)
 
+    # noinspection PyProtectedMember
+    def _init_text(self, screen, text, x, y, color, font, size, align,
+                   bold, italic, underline, strikethrough, rotation, visible):
         self._screen = screen
         self._location = Location(x, y)
         self._screen._add(self)
@@ -3867,60 +3667,53 @@ class Text(CustomRenderable):
         self._strikethrough = strikethrough
         self._angle = rotation
         self._visible = visible
+        self._font_cache = {}  # tkfont.Font objects keyed by font_data (see _calculate_transform)
 
         verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
                align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
                visible, bool)
 
-        # Handle font and decorations
-        decorations = ''
-        if self.bold():
-            decorations += 'bold '
-        if self.italic():
-            decorations += 'italic '
-        if self.underline():
-            decorations += 'underline '
-        if self.strikethrough():
-            decorations += 'overstrike '
-
-        # we use negative font size to change from point font-size to pixel font-size.
-        font_data = (self.font(), -self.size(), decorations)
-
+        font_data = self._build_font_data()
         state = tk.NORMAL if self._visible else tk.HIDDEN
 
-        # import tkinter.font as tkfont
-        #
-        # font = tkfont.Font(font=font_data)
-        # true_width = font.measure(self._text)
-        # true_height = font.metrics('linespace')
-
         true_width, true_height = self._calculate_transform(font_data)
+        self._width = true_width
+        self._height = true_height * (self._text.count('\n') + 1)
 
-        hypotenuse = true_width / 2
-        radians = math.radians(self._angle)
-
-        dx = math.cos(radians) * hypotenuse
-        dy = math.sin(radians) * hypotenuse
-
-        real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx
-        real_y = (self.y() - (self._screen.height() / 2)) - dy
-
+        real_x, real_y = self._place()
         self._ref = self._screen._screen.cv.create_text(real_x,
                                                         real_y,
                                                         text=self.text(),
                                                         anchor=Text._anchor,
                                                         justify=Text._aligns[self.align()],
-                                                        fill=self._screen._screen._colorstr(self.color().__value__()),
+                                                        fill=self._screen._colorstr(self._color),
                                                         font=font_data,
                                                         state=state,
                                                         angle=-self._angle)
 
-        # x0, y0, x1, y1 = screen._screen.cv.bbox(self._ref)
-        # self._width = x1 - x0
-        # self._height = y1 - y0
+    def _build_font_data(self) -> tuple:
+        decorations = ''
+        if self._bold:
+            decorations += 'bold '
+        if self._italic:
+            decorations += 'italic '
+        if self._underline:
+            decorations += 'underline '
+        if self._strikethrough:
+            decorations += 'overstrike '
+        # Negative font size selects pixel font-size instead of point.
+        return self._font, -self._size, decorations
 
-        self._width = true_width
-        self._height = true_height * (self._text.count('\n') + 1)
+    def _place(self) -> tuple:
+        # Canvas anchor (x, y); the width offset keeps rotation pivoting about the center.
+        hypotenuse = self._width / 2
+        radians = math.radians(self._angle)
+        dx = math.cos(radians) * hypotenuse
+        dy = math.sin(radians) * hypotenuse
+
+        real_x = (self.x() + (self._width / 2) - ((self._screen.width() / 2) + 1)) - dx
+        real_y = (self.y() - (self._screen.height() / 2)) - dy
+        return real_x, real_y
 
     def text(self, text: str = None) -> str:
         """
@@ -4144,8 +3937,13 @@ class Text(CustomRenderable):
         if rotation is not None:
             verify(rotation, (float, int))
             self._angle = rotation
-            self._screen._canvas.itemconfigure(self._ref, angle=-self._angle)
-            # self.update()
+            # Reposition as well as re-angle so runtime rotation pivots like init.
+            try:
+                real_x, real_y = self._place()
+                self._screen._canvas.coords(self._ref, real_x, real_y)
+                self._screen._canvas.itemconfigure(self._ref, angle=-self._angle)
+            except tk.TclError:
+                pass
 
         return self._angle
 
@@ -4303,94 +4101,39 @@ class Text(CustomRenderable):
                     rotation=self._angle, visible=self._visible)
 
     def _update_font(self):
-        # Handle font and decorations
-        decorations = ''
-        if self.bold():
-            decorations += 'bold '
-        if self.italic():
-            decorations += 'italic '
-        if self.underline():
-            decorations += 'underline '
-        if self.strikethrough():
-            decorations += 'overstrike '
-        font_data = (self.font(), -self.size(), decorations)
-
-        self._screen._canvas.itemconfigure(self._ref, font=font_data)
+        self._screen._canvas.itemconfigure(self._ref, font=self._build_font_data())
 
     def _update_coords(self):
-        """
-        Usually used to update x/y or vertices, but in this case we just update our width and height
-        """
+        # For Text this just refreshes width/height (position is handled elsewhere).
         self._check()
 
-        # Handle font and decorations
-        decorations = ''
-        if self.bold():
-            decorations += 'bold '
-        if self.italic():
-            decorations += 'italic '
-        if self.underline():
-            decorations += 'underline '
-        if self.strikethrough():
-            decorations += 'overstrike '
-
-        # we use negative font size to change from point font-size to pixel font-size.
-        font_data = (self.font(), -self.size(), decorations)
-
         try:
-            true_width, true_height = self._calculate_transform(font_data)
+            true_width, true_height = self._calculate_transform(self._build_font_data())
         except RuntimeError:
             return
 
         self._width = true_width
         self._height = true_height * (self._text.count('\n') + 1)
 
-
-
     # noinspection PyProtectedMember
     def update(self) -> None:
         self._check()
-        # super().update() | JUST FOR RENDERABLES - DO NOT USE
-        # we are going to delete and re-add text to the screen. You cannot alter a text object.
+        # Text items can't be altered in place, so we delete and re-create.
         old_ref = self._ref
 
-        # Handle font and decorations
-        decorations = ''
-        if self.bold():
-            decorations += 'bold '
-        if self.italic():
-            decorations += 'italic '
-        if self.underline():
-            decorations += 'underline '
-        if self.strikethrough():
-            decorations += 'overstrike '
-
-        # we use negative font size to change from point font-size to pixel font-size.
-        font_data = (self.font(), -self.size(), decorations)
-
+        font_data = self._build_font_data()
         state = tk.NORMAL if self._visible else tk.HIDDEN
 
         try:
-            # import tkinter.font as tkfont
-            #
-            # font = tkfont.Font(font=font_data)
-            # true_width = font.measure(self._text)
-            # true_height = font.metrics('linespace')
-
             try:
                 true_width, true_height = self._calculate_transform(font_data)
             except RuntimeError:
                 return
 
-            hypotenuse = true_width / 2
-            radians = math.radians(self._angle)
+            self._width = true_width
+            self._height = true_height * (self._text.count('\n') + 1)
 
-            dx = math.cos(radians) * hypotenuse
-            dy = math.sin(radians) * hypotenuse
-
-            real_x = (self.x() + (true_width / 2) - ((self._screen.width() / 2) + 1)) - dx
-            real_y = (self.y() - (self._screen.height() / 2)) - dy
-
+            real_x, real_y = self._place()
             self._ref = self._screen._screen.cv.create_text(real_x,
                                                             real_y,
                                                             text=self.text(),
@@ -4402,19 +4145,19 @@ class Text(CustomRenderable):
                                                             angle=-self._angle)
             self._screen._screen.cv.tag_lower(self._ref, old_ref)
             self._screen._screen.cv.delete(old_ref)
-
-            self._width = true_width
-            self._height = true_height * (self._text.count('\n') + 1)
         except (tk.TclError, AttributeError):
             pass
 
     def _calculate_transform(self, font_data):
-        import tkinter.font as tkfont
-        lines = self._text.split('\n')
-        true_width = 0
+        # Cache the tkfont.Font per font_data - constructing one is a Tcl round-trip.
+        font = self._font_cache.get(font_data)
+        if font is None:
+            import tkinter.font as tkfont
+            font = tkfont.Font(font=font_data)
+            self._font_cache[font_data] = font
 
-        font = tkfont.Font(font=font_data)
-        for line in lines:
+        true_width = 0
+        for line in self._text.split('\n'):
             true_width = max(font.measure(line), true_width)
         true_height = font.metrics('linespace')
 
