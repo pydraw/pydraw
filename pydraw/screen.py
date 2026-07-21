@@ -452,7 +452,7 @@ class Screen:
                 self._objects.remove(helper)
 
     def toggle_grid(self, value=None):
-        if value == False && len(self._gridlines) == 0: # If we don't have a grid and are resetting, no need to call grid()
+        if value == False and len(self._gridlines) == 0: # If we don't have a grid and are resetting, no need to call grid()
             return
 
         if value is None:
@@ -555,7 +555,7 @@ class Screen:
         from pydraw import Object
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.')
+            raise InvalidArgumentError(f'Expected an Object {obj}, instead got {type(obj)}.')
 
         self._canvas.tag_raise(obj._ref)
 
@@ -563,7 +563,7 @@ class Screen:
         from pydraw import Object
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError(f'Expected an Objcet {obj}, instead got {type(obj)}.')
+            raise InvalidArgumentError(f'Expected an Object {obj}, instead got {type(obj)}.')
 
         self._canvas.tag_lower(obj._ref)
 
