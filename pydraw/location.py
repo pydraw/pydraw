@@ -46,7 +46,7 @@ class Location:
                                        'or two numbers (x, y)!')
 
         for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+            if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('Location constructor takes a tuple/location '
                                            'or two numbers (x, y)!')
 
@@ -86,7 +86,7 @@ class Location:
                                        'or two numbers (dx, dy)!')
 
         for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+            if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('move() takes a tuple/Location '
                                            'or two numbers (dx, dy)!')
 
@@ -128,7 +128,7 @@ class Location:
                                        'or two numbers (x, y)!')
 
         for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+            if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('moveto() takes a tuple/location '
                                            'or two numbers (x, y)!')
 
