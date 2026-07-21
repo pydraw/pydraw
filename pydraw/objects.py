@@ -75,7 +75,7 @@ class Pen:
                                        'or two numbers (dx, dy)!')
 
         for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+            if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('move() takes a tuple/Location '
                                            'or two numbers (dx, dy)!')
 
@@ -106,7 +106,8 @@ class Pen:
         :return: the location (after change)
         """
 
-        location = None
+        # Seed from the current position so keyword/partial calls (e.g. moveto(x=..)) work.
+        location = (self._location.x(), self._location.y())
 
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
@@ -123,7 +124,7 @@ class Pen:
                                        'or two numbers (dx, dy)!')
 
         for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+            if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('moveto() takes a tuple/location '
                                            'or two numbers (dx, dy)!')
 
@@ -1246,7 +1247,7 @@ class Renderable(Object):
 
     def width(self, width: float = None) -> float:
         """
-        Get or set the width of the object.
+        Get or set the width of the Renderable.
 
         :param width: the width to set to in pixels, if any
         :return: the width of the object
@@ -1255,25 +1256,13 @@ class Renderable(Object):
         if width is not None:
             verify(width, (float, int))
             self._width = width
-            new_location = self._screen.canvas_location(self._location.x(), self._location.y())
-            new_location2 = self._screen.canvas_location(self._location.x() + self._width,
-                                                         self._location.y() + self._height)
-
-            new_coords = [new_location[0], new_location[1], new_location2[0], new_location[1],
-                          new_location2[0], new_location2[1], new_location[0], new_location2[1]]
-
-            if self._angle % 360 != 0:
-                self._update_coords()
-            else:
-                # self._screen._canvas.coords(self._ref, new_coords)
-                self._update_coords()
-            # self.update()
+            self._update_coords()
 
         return self._width
 
     def height(self, height: float = None) -> float:
         """
-        Get or set the height of the object
+        Get or set the height of the Renderable.
 
         :param height: the height to set to in pixels, if any
         :return: the height of the object
@@ -1282,20 +1271,7 @@ class Renderable(Object):
         if height is not None:
             verify(height, (float, int))
             self._height = height
-
-
-            new_location = self._screen.canvas_location(self._location.x(), self._location.y())
-            new_location2 = self._screen.canvas_location(self._location.x() + self._width,
-                                                         self._location.y() + self._height)
-            new_coords = [new_location[0], new_location[1], new_location2[0], new_location[1],
-                          new_location2[0], new_location2[1], new_location[0], new_location2[1]]
-
-            if self._angle % 360 != 0:
-                self._update_coords()
-            else:
-                # self._screen._canvas.coords(self._ref, new_coords)
-                self._update_coords()
-            # self.update()
+            self._update_coords()
 
         return self._height
 
@@ -2240,9 +2216,18 @@ class RoundedRectangle(CustomRenderable):
 
         if radius is not None:
             self._border_width = radius
-            self.update()
+            self._screen._canvas.itemconfigure(self._ref, width=self._border_width)
 
         return self._border_width
+
+    def clone(self) -> 'RoundedRectangle':
+        # Override Renderable.clone: border is disabled here, so rebuild via the color overload + setters.
+        clone = RoundedRectangle(self._screen, self.x(), self.y(), self.width(), self.height(), self.color())
+        clone.radius(self.radius())
+        clone.rotation(self.rotation())
+        clone.fill(self.fill())
+        clone.visible(self.visible())
+        return clone
 
     def _setup(self):
         if not hasattr(self, '_shape'):
@@ -2812,8 +2797,6 @@ class Oval(Renderable):
         self._width = width
         self._height = height
 
-        self._wedges = PIXEL_RATIO
-
         vertices = self._convert_vertices()
         self._shape = vertices
         super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
@@ -2830,8 +2813,6 @@ class Oval(Renderable):
 
         self._width = width
         self._height = height
-
-        self._wedges = PIXEL_RATIO
 
         vertices = self._convert_vertices()
         self._shape = vertices
@@ -2868,15 +2849,14 @@ class Oval(Renderable):
         return self._height
 
     def wedges(self, wedges: int = None) -> int:
-        verify(wedges, int)
-        if wedges < 20:
-            raise InvalidArgumentError('Ovals can be at least 20 wedges. If you need less, '
-                                       'just multiply your desired amount by 2 until it is above 20!')
-
         if wedges is not None:
+            verify(wedges, int)
+            if wedges < 20:
+                raise InvalidArgumentError('Ovals can be at least 20 wedges. If you need less, '
+                                           'just multiply your desired amount by 2 until it is above 20!')
             self._shape = self._generate_vertices(PIXEL_RATIO / 2, wedges=wedges)
             self._wedges = wedges
-            self.update()
+            self._update_coords()
 
         return self._wedges
 
@@ -2908,6 +2888,9 @@ class Oval(Renderable):
         radius = ((self._width + self._height) / 2) / 2
         angle = 18 if radius <= 150 else (radius * 9) / 300
         shape_vertices = self._generate_vertices(PIXEL_RATIO / 2, angle)
+
+        # Report the wedge count actually generated (size-dependent), not a fixed default.
+        self._wedges = len(shape_vertices)
 
         return shape_vertices
 
@@ -3208,7 +3191,7 @@ class Image(Renderable):
         if color is not None:
             self.color(color)
 
-        if border is not None:
+        if border is not None and border != Color.NONE:
             self.border(border)
 
     # noinspection PyProtectedMember
@@ -3416,7 +3399,7 @@ class Image(Renderable):
             sine = math.sin(theta)
 
             center_x = x + w / 2
-            center_y = y + w / 2
+            center_y = y + h / 2
 
             new_vertices = []
             for vertex in vertices:
@@ -3579,9 +3562,8 @@ class Image(Renderable):
                     image = image.rotate(-self._angle, resample=Image.BILINEAR, expand=1, fillcolor=None)
 
                 self._image = ImageTk.PhotoImage(image=image)
-            except (RuntimeError, AttributeError) as e:
-                raise e
-                pass  # We are catching some stupid errors from Tkinter involving images and program exiting.
+            except (RuntimeError, AttributeError):
+                pass  # Swallow Tkinter/PIL errors from image redraws that race program shutdown.
             except ImportError:
                 raise UnsupportedError('As PIL is not installed, you cannot modify images! '
                                        'Install Pillow via: \'pip install pillow\'.')
@@ -4131,7 +4113,7 @@ class Text(CustomRenderable):
         if rotation is not None:
             verify(rotation, (float, int))
             self._angle = rotation
-            self._screen._canvas.itemconfigure(self._ref, angle=self._angle)
+            self._screen._canvas.itemconfigure(self._ref, angle=-self._angle)
             # self.update()
 
         return self._angle
@@ -4505,10 +4487,8 @@ class Line(Object):
         if len(args) != 0:
             if len(args) == 1 and (type(args[0]) is Location or type(args[0]) is tuple):
                 self._pos2 = Location(args[0][0], args[0][1])
-                self.update()
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 self._pos2 = Location(args[0], args[1])
-                self.update()
             else:
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.')
 
@@ -4544,7 +4524,7 @@ class Line(Object):
                 raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!')
 
         for (name, value) in kwargs.items():
-            if len(kwargs) == 0 or type(value) is not int and type(value) is not float:
+            if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('Object#move() must take either a tuple/location '
                                            'or two numbers (dx, dy)!')
 
