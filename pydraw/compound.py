@@ -38,26 +38,18 @@ class CompoundObject(Object):
 
         values = list(self._objects.values())
 
-        x = values[0].x()
-        y = values[0].y()
-        endx = values[len(self._objects) - 1].x()
-        endy = values[len(self._objects) - 1].y()
+        # Bounding box over all children: min corner from each object's (x, y),
+        # max corner from each object's right/bottom edge (x + width, y + height).
+        # Single pass per attribute; min()/max() do the reduction in C.
+        xs = [o.x() for o in values]
+        ys = [o.y() for o in values]
+        xmaxs = [x + o.width() for x, o in zip(xs, values)]
+        ymaxs = [y + o.height() for y, o in zip(ys, values)]
 
-        self._location = Location(x, y)
-        self._end = Location(endx, endy)
+        self._location = Location(min(xs), min(ys))
+        self._end = Location(max(xmaxs), max(ymaxs))
 
         self._angle = 0
-
-        for obj in self._objects.values():
-            if obj.x() < self._location.x():
-                self._location.x(obj.x())
-            elif obj.x() > self._location.x():
-                self._end.x(obj.x())
-
-            if obj.y() < self._location.y():
-                self._location.y(obj.y())
-            elif obj.y() > self._location.y():
-                self._end.y(obj.y())
 
     def x(self, x: float = None) -> float:
         """
@@ -360,7 +352,7 @@ class CompoundObject(Object):
 
         return tuple(self._objects.values())
 
-    def color(self, color: Color) -> Color:
+    def color(self, color: Color):
         """Change the color of all the objects in the compound object."""
 
         for obj in self._objects.values():
@@ -374,21 +366,13 @@ class CompoundObject(Object):
 
         values = list(self._objects.values())
 
-        x = values[0].x()
-        y = values[0].y()
-        endx = values[len(self._objects) - 1].x()
-        endy = values[len(self._objects) - 1].y()
+        # Same bounding-box computation as __init__ (see there for details).
+        xs = [o.x() for o in values]
+        ys = [o.y() for o in values]
+        xmaxs = [x + o.width() for x, o in zip(xs, values)]
+        ymaxs = [y + o.height() for y, o in zip(ys, values)]
 
-        self._location = Location(x, y)
-        self._end = Location(endx, endy)
+        self._location = Location(min(xs), min(ys))
+        self._end = Location(max(xmaxs), max(ymaxs))
 
-        for obj in self._objects.values():
-            if obj.x() < self._location.x():
-                self._location.x(obj.x())
-            elif obj.x() > self._location.x():
-                self._end.x(obj.x())
 
-            if obj.y() < self._location.y():
-                self._location.y(obj.y())
-            elif obj.y() > self._location.y():
-                self._end.y(obj.y())

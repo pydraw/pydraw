@@ -54,9 +54,10 @@ class CompoundObjectTest(unittest.TestCase):
         # Regression: bounds used to be shifted once per child, multiplying the
         # delta. The bounding-box center must move by exactly the delta.
         a, b, comp = self._pair()
-        self.assertEqual(comp.center(centroid=False), Location(50, 0))
+        # Bounding box spans the children's full extent: (0,0)-(120,20), center (60,10).
+        self.assertEqual(comp.center(centroid=False), Location(60, 10))
         comp.move(5, 5)
-        self.assertEqual(comp.center(centroid=False), Location(55, 5))
+        self.assertEqual(comp.center(centroid=False), Location(65, 15))
 
     def test_center_centroid(self):
         a, b, comp = self._pair()

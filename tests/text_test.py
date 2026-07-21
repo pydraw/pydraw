@@ -123,6 +123,15 @@ class TextMethodTest(unittest.TestCase):
         self.text.rotate(15)
         self.assertEqual(self.text.rotation(), 60)
 
+    def test_rotation_matches_constructor_on_canvas(self):
+        # Constructor and .rotation() must yield the same canvas angle (getter can't catch a wrong sign).
+        cv = self.screen._screen.cv
+        constructed = Text(self.screen, 'A', 50, 150, rotation=45)
+        rotated = Text(self.screen, 'B', 250, 150)
+        rotated.rotation(45)
+        self.assertEqual(float(cv.itemcget(constructed._ref, 'angle')),
+                         float(cv.itemcget(rotated._ref, 'angle')))
+
     def test_lookat_location(self):
         self.text.lookat(Location(400, 200))
         self.assertIsInstance(self.text.rotation(), (int, float))
