@@ -1,3 +1,10 @@
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("pydraw")  # single source of truth: the installed package metadata
+except PackageNotFoundError:
+    __version__ = "0.0.0"
+
 from pydraw.overload import overload
 from pydraw.errors import *
 from pydraw.util import *
