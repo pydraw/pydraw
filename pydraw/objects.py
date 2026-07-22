@@ -2614,14 +2614,12 @@ class CustomPolygon(CustomRenderable):
 
         :return: a CustomPolygon
         """
-        return CustomPolygon(self._screen, self._vertices, self._color, self._border, self._fill, self._angle,
+
+        poly = CustomPolygon(self._screen, self._vertices, self._color, self._border, self._fill, self._angle,
                              self._visible)
+        poly.transform(self.transform())
 
-    def transform(self, transform: tuple = None) -> tuple:
-        if transform is not None:
-            raise UnsupportedError('Setting Renderable#transform() is not supported for CustomPolygon!')
-
-        return self.width(), self.height(), self.rotation()
+        return poly
 
     def _rotate(self, angle: float) -> list:
         # We have to update here since we cannot remember previous rotations (update method call won't cut it)!
