@@ -210,6 +210,10 @@ class Pen:
     def color(self, color: Color = None) -> Color:
         if color is not None:
             verify(color, Color)
+
+            if self._color == color:
+                return self._color
+
             self._color = color
             self._update()
 
@@ -1377,7 +1381,6 @@ class Renderable(Object):
             verify(angle, (float, int))
             self._angle = angle
             self._update_coords()
-            # self.update()
 
         return self._angle % 360
 
@@ -1457,6 +1460,10 @@ class Renderable(Object):
 
         if color is not None:
             verify(color, Color)
+
+            if self._color == color:
+                return self._color
+
             self._color = color
             # TODO: Can probably improve this speed with a custom _colorstr function on declaration
             color_state = self._color if self._fill else Color.NONE
@@ -1585,11 +1592,21 @@ class Renderable(Object):
                 raise InvalidArgumentError('Ensure you are passing in a Transform from another object or a '
                                            'tuple in the following order: (width, height, rotation)')
             verify(transform[0], (float, int), transform[1], (float, int), transform[2], (float, int))
-            self.width(transform[0])
-            self.height(transform[1])
-            self.rotation(transform[2])
 
-        return self.width(), self.height(), self.rotation()
+            update_width = transform[0] != self._width
+            update_height = transform[1] != self._height
+            update_rotation = transform[2] % 360 != self._angle % 360
+
+            if not update_width and not update_height and not update_rotation:
+                return self._width, self._height, self._angle % 360
+
+            self._width = transform[0]
+            self._height = transform[1]
+            self._angle = transform[2]
+
+            self._update_coords()
+
+        return self._width, self._height, self._angle % 360
 
     def clone(self):
         """
@@ -2449,11 +2466,11 @@ class CustomPolygon(CustomRenderable):
 
         if width is not None:
             verify(width, (float, int))
-            # self._width = width
-            self._update_coords(width=width)
 
-            # self.update()
-            # raise UnsupportedError('Modifying the width/height of CustomPolygons is not currently possible')
+            if self._width == width:
+                return width
+
+            self._update_coords(width=width)
 
         return self._width
 
@@ -2461,17 +2478,17 @@ class CustomPolygon(CustomRenderable):
         """
         Get the height of the Polygon
 
-        :param height: Unsupported.
+        :param height: The new height to scale to in px.
         :return: the height of the object
         """
 
         if height is not None:
             verify(height, (float, int))
-            # self._height = height
-            self._update_coords(height=height)
 
-            # self.update()
-            # raise UnsupportedError('Modifying the width/height of CustomPolygons is not currently possible')
+            if self._height == height:
+                return height
+
+            self._update_coords(height=height)
 
         return self._height
 
@@ -3231,6 +3248,10 @@ class Image(Renderable):
 
         if width is not None:
             verify(width, (float, int))
+
+            if self._width == width:
+                return width
+
             self._width = width
             self.update(True)
 
@@ -3246,6 +3267,10 @@ class Image(Renderable):
 
         if height is not None:
             verify(height, (float, int))
+
+            if self._height == height:
+                return height
+
             self._height = height
             self.update(True)
 
@@ -3262,6 +3287,10 @@ class Image(Renderable):
 
         if color is not None:
             verify(color, Color)
+
+            if self._color == color and self._mask == alpha:
+                return self._color
+
             self._color = color
             self._mask = alpha
             self.update(True)
@@ -3297,10 +3326,14 @@ class Image(Renderable):
 
         if angle is not None:
             verify(angle, (float, int))
+
+            if self._angle == angle:
+                return angle % 360
+
             self._angle = angle
             self.update(True)
 
-        return self._angle
+        return self._angle % 360
 
     # noinspection PyMethodOverriding
     def rotate(self, angle_diff: float) -> None:
@@ -3315,6 +3348,41 @@ class Image(Renderable):
             verify(angle_diff, (float, int))
             self._angle += angle_diff
             self.update(True)
+
+    def transform(self, transform: tuple = None) -> tuple:
+        """
+        Get or set the transform of the Image.
+        Transforms represent the width, height, and rotation of the Image.
+
+        You can retrieve a Transform from an Image with this method and set the transform the same way.
+
+        :param transform: the transform to set to, if any.
+        :return: the transform
+        """
+
+        if transform is not None:
+            verify(transform, tuple)
+            if not len(transform) == 3:
+                raise InvalidArgumentError('Ensure you are passing in a Transform from another object or a '
+                                           'tuple in the following order: (width, height, rotation)')
+            verify(transform[0], (float, int), transform[1], (float, int), transform[2], (float, int))
+
+            update_width = transform[0] != self._width
+            update_height = transform[1] != self._height
+            update_rotation = transform[2] % 360 != self._angle % 360
+
+            if not update_width and not update_height and not update_rotation:
+                return self._width, self._height, self._angle % 360
+
+            self._width = transform[0]
+            self._height = transform[1]
+            self._angle = transform[2]
+
+            self.update(True)
+
+        return self._width, self._height, self._angle % 360
+
+
 
     def center(self, *args, **kwargs) -> Location:
         """
@@ -3805,6 +3873,10 @@ class Text(CustomRenderable):
 
         if color is not None:
             verify(color, Color)
+
+            if self._color == color:
+                return self._color
+
             self._color = color
             self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(self._color))
             # self.update()
@@ -4505,6 +4577,10 @@ class Line(Object):
 
         if color is not None:
             verify(color, Color)
+
+            if self._color == color:
+                return self._color
+
             self._color = color
 
             self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(self._color))
