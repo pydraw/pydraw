@@ -27,7 +27,6 @@ class Pen:
     # Pen for drawing a line as an object moves around on the screen
     def __init__(self, screen: Screen, x: float, y: float, color: Color = Color('black'), width: int = 2, top: bool = False):
         self._screen = screen
-        self._object = None  # Set internally for Object's Pens.
         self._coordinates = []  # contains all coordinates of the lines
         self._location = Location(x, y)  # used for when _drawing = False
 
@@ -41,9 +40,11 @@ class Pen:
 
         self._history = []  # stores old line _refs for clearing
         self._ref = None  # currentLine
-        self._setup()
 
     def location(self) -> Location:
+        if self._drawing and len(self._coordinates) > 0:
+            return self._coordinates[-1]
+
         return self._location
 
     def move(self, *args, **kwargs):
@@ -79,21 +80,26 @@ class Pen:
                 raise InvalidArgumentError('move() takes a tuple/Location '
                                            'or two numbers (dx, dy)!')
 
-            if name.lower() == 'dx':
+            name = name.lower()
+            if name == 'dx':
                 diff = (value, diff[1])
-            if name.lower() == 'dy':
+            elif name == 'dy':
                 diff = (diff[0], value)
+            else:
+                raise InvalidArgumentError(f'Unknown keyword for Pen#move(): {name}')
 
         if not len(self._coordinates) > 0:
             raise PydrawError('No starting coordinate to move Pen from.')
 
+        current = self.location()
+        location = Location(current.x() + diff[0], current.y() + diff[1])
         if self._drawing:
-            location = Location(self._coordinates[-1].x() + diff[0], self._coordinates[-1].y() + diff[1]) if len(self._coordinates) > 0 else self._location.move(diff[0], diff[1])
             self._coordinates.append(location)
         else:
-            self._location = Location(self._coordinates[-1].x() + diff[0], self._coordinates[-1].y() + diff[1]) if len(self._coordinates) > 0 else self._location.move(diff[0], diff[1])
+            self._location = location
 
         self._update()
+        return location
 
     def moveto(self, *args, **kwargs):
         """
@@ -106,8 +112,10 @@ class Pen:
         :return: the location (after change)
         """
 
-        # Seed from the current position so keyword/partial calls (e.g. moveto(x=..)) work.
-        location = (self._location.x(), self._location.y())
+        # Seed from the effective current position so partial calls work both
+        # while drawing and after the pen has stopped.
+        current = self.location()
+        location = (current.x(), current.y())
 
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
@@ -128,21 +136,25 @@ class Pen:
                 raise InvalidArgumentError('moveto() takes a tuple/location '
                                            'or two numbers (dx, dy)!')
 
-            if name.lower() == 'x':
+            name = name.lower()
+            if name == 'x':
                 location = (value, location[1])
-            if name.lower() == 'y':
+            elif name == 'y':
                 location = (location[0], value)
+            else:
+                raise InvalidArgumentError(f'Unknown keyword for Pen#moveto(): {name}')
 
         if not len(self._coordinates) > 0:
             raise PydrawError('No starting coordinate to move Pen from.')
 
+        new_location = Location(location[0], location[1])
         if self._drawing:
-            location = Location(location[0], location[1])
-            self._coordinates.append(location)
+            self._coordinates.append(new_location)
         else:
-            self._location = Location(location[0], location[1])
+            self._location = new_location
 
         self._update()
+        return new_location
 
     def coordinates(self, *coords) -> List[Location]:
 
@@ -160,17 +172,24 @@ class Pen:
         return self._coordinates
 
     def start(self):
+        if self._drawing:
+            return
+
         self._drawing = True
         self._coordinates = [Location(self._location)]
 
         self._setup()
 
     def stop(self):
+        if not self._drawing:
+            return
+
         if len(self._coordinates) > 0:
             self._location = self._coordinates[-1]
             # don't clear coordinates in case they get altered after we are done drawing
 
-        self._history.append(self._ref)
+        if self._ref is not None:
+            self._history.append(self._ref)
         self._drawing = False
 
     def drawing(self, drawing: bool = None) -> bool:
@@ -197,8 +216,8 @@ class Pen:
         """
 
         if len(self._coordinates) > 0:
-            self._location = self._coordinates[-1]
-        self._coordinates = []
+            self._location = Location(self._coordinates[-1])
+        self._coordinates = [Location(self._location)] if self._drawing else []
 
         # self._screen._canvas.itemconfigure(self._ref, style=tk.HIDDEN)
         if self._ref is not None: self._screen._canvas.coords(self._ref, 0, 0, 0, 0)
@@ -215,7 +234,8 @@ class Pen:
                 return self._color
 
             self._color = color
-            self._update()
+            if self._ref is not None:
+                self._update()
 
         return self._color
 
@@ -223,7 +243,8 @@ class Pen:
         if width is not None:
             verify(width, int)
             self._width = width
-            self._update()
+            if self._ref is not None:
+                self._update()
 
         return self._width
 
@@ -231,13 +252,23 @@ class Pen:
         if top is not None:
             verify(top, bool)
             self._top = top
-            self._update()
+            if self._ref is not None:
+                self._update()
 
         return self._top
 
     def _setup(self):
         # noinspection PyProtectedMember
-        self._ref = self._screen._canvas.create_line(0, 0, 0, 0, fill="", width=2, capstyle=tk.ROUND)
+        x = self._location.x() - self._screen.width() / 2
+        y = self._location.y() - self._screen.height() / 2
+        self._ref = self._screen._canvas.create_line(
+            x, y, x, y,
+            fill=self._screen._colorstr(self._color),
+            width=self._width,
+            capstyle=tk.ROUND
+        )
+        if self._top:
+            self._screen._canvas.tag_raise(self._ref)
 
     # noinspection PyProtectedMember
     def _update(self):
@@ -282,6 +313,8 @@ class Object:
     done with the root in the top left corner, and not at the center.
     """
 
+    _PEN_SUPPORTED = True
+
     def __init__(self, screen: Screen, x: float = 0, y: float = 0, location: Location = None):
         verify(screen, Screen, x, (float, int), y, (float, int), location, Location)
 
@@ -291,8 +324,9 @@ class Object:
         # noinspection PyProtectedMember
         self._screen._add(self)
 
-        self._pen = Pen(screen, self._location.x(), self._location.y())
-        self._pen._object = self
+        # Most objects never draw trails, so avoid creating an unused Pen and
+        # canvas line until pen() is actually called.
+        self._pen = None
 
     def x(self, x: float = None) -> float:
         if x is not None:
@@ -320,6 +354,7 @@ class Object:
 
         self._location.move(*args, **kwargs)
         self.update()
+        self._sync_pen()
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -330,6 +365,7 @@ class Object:
 
         self._location.moveto(*args, **kwargs)
         self.update()
+        self._sync_pen()
 
     def _get_real_location(self):
         # todo: move this to renderable
@@ -364,20 +400,51 @@ class Object:
         self._screen.remove(self)
 
     # Pen methods
-    def pen(self, color: Color = Color('black'), width: int = 2, top: bool = False):
-        pass
+    def _check_pen_supported(self) -> None:
+        if not self._PEN_SUPPORTED:
+            raise UnsupportedError(f'{type(self).__name__} does not support Pens.')
 
-    def pen_clear(self):
-        pass
+    def _require_pen(self) -> Pen:
+        self._check_pen_supported()
+        if self._pen is None:
+            raise PydrawError('This object has not started a Pen.')
 
-    def pen_stop(self):
-        pass
+        return self._pen
+
+    def _sync_pen(self) -> None:
+        pen = getattr(self, '_pen', None)
+        if pen is None or not pen.drawing():
+            return
+
+        location = Location(self.x(), self.y())
+        if pen.location() != location:
+            pen.moveto(location)
+
+    def pen(self, color: Color = Color('black'), width: int = 2, top: bool = False) -> Pen:
+        self._check_pen_supported()
+        verify(color, Color, width, int, top, bool)
+
+        if self._pen is None:
+            self._pen = Pen(self._screen, self.x(), self.y(), color, width, top)
+        else:
+            self._pen.color(color)
+            self._pen.width(width)
+            self._pen.top(top)
+
+        self._pen.drawing(True)
+        return self._pen
+
+    def pen_clear(self) -> None:
+        self._require_pen().clear()
+
+    def pen_stop(self) -> bool:
+        return self._require_pen().drawing(False)
 
     def pen_width(self, width: int = None) -> int:
-        pass
+        return self._require_pen().width(width)
 
     def pen_top(self, top: bool = None) -> bool:
-        pass
+        return self._require_pen().top(top)
 
     # # noinspection PyProtectedMember
     # def add(self) -> None:
@@ -1249,6 +1316,8 @@ class Renderable(Object):
             vertex._x += dx
             vertex._y += dy
 
+        self._sync_pen()
+
     def width(self, width: float = None) -> float:
         """
         Get or set the width of the Renderable.
@@ -1678,6 +1747,8 @@ class Renderable(Object):
             elif type(args[0]) is tuple and len(args[0]) == 2:
                 x = args[0][0]
                 y = args[0][1]
+            else:
+                raise InvalidArgumentError('Tuple length must be 2.')
         elif len(args) == 2:
             verify(args[0], (float, int), args[1], (float, int))
             if type(args[0]) is not float and type(args[0]) is not int \
@@ -2452,8 +2523,7 @@ class CustomPolygon(CustomRenderable):
         if self._angle % 360 != 0:
             self._update_coords()
 
-        self._pen = Pen(screen, self._location.x(), self._location.y())
-        self._pen._object = self
+        self._pen = None
 
     def move(self, *args, **kwargs):
         """
@@ -2473,6 +2543,7 @@ class CustomPolygon(CustomRenderable):
         self._screen._canvas.move(self._ref, dx, dy)
         self._vertex_offset[0] += dx
         self._vertex_offset[1] += dy
+        self._sync_pen()
 
     def moveto(self, *args, **kwargs):
         """
@@ -2490,6 +2561,7 @@ class CustomPolygon(CustomRenderable):
         self._screen._canvas.move(self._ref, dx, dy)
         self._vertex_offset[0] += dx
         self._vertex_offset[1] += dy
+        self._sync_pen()
 
     def width(self, width: float = None) -> float:
         """
@@ -3148,13 +3220,11 @@ class Image(Renderable):
         self._original = None
 
         # Filetype Checking
-        split = image.split('.')
-        if len(split) <= 1:
+        import os
+        filetype = os.path.splitext(image)[1].lower()
+        if not filetype:
             raise PydrawError('File must have extension filetype:', self._image_name)
 
-        filetype = split[len(split) - 1]
-
-        import os
         if not os.path.isfile(image):
             raise InvalidArgumentError(f'Image does not exist or is directory: {image}')
 
@@ -3183,6 +3253,11 @@ class Image(Renderable):
         # LANCZOS/BILINEAR filters; False uses NEAREST, which is ~13x cheaper on
         # rotation and ideal for pixel-art sprites in a game loop.
         self._smooth = True
+
+        # Flips are retained as source-image state so they survive later image
+        # rebuilds caused by resizing, tinting, borders, rotation, or GIF frames.
+        self._flip_x = False
+        self._flip_y = False
 
         self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
 
@@ -3495,9 +3570,30 @@ class Image(Renderable):
 
         return vertices
 
-    def flip(self, axis: str = 'y'):
-        # TODO: Finish this noah
-        pass
+    def flip(self, axis: str = 'y') -> None:
+        """
+        Flip the image across an axis.
+
+        Flipping across the x-axis reverses the image vertically; flipping
+        across the y-axis reverses it horizontally. Calling this method again
+        with the same axis restores the original orientation.
+
+        Requires PIL/Pillow.
+
+        :param axis: the axis to flip across, either ``'x'`` or ``'y'``
+        :return: None
+        """
+
+        verify(axis, str)
+        axis = axis.lower()
+        if axis == 'x':
+            self._flip_x = not self._flip_x
+        elif axis == 'y':
+            self._flip_y = not self._flip_y
+        else:
+            raise InvalidArgumentError("Image#flip() axis must be either 'x' or 'y'.")
+
+        self.update(True)
 
     def load(self) -> None:
         """
@@ -3554,8 +3650,14 @@ class Image(Renderable):
 
     def clone(self) -> 'Image':
         constructor = type(self)
-        return constructor(self._screen, self._image_name, self.x(), self.y(), self.width(), self.height(),
-                           self.color(), self.border(), self.rotation(), self.visible())
+        clone = constructor(self._screen, self._image_name, self.x(), self.y(), self.width(), self.height(),
+                            self.color(), self.border(), self.rotation(), self.visible())
+        clone._flip_x = self._flip_x
+        clone._flip_y = self._flip_y
+        if clone._flip_x or clone._flip_y:
+            clone.update(True)
+
+        return clone
 
     @staticmethod
     def _monkey_patch_del():
@@ -3624,6 +3726,11 @@ class Image(Renderable):
                 # Don't need to convert RGBA if we already are.
                 if image.mode != 'RGBA':
                     image = image.convert('RGBA')
+
+                if self._flip_x:
+                    image = ImageOps.flip(image)
+                if self._flip_y:
+                    image = ImageOps.mirror(image)
 
                 if self._color is not None and self._color != Color.NONE:
                     r, g, b, alpha = image.split()
@@ -3830,6 +3937,8 @@ class Text(CustomRenderable):
             self._screen._canvas.move(self._ref, dx, dy)
         except tk.TclError:
             pass  # pass on TclError as this is likely on program shutdown.
+
+        self._sync_pen()
 
     # noinspection PyMethodOverriding
     def width(self) -> float:
@@ -4227,6 +4336,8 @@ class Text(CustomRenderable):
 
 
 class Line(Object):
+    _PEN_SUPPORTED = False
+
     def __init__(self, screen: Screen, *args, color: Color = Color('black'), thickness: int = 1, dashes=None,
                  visible: bool = True):
         super().__init__(screen)
