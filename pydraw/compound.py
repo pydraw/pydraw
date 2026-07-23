@@ -42,18 +42,7 @@ class CompoundObject(Object):
         if len(self._objects) == 0:
             raise InvalidArgumentError('CompoundObject(): expected at least one Object.')
 
-        values = list(self._objects.values())
-
-        # Bounding box over all children: min corner from each object's (x, y),
-        # max corner from each object's right/bottom edge (x + width, y + height).
-        # Single pass per attribute; min()/max() do the reduction in C.
-        xs = [o.x() for o in values]
-        ys = [o.y() for o in values]
-        xmaxs = [x + o.width() for x, o in zip(xs, values)]
-        ymaxs = [y + o.height() for y, o in zip(ys, values)]
-
-        self._location = Location(min(xs), min(ys))
-        self._end = Location(max(xmaxs), max(ymaxs))
+        self._location, self._end = self._calculate_bounds()
 
         self._angle = 0
 
@@ -150,24 +139,37 @@ class CompoundObject(Object):
         :return: None
         """
 
+        verify(angle_diff, (float, int), pivot, Location)
+
         pivot = self.center(centroid=True) if pivot is None else pivot
 
         # Convert the angle_diff to radians
         angle_diff_rad = math.radians(angle_diff)
+        cosine = math.cos(angle_diff_rad)
+        sine = math.sin(angle_diff_rad)
 
         for obj in self._objects.values():
-            # Calculate new position
-            dx = obj.x() - pivot.x()
-            dy = obj.y() - pivot.y()
+            # An object's location is its unrotated top-left anchor, but
+            # Object#rotate() spins it around its center.  Revolving that anchor
+            # and then spinning around the center applies two incompatible
+            # transforms: differently sized children drift apart and the
+            # compound no longer behaves as a rigid body.
+            #
+            # Revolve the same point that the child uses for its own rotation,
+            # then translate the rotated child until that point reaches its
+            # destination.  Calculating the translation after obj.rotate()
+            # also accommodates child implementations whose reported center
+            # changes slightly while rebuilding their rotated geometry.
+            center = obj.center()
+            dx = center.x() - pivot.x()
+            dy = center.y() - pivot.y()
 
-            new_x = (dx * math.cos(angle_diff_rad)) - (dy * math.sin(angle_diff_rad)) + pivot.x()
-            new_y = (dx * math.sin(angle_diff_rad)) + (dy * math.cos(angle_diff_rad)) + pivot.y()
+            new_center_x = (dx * cosine) - (dy * sine) + pivot.x()
+            new_center_y = (dx * sine) + (dy * cosine) + pivot.y()
 
-            # Move the object to the new position
-            obj.moveto(new_x, new_y)
-
-            # Rotate the object
             obj.rotate(angle_diff)
+            rotated_center = obj.center()
+            obj.move(new_center_x - rotated_center.x(), new_center_y - rotated_center.y())
 
         # Update the angle
         self._angle += angle_diff
@@ -199,16 +201,9 @@ class CompoundObject(Object):
         if not centroid:
             return Location((self._location.x() + self._end.x()) / 2, (self._location.y() + self._end.y()) / 2)
 
-        total_x = 0
-        total_y = 0
-        num_objects = len(self._objects)
-
-        for obj in self._objects.values():
-            total_x += obj.x()
-            total_y += obj.y()
-
-        center_x = total_x / num_objects
-        center_y = total_y / num_objects
+        centers = [obj.center() for obj in self._objects.values()]
+        center_x = sum(center.x() for center in centers) / len(centers)
+        center_y = sum(center.y() for center in centers) / len(centers)
 
         return Location(center_x, center_y)
 
@@ -375,15 +370,31 @@ class CompoundObject(Object):
     def update(self):
         """Updates values of the compound object."""
 
-        values = list(self._objects.values())
+        self._location, self._end = self._calculate_bounds()
 
-        # Same bounding-box computation as __init__ (see there for details).
-        xs = [o.x() for o in values]
-        ys = [o.y() for o in values]
-        xmaxs = [x + o.width() for x, o in zip(xs, values)]
-        ymaxs = [y + o.height() for y, o in zip(ys, values)]
+    def _calculate_bounds(self) -> Tuple[Location, Location]:
+        """Return the axis-aligned bounds of the children's live geometry."""
 
-        self._location = Location(min(xs), min(ys))
-        self._end = Location(max(xmaxs), max(ymaxs))
+        bounds = []
+        for obj in self._objects.values():
+            if isinstance(obj, Renderable):
+                vertices = obj.vertices()
+                if vertices:
+                    xs = [vertex.x() for vertex in vertices]
+                    ys = [vertex.y() for vertex in vertices]
+                    bounds.append((min(xs), min(ys), max(xs), max(ys)))
+                    continue
+
+            # CompoundObject and other dimensioned Object implementations do
+            # not necessarily expose vertices. Their own location/dimensions
+            # are the best available bounds.
+            x = obj.x()
+            y = obj.y()
+            bounds.append((x, y, x + obj.width(), y + obj.height()))
+
+        return (
+            Location(min(bound[0] for bound in bounds), min(bound[1] for bound in bounds)),
+            Location(max(bound[2] for bound in bounds), max(bound[3] for bound in bounds)),
+        )
 
 
