@@ -1673,7 +1673,7 @@ class Renderable(Object):
         count = 0
 
         if len(args) == 1:
-            verify(args, (tuple, Location))
+            verify(args[0], (tuple, Location))
             if type(args[0]) is Location:
                 x = args[0].x()
                 y = args[0].y()
@@ -2387,24 +2387,28 @@ class CustomPolygon(CustomRenderable):
             if new_vertex.y() > ymax:
                 ymax = new_vertex.y()
 
-        self._num_sides = len(real_vertices)
         self._vertices = real_vertices
-        # _current_vertices holds the live on-screen vertices. We clone so that
-        # translating them in place never mutates the pristine _vertices shape
-        # definition (which update() rebuilds from).
         self._current_vertices = [vertex.clone() for vertex in real_vertices]
+
         # Pending translation not yet folded into _current_vertices. move() just
         # accumulates the delta here (O(1)); vertices() applies it once, lazily,
         # collapsing any run of moves into a single pass. See _flush_vertices().
         self._vertex_offset = [0.0, 0.0]
+
         self._location = Location(xmin, ymin)
-        self._width = xmax - xmin
-        self._height = ymax - ymin
+        self._base_width = self._width = xmax - xmin
+        self._base_height = self._height = ymax - ymin
+
+        self._base_location = self._location.clone()
+        self._base_center = Location(
+            sum(vertex.x() for vertex in self._vertices) / len(self._vertices),
+            sum(vertex.y() for vertex in self._vertices) / len(self._vertices),
+        )
 
         color_state = self._color if self._fill else Color.NONE
 
         tk_vertices = []  # we need to convert to tk's coordinate system.
-        for vertex in real_vertices:
+        for vertex in self._current_vertices:
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
                                 (vertex.y() - (self._screen.height() / 2))))
         state = tk.NORMAL if self._visible else tk.HIDDEN
@@ -2417,6 +2421,9 @@ class CustomPolygon(CustomRenderable):
             state=state
         )
 
+        if self._angle % 360 != 0:
+            self._update_coords()
+
         self._pen = Pen(screen, self._location.x(), self._location.y())
         self._pen._object = self
 
@@ -2428,7 +2435,7 @@ class CustomPolygon(CustomRenderable):
         """
 
         before = self._location.clone()
-        self._location.move(*args, **kwargs)
+        self._location.move(*args, **kwargs)  # Does the arg parsing for us
 
         # Use a relative canvas move (exact) rather than moveto(), which
         # positions by the item's bounding box and lands 1px off because the
@@ -2460,7 +2467,7 @@ class CustomPolygon(CustomRenderable):
         """
         Get the width of the CustomPolygon
 
-        :param width: Unsupported.
+        :param width: the new width to scale to in pixels, if any
         :return: the width of the object
         """
 
@@ -2470,7 +2477,8 @@ class CustomPolygon(CustomRenderable):
             if self._width == width:
                 return width
 
-            self._update_coords(width=width)
+            self._width = width
+            self._update_coords()
 
         return self._width
 
@@ -2488,12 +2496,16 @@ class CustomPolygon(CustomRenderable):
             if self._height == height:
                 return height
 
-            self._update_coords(height=height)
+            self._height = height
+            self._update_coords()
 
         return self._height
 
     def rotate(self, angle_diff: float = 0) -> None:
         verify(angle_diff, (float, int))
+
+        if angle_diff == 0:
+            return
 
         self._angle += angle_diff
 
@@ -2503,8 +2515,19 @@ class CustomPolygon(CustomRenderable):
         self._update_coords()
 
     def rotation(self, angle: float = None) -> float:
+        """
+        Gets or sets the rotation of the CustomPolygon.
+
+        :param angle: the angle to rotate the polygon to
+        :return: the angle that was set
+        """
+
         if angle is not None:
             verify(angle, (float, int))
+
+            if angle % 360 == self._angle % 360:
+                return self._angle
+
             self._angle = angle
             self._update_coords()
 
@@ -2615,149 +2638,82 @@ class CustomPolygon(CustomRenderable):
         :return: a CustomPolygon
         """
 
-        poly = CustomPolygon(self._screen, self._vertices, self._color, self._border, self._fill, self._angle,
+        poly = CustomPolygon(self._screen, self._vertices, self._color, self._border, self._fill, 0,
                              self._visible)
         poly.transform(self.transform())
+        poly.moveto(self.location())
 
         return poly
 
-    def _rotate(self, angle: float) -> list:
-        # We have to update here since we cannot remember previous rotations (update method call won't cut it)!
-        self._flush_vertices()  # rotate from the true current positions, not a stale pre-move snapshot
-        vertices = self._current_vertices
+    def _update_coords(self):
+        """Rebuild the live geometry from the immutable base vertices and transform."""
+        self._check()
 
-        # First get some values that we are going to use later
-        theta = math.radians(angle)
+        # _location already includes every lazy translation.
+        self._vertex_offset[0] = 0.0
+        self._vertex_offset[1] = 0.0
+
+        scale_factor = (
+            self._width / self._base_width if self._base_width != 0 else 0,
+            self._height / self._base_height if self._base_height != 0 else 0,
+        )
+
+        centroid_x = self._location.x() + (
+            self._base_center.x() - self._base_location.x()
+        ) * scale_factor[0]
+        centroid_y = self._location.y() + (
+            self._base_center.y() - self._base_location.y()
+        ) * scale_factor[1]
+
+        theta = math.radians(self._angle)
         cosine = math.cos(theta)
         sine = math.sin(theta)
 
-        centroid_x = self.center().x()
-        centroid_y = self.center().y()
+        half_screen_width = self._screen.width() / 2
+        half_screen_height = self._screen.height() / 2
 
-        new_vertices = []
-        for vertex in vertices:
-            # We have to create these separately because they're ironically used in each other's calculations xD
-            old_x = vertex.x() - centroid_x
-            old_y = vertex.y() - centroid_y
+        rotated = self._angle % 360 != 0
+        tk_vertices = []
 
-            new_x = (old_x * cosine - old_y * sine) + centroid_x
-            new_y = (old_x * sine + old_y * cosine) + centroid_y
-            new_vertices.append(Location(new_x, new_y))
+        for index, vertex in enumerate(self._vertices):
+            old_x = self._location.x() + (
+                vertex.x() - self._base_location.x()
+            ) * scale_factor[0]
+            old_y = self._location.y() + (
+                vertex.y() - self._base_location.y()
+            ) * scale_factor[1]
 
-        return new_vertices
+            if rotated:
+                relative_x = old_x - centroid_x
+                relative_y = old_y - centroid_y
+                new_x = relative_x * cosine - relative_y * sine + centroid_x
+                new_y = relative_x * sine + relative_y * cosine + centroid_y
+            else:
+                new_x = old_x
+                new_y = old_y
 
-    def _get_ref_vertices(self) -> list:
-        new_vertices = []
-        tk_coords = self._screen._canvas.coords(self._ref)
-        last = None
+            current_vertex = self._current_vertices[index]
+            current_vertex._x = new_x
+            current_vertex._y = new_y
 
-        for j in range(0, len(tk_coords), 2):
-            x = tk_coords[j]
-            y = tk_coords[j + 1]
-            new_vertices.append(Location(x + self._screen.width() / 2, y + self._screen.height() / 2))
-        return new_vertices
-
-    def _update_coords(self, width: float = None, height: float = None):
-        width = width if width is not None else self._width
-        height = height if height is not None else self._height
-
-        cx = self.x() + (self._width / 2)
-        cy = self.y() + (self._height / 2)
-
-        # calculate the scaling factor
-        # scale_factor = (self._width / width, self._height / height)
-        scale_factor = (width / self._width, height / self._height)
-
-        # self._current_vertices = self._vertices.copy()
-        # _get_ref_vertices() reads the canvas, which already reflects every
-        # move(), so any pending translation is now folded in — drop the offset.
-        self._current_vertices = self._get_ref_vertices()
-        self._vertex_offset[0] = 0.0
-        self._vertex_offset[1] = 0.0
-        for vertex in self._current_vertices:
-            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, scale_factor[1] * (vertex.y() - cy) + cy)
-            vertex.move(dx=(self._width - width) / 2)
-            vertex.move(dy=(self._height - height) / 2)
-
-        self._width = width
-        self._height = height
-
-        self._current_vertices = self._rotate(self._angle)
-
-        tk_vertices = []  # we need to convert to tk's coordinate system.
-        for vertex in self._current_vertices:
-            tk_vertices.append(vertex.x() - (self._screen.width() / 2))
-            tk_vertices.append((vertex.y() - (self._screen.height() / 2)))
+            tk_vertices.append(new_x - half_screen_width)
+            tk_vertices.append(new_y - half_screen_height)
 
         self._screen._canvas.coords(self._ref, tk_vertices)
 
     def update(self):
         self._check()
-
-        # update() rebuilds geometry from the pristine _vertices definition, so
-        # any pending translation of the old cached vertices no longer applies.
-        self._vertex_offset[0] = 0.0
-        self._vertex_offset[1] = 0.0
-
-        old_ref = self._ref
-
-        xmin = self._vertices[0][0]
-        xmax = self._vertices[0][0]
-        ymin = self._vertices[0][1]
-        ymax = self._vertices[0][1]
-
-        for vertex in self._vertices:
-            if vertex.x() < xmin:
-                xmin = vertex.x()
-            if vertex.x() > xmax:
-                xmax = vertex.x()
-
-            if vertex.y() < ymin:
-                ymin = vertex.y()
-            if vertex.y() > ymax:
-                ymax = vertex.y()
-
-        self._num_sides = len(self._vertices)
-        self._location = Location(xmin, ymin)
-
-        width = xmax - xmin
-        height = ymax - ymin
-
-        cx = xmin + (width / 2)
-        cy = ymin + (height / 2)
-
-        # calculate the scaling factor
-        scale_factor = (self._width / width, self._height / height)
-
-        # Clone (not .copy(), which is shallow) so scaling these in place does
-        # not mutate the pristine _vertices shape definition.
-        self._current_vertices = [vertex.clone() for vertex in self._vertices]
-        for vertex in self._current_vertices:
-            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, scale_factor[1] * (vertex.y() - cy) + cy)
-            vertex.move(dx=(self._width - width) / 2)
-            vertex.move(dy=(self._height - height) / 2)
-
-        self._current_vertices = self._rotate(self._angle)
-
-        tk_vertices = []  # we need to convert to tk's coordinate system.
-        for vertex in self._current_vertices:
-            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
-                                (vertex.y() - (self._screen.height() / 2))))
+        self._update_coords()
 
         color_state = self._color if self._fill else Color.NONE
-
         state = tk.NORMAL if self._visible else tk.HIDDEN
-
-        self._ref = self._screen._screen.cv.create_polygon(
-            tk_vertices,
+        self._screen._canvas.itemconfigure(
+            self._ref,
             fill=self._screen._colorstr(color_state),
             outline=self._screen._screen._colorstr(self._border.__value__()),
             width=self._border_width,
-            state=state
+            state=state,
         )
-
-        self._screen._screen.cv.tag_lower(self._ref, old_ref)
-        self._screen._screen.cv.delete(old_ref)
 
 
 class Rectangle(Renderable):
@@ -2963,6 +2919,9 @@ class Polygon(Renderable):
                  fill: bool = True,
                  rotation: float = 0,
                  visible: bool = True):
+        if num_sides < 3:
+            raise InvalidArgumentError('num_sides must be at least 3 to create a Polygon')
+
         self._num_sides = num_sides
         radius = PIXEL_RATIO / 2
         shape_points = []
@@ -2980,6 +2939,9 @@ class Polygon(Renderable):
                  fill: bool = True,
                  rotation: float = 0,
                  visible: bool = True):
+        if num_sides < 3:
+            raise InvalidArgumentError('num_sides must be at least 3 to create a Polygon')
+
         x = location.x()
         y = location.y()
 
@@ -4292,10 +4254,7 @@ class Line(Object):
                                                         fill=self._screen._screen._colorstr(self._color.__value__()),
                                                         width=self._thickness, dash=self._dashes, state=state)
 
-        # Set angle
-        theta = math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x())
-        theta = math.degrees(theta)
-        self._angle = theta
+        self._update_angle()
 
     def pos1(self, *args) -> Location:
         """
@@ -4313,11 +4272,11 @@ class Line(Object):
             else:
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.')
 
-        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
-                                                        self._pos1.y() - self._screen.height() / 2,
-                                                        self._pos2.x() - self._screen.width() / 2,
-                                                        self._pos2.y() - self._screen.height() / 2])
-        # self.update()
+            self._update_angle()
+            self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
+                                                    self._pos1.y() - self._screen.height() / 2,
+                                                    self._pos2.x() - self._screen.width() / 2,
+                                                    self._pos2.y() - self._screen.height() / 2])
         return self._pos1
 
     def pos2(self, *args) -> Location:
@@ -4336,11 +4295,11 @@ class Line(Object):
             else:
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.')
 
-        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
-                                                self._pos1.y() - self._screen.height() / 2,
-                                                self._pos2.x() - self._screen.width() / 2,
-                                                self._pos2.y() - self._screen.height() / 2])
-        # self.update()
+            self._update_angle()
+            self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
+                                                    self._pos1.y() - self._screen.height() / 2,
+                                                    self._pos2.x() - self._screen.width() / 2,
+                                                    self._pos2.y() - self._screen.height() / 2])
         return self._pos2
 
     def move(self, *args, **kwargs) -> None:
@@ -4377,18 +4336,20 @@ class Line(Object):
             if name.lower() == 'dy':
                 diff = (diff[0], value)
 
-        if 'point' in kwargs:
-            point = kwargs['point']
-            verify(point, int)
-            if point == 1:
-                self._pos1.move(diff[0], diff[1])
-            elif point == 2:
-                self._pos2.move(diff[0], diff[1])
-            elif point != 0:
-                raise InvalidArgumentError('You must pass either 1 or 2 in as a point, or 0 for both points!')
-        else:
+        point = kwargs['point'] if 'point' in kwargs else 0
+        verify(point, int)
+        if point == 1:
+            self._pos1.move(diff[0], diff[1])
+        elif point == 2:
+            self._pos2.move(diff[0], diff[1])
+        elif point == 0:
             self._pos1.move(diff[0], diff[1])
             self._pos2.move(diff[0], diff[1])
+        else:
+            raise InvalidArgumentError('You must pass either 1 or 2 in as a point, or 0 for both points!')
+
+        if point != 0:
+            self._update_angle()
 
         self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
                                                 self._pos1.y() - self._screen.height() / 2,
@@ -4436,6 +4397,7 @@ class Line(Object):
             raise TypeError('Incorrect Argumentation: Requires either two locations, tuples, or four numbers (x1, y1, '
                             'x2, y2)')
 
+        self._update_angle()
         self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
                                                 self._pos1.y() - self._screen.height() / 2,
                                                 self._pos2.x() - self._screen.width() / 2,
@@ -4503,9 +4465,6 @@ class Line(Object):
         :return: the angle of the line
         """
 
-        # theta = math.atan2(self.pos1().y() - self.pos2().y(), self.pos1().x() - self.pos2().x())
-        # theta = math.degrees(theta)
-
         if angle is not None:
             self.rotate(angle - self._angle)
 
@@ -4519,6 +4478,9 @@ class Line(Object):
         :param point: the point to serve as the origin.
         :return: the new angle
         """
+
+        if point not in (1, 2):
+            raise InvalidArgumentError('Point must be 1 or 2.')
 
         origin = self._pos1 if point == 1 else self._pos2
         point = self._pos2 if point == 1 else self._pos1
@@ -4541,6 +4503,16 @@ class Line(Object):
                                                 self._pos2.y() - self._screen.height() / 2])
 
         self._angle += angle_diff
+        return self._angle
+
+    def _update_angle(self) -> float:
+        """Recalculate the angle from the current endpoint locations."""
+
+        theta = math.atan2(
+            self._pos1.y() - self._pos2.y(),
+            self._pos1.x() - self._pos2.x(),
+        )
+        self._angle = math.degrees(theta)
         return self._angle
 
     def location(self) -> tuple:
