@@ -1,4 +1,5 @@
 from pydraw.errors import *
+from pydraw.util import verify_keywords
 import math
 
 
@@ -45,14 +46,16 @@ class Location:
             raise InvalidArgumentError('Location constructor takes a tuple/location '
                                        'or two numbers (x, y)!')
 
+        verify_keywords(kwargs, ('x', 'y'), 'Location()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('Location constructor takes a tuple/location '
                                            'or two numbers (x, y)!')
 
-            if name.lower() == 'x':
+            name = name.lower()
+            if name == 'x':
                 location = (value, location[1])
-            if name.lower() == 'y':
+            elif name == 'y':
                 location = (location[0], value)
 
         self._x = location[0]
@@ -85,14 +88,16 @@ class Location:
             raise InvalidArgumentError('move() takes a tuple/Location '
                                        'or two numbers (dx, dy)!')
 
+        verify_keywords(kwargs, ('dx', 'dy'), 'Location#move()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('move() takes a tuple/Location '
                                            'or two numbers (dx, dy)!')
 
-            if name.lower() == 'dx':
+            name = name.lower()
+            if name == 'dx':
                 diff = (value, diff[1])
-            if name.lower() == 'dy':
+            elif name == 'dy':
                 diff = (diff[0], value)
 
         self._x += diff[0]
@@ -127,14 +132,16 @@ class Location:
             raise InvalidArgumentError('moveto() takes a tuple/location '
                                        'or two numbers (x, y)!')
 
+        verify_keywords(kwargs, ('x', 'y'), 'Location#moveto()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('moveto() takes a tuple/location '
                                            'or two numbers (x, y)!')
 
-            if name.lower() == 'x':
+            name = name.lower()
+            if name == 'x':
                 location = (value, location[1])
-            if name.lower() == 'y':
+            elif name == 'y':
                 location = (location[0], value)
 
         self._x = location[0]

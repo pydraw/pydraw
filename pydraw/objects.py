@@ -75,6 +75,7 @@ class Pen:
             raise InvalidArgumentError('move() takes a tuple/Location '
                                        'or two numbers (dx, dy)!')
 
+        verify_keywords(kwargs, ('dx', 'dy'), 'Pen#move()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('move() takes a tuple/Location '
@@ -85,8 +86,6 @@ class Pen:
                 diff = (value, diff[1])
             elif name == 'dy':
                 diff = (diff[0], value)
-            else:
-                raise InvalidArgumentError(f'Unknown keyword for Pen#move(): {name}')
 
         if not len(self._coordinates) > 0:
             raise PydrawError('No starting coordinate to move Pen from.')
@@ -131,6 +130,7 @@ class Pen:
             raise InvalidArgumentError('moveto() takes a tuple/location '
                                        'or two numbers (dx, dy)!')
 
+        verify_keywords(kwargs, ('x', 'y'), 'Pen#moveto()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('moveto() takes a tuple/location '
@@ -141,8 +141,6 @@ class Pen:
                 location = (value, location[1])
             elif name == 'y':
                 location = (location[0], value)
-            else:
-                raise InvalidArgumentError(f'Unknown keyword for Pen#moveto(): {name}')
 
         if not len(self._coordinates) > 0:
             raise PydrawError('No starting coordinate to move Pen from.')
@@ -1357,6 +1355,8 @@ class Renderable(Object):
         :param y: if defined, move the center y-coordinate to the specified value
         :return: Location object representing center of Renderable
         """
+
+        verify_keywords(kwargs, ('move_to', 'x', 'y', 'centroid'), 'Renderable#center()')
 
         centroid = False
         if len(args) == 0:
@@ -2643,6 +2643,8 @@ class CustomPolygon(CustomRenderable):
         :return: Location object representing centroid of CustomRenderable
         """
 
+        verify_keywords(kwargs, ('move_to', 'x', 'y'), 'CustomPolygon#center()')
+
         if len(args) == 0 and len(kwargs) == 0:
             return self._center()
 
@@ -3457,6 +3459,8 @@ class Image(Renderable):
         :return: Location object representing center of Image
         """
 
+        verify_keywords(kwargs, ('move_to', 'x', 'y'), 'Image#center()')
+
         if len(args) == 0 and len(kwargs) == 0:
             return self._center()
 
@@ -4150,6 +4154,8 @@ class Text(CustomRenderable):
         :return: Location object representing center of Renderable
         """
 
+        verify_keywords(kwargs, ('move_to', 'x', 'y'), 'Text#center()')
+
         if len(args) == 0 and len(kwargs) == 0:
             return self._center()
 
@@ -4465,17 +4471,21 @@ class Line(Object):
             else:
                 raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!')
 
+        verify_keywords(kwargs, ('dx', 'dy', 'point'), 'Line#move()', case_sensitive=False)
+        point = 0
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
                 raise InvalidArgumentError('Object#move() must take either a tuple/location '
                                            'or two numbers (dx, dy)!')
 
-            if name.lower() == 'dx':
+            name = name.lower()
+            if name == 'dx':
                 diff = (value, diff[1])
-            if name.lower() == 'dy':
+            elif name == 'dy':
                 diff = (diff[0], value)
+            elif name == 'point':
+                point = value
 
-        point = kwargs['point'] if 'point' in kwargs else 0
         verify(point, int)
         if point == 1:
             self._pos1.move(diff[0], diff[1])
@@ -4504,6 +4514,12 @@ class Line(Object):
         :return: None
         """
 
+        verify_keywords(
+            kwargs,
+            ('pos1', 'pos2', 'x1', 'y1', 'x2', 'y2'),
+            'Line#moveto()',
+            case_sensitive=False
+        )
         if len(args) == 2 and all(type(arg) is tuple or type(arg) is Location for arg in args):
             self._pos1.moveto(args[0][0], args[0][1])
             self._pos2.moveto(args[1][0], args[1][1])
@@ -4516,21 +4532,28 @@ class Line(Object):
 
         if len(kwargs.keys()) > 0:
             for key, value in kwargs.items():
-                if key.lower() == 'pos1' and (type(value) is tuple or type(value) is Location):
+                key = key.lower()
+                if key == 'pos1':
+                    if type(value) is not tuple and type(value) is not Location:
+                        raise InvalidArgumentError('Line#moveto() pos1 must be a tuple or Location.')
                     pos1 = value
                     verify(pos1[0], (float, int), pos1[1], (float, int))
                     self._pos1 = Location(pos1[0], pos1[1])
-                elif key.lower() == 'pos2' and (type(value) is tuple or type(value) is Location):
+                elif key == 'pos2':
+                    if type(value) is not tuple and type(value) is not Location:
+                        raise InvalidArgumentError('Line#moveto() pos2 must be a tuple or Location.')
                     pos2 = value
                     verify(pos2[0], (float, int), pos2[1], (float, int))
                     self._pos2 = Location(pos2[0], pos2[1])
-                elif key.lower() == 'x1' and (type(value) is float or type(value) is int):
+                elif type(value) is not float and type(value) is not int:
+                    raise InvalidArgumentError(f'Line#moveto() {key} must be a number.')
+                elif key == 'x1':
                     self._pos1.x(value)
-                elif key.lower() == 'y1' and (type(value) is float or type(value) is int):
+                elif key == 'y1':
                     self._pos1.y(value)
-                elif key.lower() == 'x2' and (type(value) is float or type(value) is int):
+                elif key == 'x2':
                     self._pos2.x(value)
-                elif key.lower() == 'y2' and (type(value) is float or type(value) is int):
+                elif key == 'y2':
                     self._pos2.y(value)
         elif len(args) == 0:
             raise TypeError('Incorrect Argumentation: Requires either two locations, tuples, or four numbers (x1, y1, '
@@ -4552,6 +4575,7 @@ class Line(Object):
         :return: None
         """
 
+        verify_keywords(kwargs, ('point',), 'Line#lookat()', case_sensitive=False)
         point = 2
 
         if len(args) >= 1 and (type(args[0]) is tuple or type(args[0]) is Location):
@@ -4567,11 +4591,12 @@ class Line(Object):
         else:
             raise InvalidArgumentError('You must pass either two numbers (x, y), or a tuple/Location!')
 
-        if 'point' in kwargs:
-            if type(kwargs['point']) is not int:
+        for name, value in kwargs.items():
+            if type(value) is not int:
                 raise InvalidArgumentError('Point must be an int.')
 
-            point = kwargs['point']
+            if name.lower() == 'point':
+                point = value
 
         # so now we have a location, but we need to shorten it to be the same length of our line right now.
         # slope = (self.pos2().y() - self.pos1().y()) / (self.pos2.x() - self.pos1.x())

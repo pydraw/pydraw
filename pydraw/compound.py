@@ -12,6 +12,8 @@ class CompoundObject(Object):
     A compound group of objects that can be moved or modified together.
     """
 
+    _PEN_SUPPORTED = False
+
     def __init__(self, *args, **kwargs):
         """
         Pass in the shapes/objects to be used to create the CompoundObject

@@ -39,3 +39,20 @@ def verify(*args):
 
         if not verify_type(obj, expected_type):
             raise InvalidArgumentError(f'Type does not match: {type(obj)} ({obj}) : {expected_type}')
+
+
+def verify_keywords(kwargs, allowed, method: str, case_sensitive: bool = True):
+    """
+    Reject keywords that are not recognized by a manually parsed API.
+
+    :param kwargs: the keyword mapping passed to the method
+    :param allowed: the supported keyword names
+    :param method: the method name to include in an error
+    :param case_sensitive: whether keyword-name matching is case-sensitive
+    """
+
+    allowed = set(allowed)
+    for keyword in kwargs:
+        comparison = keyword if case_sensitive else keyword.lower()
+        if comparison not in allowed:
+            raise InvalidArgumentError(f'Unknown keyword for {method}: {keyword}')
