@@ -1,7 +1,9 @@
 import turtle
 import tkinter as tk
 import inspect
+import math
 import time
+from typing import Optional
 
 from pydraw import Color
 from pydraw import Location
@@ -137,7 +139,10 @@ class Screen:
         self._width = width
         self._height = height
 
-        self._time = None
+        # Timing state used by sleep(delta=True). The completed-frame timestamp
+        # measures delta time; the deadline keeps frame pacing from drifting.
+        self._last_frame_time = None
+        self._next_frame_time = None
 
         # The only thing on the canvas is itself, so we prevent anything stupid from happening.
         # self._canvas.configure(scrollregion=self._canvas.bbox("all"))
@@ -689,6 +694,10 @@ class Screen:
         :return: None
         """
 
+        # A reset commonly starts a new scene and therefore a new frame loop.
+        self._last_frame_time = None
+        self._next_frame_time = None
+
         self.toggle_grid(False)
         for line in self._gridlines:
             line.remove()
@@ -702,35 +711,77 @@ class Screen:
         self.clear()
         self.registry.clear()
 
-    # @staticmethod
-    def sleep(self, delay: float, delta: bool = False) -> None:
+    def sleep(self, delay: float, delta: bool = False) -> Optional[float]:
         """
-        Cause the program to sleep by calling `time.sleep(delay)`
+        Pause execution, optionally compensating for work done during the frame.
 
-        You can enable the 'deltaTime' feature by passing in the `delta` parameter is true, which will allow it
-        to calculate the time between `time.sleep(delay)`, and take that into account, reducing `delay` by that amount.
+        With ``delta=False``, this sleeps for the full delay and returns None.
+        With ``delta=True``, it sleeps only until the next frame deadline and
+        returns the actual duration of the completed frame in seconds. The
+        returned value is intended to be used as ``dt`` in the next frame.
 
-        :param delay: the delay in seconds to sleep by
-        :param delta: enable the deltaTime feature which will take processing time into account for sleep time
-        :return: None
+        The first delta-enabled call returns the requested delay because there
+        is no previous frame timestamp to measure. If execution falls more than
+        one frame behind, the deadline is reset so the loop does not run a burst
+        of catch-up frames.
+
+        :param delay: target frame duration in seconds
+        :param delta: whether to enable compensated frame pacing and return dt
+        :return: None normally, or the completed frame duration when delta=True
         """
 
-        if delta:
-            if self._time is None:
-                self._time = time.time()
-            else:
-                delay_offset = time.time() - self._time
-                self._time = time.time()
+        if type(delay) is not int and type(delay) is not float:
+            raise InvalidArgumentError(
+                f'Screen#sleep(): delay must be a number; received {type(delay)} ({delay!r}).'
+            )
+        if type(delta) is not bool:
+            raise InvalidArgumentError(
+                f'Screen#sleep(): delta must be a bool; received {type(delta)} ({delta!r}).'
+            )
 
-                # delay offset cases:
-                # 0 = no time has passed
-                # 0 < x < delay = some time has passed, subtract it from delay for deltaTime
-                # x > delay = more time has passed than our frame limit allows for, set delay to 0
+        original_delay = delay
+        try:
+            delay = float(delay)
+        except OverflowError:
+            raise InvalidArgumentError(
+                f'Screen#sleep(): delay must be finite and non-negative; received {original_delay!r}.'
+            )
 
-                if delay_offset > 0:
-                    delay = delay - delay_offset if delay >= delay_offset else 0
+        if delay < 0 or not math.isfinite(delay):
+            raise InvalidArgumentError(
+                f'Screen#sleep(): delay must be finite and non-negative; received {original_delay!r}.'
+            )
 
-        time.sleep(delay)
+        if not delta:
+            # A normal sleep breaks the delta-enabled frame sequence. Resetting
+            # prevents that wait from being counted as work if delta timing is
+            # enabled again later.
+            self._last_frame_time = None
+            self._next_frame_time = None
+            time.sleep(delay)
+            return None
+
+        now = time.perf_counter()
+        first_frame = self._last_frame_time is None or self._next_frame_time is None
+
+        if first_frame:
+            self._next_frame_time = now + delay
+        else:
+            self._next_frame_time += delay
+
+            # Retain the absolute schedule for ordinary jitter, but discard
+            # accumulated timing debt after a pause or a very slow frame.
+            if now - self._next_frame_time > delay:
+                self._next_frame_time = now + delay
+
+        remaining = self._next_frame_time - now
+        if remaining > 0:
+            time.sleep(remaining)
+
+        completed_at = time.perf_counter()
+        frame_time = delay if first_frame else completed_at - self._last_frame_time
+        self._last_frame_time = completed_at
+        return frame_time
 
     def update(self) -> None:
         """
