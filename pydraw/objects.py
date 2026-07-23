@@ -223,14 +223,28 @@ class Pen:
 
         if len(self._coordinates) > 0:
             self._location = Location(self._coordinates[-1])
-        self._coordinates = [Location(self._location)] if self._drawing else []
 
-        # self._screen._canvas.itemconfigure(self._ref, style=tk.HIDDEN)
-        if self._ref is not None: self._screen._canvas.coords(self._ref, 0, 0, 0, 0)
+        # Delete finished strokes from the canvas entirely; leaving them around
+        # (even hidden) would leak a canvas item on every clear().
         for line in self._history:
-            self._screen._canvas.coords(line, 0, 0, 0, 0)
-
+            self._screen._canvas.delete(line)
         self._history.clear()
+
+        if self._drawing:
+            # Still drawing: keep _ref alive since _update() reuses it, but hide
+            # it and reset to the current point. A zero-length ROUND line would
+            # otherwise render as a dot; _update() re-shows it on the next move.
+            self._coordinates = [Location(self._location)]
+            if self._ref is not None:
+                self._screen._canvas.itemconfigure(self._ref, state=tk.HIDDEN)
+        else:
+            # Not drawing: nothing reuses _ref, so delete it outright. (When
+            # stopped it aliases the last history item, already deleted above;
+            # a repeat delete is a harmless no-op.)
+            self._coordinates = []
+            if self._ref is not None:
+                self._screen._canvas.delete(self._ref)
+                self._ref = None
 
     def color(self, color: Color = None) -> Color:
         if color is not None:
@@ -291,6 +305,8 @@ class Pen:
                 cl.append(y - (self._screen.height() / 2))
 
             self._screen._canvas.coords(self._ref, *cl)
+            # Re-show the current line in case it was hidden by clear().
+            self._screen._canvas.itemconfigure(self._ref, state=tk.NORMAL)
 
         if self._color is not None:
             self._screen._canvas.itemconfigure(self._ref,
