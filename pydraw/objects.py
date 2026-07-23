@@ -1670,8 +1670,6 @@ class Renderable(Object):
         """
 
         x, y = 0, 0
-        count = 0
-
         if len(args) == 1:
             verify(args[0], (tuple, Location))
             if type(args[0]) is Location:
@@ -1703,15 +1701,26 @@ class Renderable(Object):
         # Pre-extract raw (x, y) floats once so the ray-cast loop does pure
         # float math instead of calling Location.x()/.y() on every vertex, every
         # pass. This is the single biggest cost for high-vertex shapes.
-        verts = self.vertices()
-        n = len(verts)
-        pts = [(v.x(), v.y()) for v in verts]
+        vertices = [(vertex.x(), vertex.y()) for vertex in self.vertices()]
+        return self._contains_point(vertices, x, y)
 
-        p1x, p1y = pts[0]
+    @staticmethod
+    def _contains_point(vertices: list, x: float, y: float) -> bool:
+        """
+        Test whether raw coordinates contain a point.
+
+        This internal form skips public argument validation and lets collision
+        checks reuse vertices that have already been converted to numeric tuples.
+        """
+
+        count = 0
+        n = len(vertices)
+
+        p1x, p1y = vertices[0]
         for i in range(1, n + 1):
             # A cool trick that gets the next index in an array, or the first index if i is the last index.
             # (since we start at index 1)
-            p2x, p2y = pts[i % n]
+            p2x, p2y = vertices[i % n]
 
             # make sure we're in the ballpark on the y-axis (actually able to intersect on the x-axis)
             if y > (p1y if p1y < p2y else p2y):
@@ -1824,26 +1833,45 @@ class Renderable(Object):
         if a_left_b or a_right_b or a_above_b or a_below_b:
             return False
 
+        vertices1 = None
+        vertices2 = None
+        shape1 = None
+        shape2 = None
+
         # Check if one shape is entirely inside the other shape
         if (min_ax >= min_bx and max_ax <= max_bx) and (min_ay >= min_by and max_ay <= max_by):
-            return True
+            vertices1 = self.vertices()
+            point = vertices1[0]
+            vertices2 = other.vertices()
+            shape2 = [(vertex.x(), vertex.y()) for vertex in vertices2]
+            if self._contains_point(shape2, point.x(), point.y()):
+                return True
 
         if (min_bx >= min_ax and max_bx <= max_ax) and (min_by >= min_ay and max_by <= max_ay):
-            return True
+            if vertices2 is None:
+                vertices2 = other.vertices()
+            point = vertices2[0]
+            if vertices1 is None:
+                vertices1 = self.vertices()
+            shape1 = [(vertex.x(), vertex.y()) for vertex in vertices1]
+            if self._contains_point(shape1, point.x(), point.y()):
+                return True
 
         # Next we are going to use a sweeping line algorithm.
         # Essentially we will process the lines on the x-axis, one coordinate at a time (imagine a vertical line scan).
         # Then we will look for their orientations. We will essentially make sure its impossible they do not cross.
-        shape1 = self.vertices()
-
-        # noinspection PyProtectedMember
-        shape2 = other.vertices()
-
         # Pre-extract raw (x, y) floats once. The edge-vs-edge test below is
         # O(n*m) and previously called Location.x()/.y() millions of times on
         # high-vertex shapes; from here on we work on plain float tuples instead.
-        shape1 = [(vertex.x(), vertex.y()) for vertex in shape1]
-        shape2 = [(vertex.x(), vertex.y()) for vertex in shape2]
+        if shape1 is None:
+            if vertices1 is None:
+                vertices1 = self.vertices()
+            shape1 = [(vertex.x(), vertex.y()) for vertex in vertices1]
+        if shape2 is None:
+            if vertices2 is None:
+                # noinspection PyProtectedMember
+                vertices2 = other.vertices()
+            shape2 = [(vertex.x(), vertex.y()) for vertex in vertices2]
 
         # Orientation method that will determine if it is a triangle (and in what direction [cc or ccw]) or a line.
         def orientation(point1, point2, point3) -> int:
