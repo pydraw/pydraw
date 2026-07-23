@@ -25,18 +25,22 @@ class CompoundObject(Object):
 
         for arg in args:
             if not isinstance(arg, Object):
-                raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg)
+                raise InvalidArgumentError(
+                    f'CompoundObject(): expected Object values; received {type(arg)} ({arg!r}).'
+                )
 
             self._objects[str(arg)] = arg
 
         for (name, arg) in kwargs.items():
             if not isinstance(arg, Object):
-                raise InvalidArgumentError('Argument passed to CompoundObject was not an Object:', arg)
+                raise InvalidArgumentError(
+                    f'CompoundObject(): expected Object values; received {type(arg)} ({arg!r}).'
+                )
 
             self._objects[name] = arg
 
         if len(self._objects) == 0:
-            raise InvalidArgumentError('You must pass at least one object to create a CompoundObject!')
+            raise InvalidArgumentError('CompoundObject(): expected at least one Object.')
 
         values = list(self._objects.values())
 
@@ -120,7 +124,7 @@ class CompoundObject(Object):
         """
 
         if width is not None:
-            raise UnsupportedError('Cannot set width of a CompoundObject')
+            raise UnsupportedError('CompoundObject#width(): setting width is unsupported.')
 
         return self._end.x() - self._location.x()
 
@@ -133,7 +137,7 @@ class CompoundObject(Object):
         """
 
         if height is not None:
-            raise UnsupportedError('Cannot set height of a CompoundObject')
+            raise UnsupportedError('CompoundObject#height(): setting height is unsupported.')
 
         return self._end.y() - self._location.y()
 
@@ -230,12 +234,15 @@ class CompoundObject(Object):
             verify(args[0], (float, int), args[1], (float, int))
             if type(args[0]) is not float and type(args[0]) is not int \
                     and type(args[1]) is not float and type(args[1]) is not int:
-                raise InvalidArgumentError('Passed arguments must be numbers (x, y), '
-                                           'or you may pass a location/tuple.')
+                raise InvalidArgumentError(
+                    'CompoundObject#contains(): expected a tuple/Location or two numbers (x, y).'
+                )
             x = args[0]
             y = args[1]
         else:
-            raise InvalidArgumentError('You must pass in a tuple, Location, or two numbers (x, y)!')
+            raise InvalidArgumentError(
+                'CompoundObject#contains(): expected a tuple/Location or two numbers (x, y).'
+            )
 
         for obj in self._objects.values():
             if not isinstance(obj, Renderable):
@@ -297,7 +304,9 @@ class CompoundObject(Object):
         """
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError('Argument passed to CompoundObject was not an Object.')
+            raise InvalidArgumentError(
+                f'CompoundObject#add(): expected an Object; received {type(obj)} ({obj!r}).'
+            )
 
         if name is None:
             name = str(obj)

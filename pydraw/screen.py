@@ -529,8 +529,9 @@ class Screen:
             ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename)
             return filename
         except:
-            raise UnsupportedError('As PIL is not installed, you cannot grab the screen! '
-                                   'Install Pillow via: \'pip install pillow\'.')
+            raise UnsupportedError(
+                "Screen#grab(): Pillow is required. Install it with 'pip install pillow'."
+            )
 
     def fullscreen(self, fullscreen: bool = None) -> bool:
         """
@@ -555,7 +556,9 @@ class Screen:
         from pydraw import Object
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError(f'Expected an Object {obj}, instead got {type(obj)}.')
+            raise InvalidArgumentError(
+                f'Screen#front(): expected an Object; received {type(obj)} ({obj!r}).'
+            )
 
         self._canvas.tag_raise(obj._ref)
 
@@ -563,7 +566,9 @@ class Screen:
         from pydraw import Object
 
         if not isinstance(obj, Object):
-            raise InvalidArgumentError(f'Expected an Object {obj}, instead got {type(obj)}.')
+            raise InvalidArgumentError(
+                f'Screen#back(): expected an Object; received {type(obj)} ({obj!r}).'
+            )
 
         self._canvas.tag_lower(obj._ref)
 
@@ -586,7 +591,9 @@ class Screen:
         """
 
         if obj in self._objects:
-            raise PydrawError(f'Cannot re-add object that is already in the object cache! {obj}: {type(obj)}')
+            raise PydrawError(
+                f'Screen#add(): object is already on this Screen: {type(obj)} ({obj!r}).'
+            )
 
         self._add(obj)
 
@@ -656,7 +663,9 @@ class Screen:
             return self._scene
 
         if not isinstance(scene, Scene):
-            raise InvalidArgumentError('You must pass a an object that extends Scene!')
+            raise InvalidArgumentError(
+                f'Screen#scene(): expected a Scene; received {type(scene)} ({scene!r}).'
+            )
 
         if self._scene is not None:
             del self._scene # calls our delete handler

@@ -40,17 +40,20 @@ class Location:
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 location = (args[0], args[1])
             else:
-                raise InvalidArgumentError('Location constructor takes a tuple/location '
-                                           'or two numbers (x, y)!')
+                raise InvalidArgumentError(
+                    'Location(): expected a tuple/Location or two numbers (x, y).'
+                )
         elif len(kwargs) == 0:
-            raise InvalidArgumentError('Location constructor takes a tuple/location '
-                                       'or two numbers (x, y)!')
+            raise InvalidArgumentError(
+                'Location(): expected a tuple/Location or two numbers (x, y).'
+            )
 
         verify_keywords(kwargs, ('x', 'y'), 'Location()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('Location constructor takes a tuple/location '
-                                           'or two numbers (x, y)!')
+                raise InvalidArgumentError(
+                    'Location(): expected a tuple/Location or two numbers (x, y).'
+                )
 
             name = name.lower()
             if name == 'x':
@@ -82,17 +85,20 @@ class Location:
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 diff = (args[0], args[1])
             else:
-                raise InvalidArgumentError('move() takes a tuple/Location '
-                                           'or two numbers (dx, dy)!')
+                raise InvalidArgumentError(
+                    'Location#move(): expected a tuple/Location or two numbers (dx, dy).'
+                )
         elif len(kwargs) == 0:
-            raise InvalidArgumentError('move() takes a tuple/Location '
-                                       'or two numbers (dx, dy)!')
+            raise InvalidArgumentError(
+                'Location#move(): expected a tuple/Location or two numbers (dx, dy).'
+            )
 
         verify_keywords(kwargs, ('dx', 'dy'), 'Location#move()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('move() takes a tuple/Location '
-                                           'or two numbers (dx, dy)!')
+                raise InvalidArgumentError(
+                    'Location#move(): expected a tuple/Location or two numbers (dx, dy).'
+                )
 
             name = name.lower()
             if name == 'dx':
@@ -126,17 +132,20 @@ class Location:
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 location = (args[0], args[1])
             else:
-                raise InvalidArgumentError('moveto() takes a tuple/Location '
-                                           'or two numbers (x, y)!')
+                raise InvalidArgumentError(
+                    'Location#moveto(): expected a tuple/Location or two numbers (x, y).'
+                )
         elif len(kwargs) == 0:
-            raise InvalidArgumentError('moveto() takes a tuple/location '
-                                       'or two numbers (x, y)!')
+            raise InvalidArgumentError(
+                'Location#moveto(): expected a tuple/Location or two numbers (x, y).'
+            )
 
         verify_keywords(kwargs, ('x', 'y'), 'Location#moveto()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('moveto() takes a tuple/location '
-                                           'or two numbers (x, y)!')
+                raise InvalidArgumentError(
+                    'Location#moveto(): expected a tuple/Location or two numbers (x, y).'
+                )
 
             name = name.lower()
             if name == 'x':

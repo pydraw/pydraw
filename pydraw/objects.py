@@ -69,17 +69,20 @@ class Pen:
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 diff = (args[0], args[1])
             else:
-                raise InvalidArgumentError('move() takes a tuple/Location '
-                                           'or two numbers (dx, dy)!')
+                raise InvalidArgumentError(
+                    'Pen#move(): expected a tuple/Location or two numbers (dx, dy).'
+                )
         elif len(kwargs) == 0:
-            raise InvalidArgumentError('move() takes a tuple/Location '
-                                       'or two numbers (dx, dy)!')
+            raise InvalidArgumentError(
+                'Pen#move(): expected a tuple/Location or two numbers (dx, dy).'
+            )
 
         verify_keywords(kwargs, ('dx', 'dy'), 'Pen#move()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('move() takes a tuple/Location '
-                                           'or two numbers (dx, dy)!')
+                raise InvalidArgumentError(
+                    'Pen#move(): expected a tuple/Location or two numbers (dx, dy).'
+                )
 
             name = name.lower()
             if name == 'dx':
@@ -88,7 +91,7 @@ class Pen:
                 diff = (diff[0], value)
 
         if not len(self._coordinates) > 0:
-            raise PydrawError('No starting coordinate to move Pen from.')
+            raise PydrawError('Pen#move(): cannot move before the Pen has been started.')
 
         current = self.location()
         location = Location(current.x() + diff[0], current.y() + diff[1])
@@ -124,17 +127,20 @@ class Pen:
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 location = (args[0], args[1])
             else:
-                raise InvalidArgumentError('move() takes a tuple/Location '
-                                           'or two numbers (dx, dy)!')
+                raise InvalidArgumentError(
+                    'Pen#moveto(): expected a tuple/Location or two numbers (x, y).'
+                )
         elif len(kwargs) == 0:
-            raise InvalidArgumentError('moveto() takes a tuple/location '
-                                       'or two numbers (dx, dy)!')
+            raise InvalidArgumentError(
+                'Pen#moveto(): expected a tuple/Location or two numbers (x, y).'
+            )
 
         verify_keywords(kwargs, ('x', 'y'), 'Pen#moveto()', case_sensitive=False)
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('moveto() takes a tuple/location '
-                                           'or two numbers (dx, dy)!')
+                raise InvalidArgumentError(
+                    'Pen#moveto(): expected a tuple/Location or two numbers (x, y).'
+                )
 
             name = name.lower()
             if name == 'x':
@@ -143,7 +149,7 @@ class Pen:
                 location = (location[0], value)
 
         if not len(self._coordinates) > 0:
-            raise PydrawError('No starting coordinate to move Pen from.')
+            raise PydrawError('Pen#moveto(): cannot move before the Pen has been started.')
 
         new_location = Location(location[0], location[1])
         if self._drawing:
@@ -163,7 +169,9 @@ class Pen:
                 if type(pos) is tuple or type(pos) is Location:
                     self._coordinates.append(Location(pos[0], pos[1]))
                 else:
-                    raise InvalidArgumentError('coordinates() takes tuples/Locations only!')
+                    raise InvalidArgumentError(
+                        'Pen#coordinates(): expected only tuples or Locations.'
+                    )
 
             self._update()
 
@@ -271,7 +279,7 @@ class Pen:
     # noinspection PyProtectedMember
     def _update(self):
         if self._ref is None:
-            raise PydrawError('Pen has not been started yet!')
+            raise PydrawError('Pen#update(): Pen has not been started.')
 
         if self._coordinates is not None:
             cl = []
@@ -398,14 +406,18 @@ class Object:
         self._screen.remove(self)
 
     # Pen methods
-    def _check_pen_supported(self) -> None:
+    def _check_pen_supported(self, method: str = 'pen()') -> None:
         if not self._PEN_SUPPORTED:
-            raise UnsupportedError(f'{type(self).__name__} does not support Pens.')
+            raise UnsupportedError(
+                f'{type(self).__name__}#{method}: Pens are unsupported for this object.'
+            )
 
-    def _require_pen(self) -> Pen:
-        self._check_pen_supported()
+    def _require_pen(self, method: str) -> Pen:
+        self._check_pen_supported(method)
         if self._pen is None:
-            raise PydrawError('This object has not started a Pen.')
+            raise PydrawError(
+                f'{type(self).__name__}#{method}: this object has not started a Pen.'
+            )
 
         return self._pen
 
@@ -419,7 +431,7 @@ class Object:
             pen.moveto(location)
 
     def pen(self, color: Color = Color('black'), width: int = 2, top: bool = False) -> Pen:
-        self._check_pen_supported()
+        self._check_pen_supported('pen()')
         verify(color, Color, width, int, top, bool)
 
         if self._pen is None:
@@ -433,16 +445,16 @@ class Object:
         return self._pen
 
     def pen_clear(self) -> None:
-        self._require_pen().clear()
+        self._require_pen('pen_clear()').clear()
 
     def pen_stop(self) -> bool:
-        return self._require_pen().drawing(False)
+        return self._require_pen('pen_stop()').drawing(False)
 
     def pen_width(self, width: int = None) -> int:
-        return self._require_pen().width(width)
+        return self._require_pen('pen_width()').width(width)
 
     def pen_top(self, top: bool = None) -> bool:
-        return self._require_pen().top(top)
+        return self._require_pen('pen_top()').top(top)
 
     # # noinspection PyProtectedMember
     # def add(self) -> None:
@@ -471,7 +483,9 @@ class Object:
             if self in self._screen._gridlines or self in self._screen._helpers:
                 return
 
-            raise PydrawError('Cannot update or draw object that is not on the Screen!')
+            raise PydrawError(
+                f'{type(self).__name__}#update(): object is not on its Screen.'
+            )
 
     def update(self) -> None:
         """
@@ -1365,8 +1379,8 @@ class Renderable(Object):
                     centroid = kwargs['centroid']
                 else:
                     raise InvalidArgumentError(
-                        ".center() requires a boolean for centroid (whether to return a bounds "
-                        "center or a calculated centroid).")
+                        'Renderable#center(): centroid must be a bool.'
+                    )
 
             # centroid is only a getter modifier; without an actual move request
             # (positional args or move_to/x/y) this is a pure getter.
@@ -1380,13 +1394,19 @@ class Renderable(Object):
                 location.moveto(args[0])
             elif type(args[0]) == float or type(args[0]) is int:
                 if len(args) != 2:
-                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.")
+                    raise InvalidArgumentError(
+                        'Renderable#center(): expected both x and y.'
+                    )
                 elif type(args[1]) is not float and type(args[1]) is not int:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Renderable#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
                 location.moveto(args[0], args[1])
             else:
-                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                raise InvalidArgumentError(
+                    'Renderable#center(): expected a tuple/Location or two numbers (x, y).'
+                )
 
         if len(kwargs) != 0:
             # TODO: Shouldn't this be called "location", not "move_to"
@@ -1394,24 +1414,31 @@ class Renderable(Object):
                 if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
                     location.moveto(kwargs['move_to'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Renderable#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
             if 'x' in kwargs:
                 if type(kwargs['x']) is float or type(kwargs['x']) is int:
                     location.x(kwargs['x'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Renderable#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
             if 'y' in kwargs:
                 if type(kwargs['y']) is float or type(kwargs['y']) is int:
                     location.y(kwargs['y'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Renderable#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
             if 'centroid' in kwargs:
                 if type(kwargs['centroid']) is bool:
                     centroid = kwargs['centroid']
                 else:
-                    raise InvalidArgumentError(".center() requires a boolean for centroid (whether to return a bounds "
-                                               "center or a calculated centroid).")
+                    raise InvalidArgumentError(
+                        'Renderable#center(): centroid must be a bool.'
+                    )
 
         return self._center(location, centroid)
 
@@ -1475,7 +1502,9 @@ class Renderable(Object):
         if isinstance(obj, Object):
             obj = obj.location()
         elif type(obj) is not Location and type(obj) is not tuple:
-            raise InvalidArgumentError('Renderable#lookat() must be passed either a renderable or a location!')
+            raise InvalidArgumentError(
+                f'Renderable#angleto(): expected a Renderable or Location; received {type(obj)} ({obj!r}).'
+            )
 
         location = Location(obj[0], obj[1])
         # theta = -math.atan2(location.x() - self.x(), location.y() - self.y()) - math.radians(self.rotation())
@@ -1619,8 +1648,10 @@ class Renderable(Object):
         """
 
         if type(obj) is not Location and not isinstance(obj, Renderable):
-            raise InvalidArgumentError(f'.distance() must be passed a Renderable or a Location! '
-                                       f'(Passed: {type(obj)}')
+            raise InvalidArgumentError(
+                f'Renderable#distance(): expected a Renderable or Location; '
+                f'received {type(obj)} ({obj!r}).'
+            )
 
         location = obj if type(obj) is Location else obj.center()
 
@@ -1658,8 +1689,9 @@ class Renderable(Object):
         if transform is not None:
             verify(transform, tuple)
             if not len(transform) == 3:
-                raise InvalidArgumentError('Ensure you are passing in a Transform from another object or a '
-                                           'tuple in the following order: (width, height, rotation)')
+                raise InvalidArgumentError(
+                    'Renderable#transform(): expected (width, height, rotation).'
+                )
             verify(transform[0], (float, int), transform[1], (float, int), transform[2], (float, int))
 
             update_width = transform[0] != self._width
@@ -1748,17 +1780,22 @@ class Renderable(Object):
                 x = args[0][0]
                 y = args[0][1]
             else:
-                raise InvalidArgumentError('Tuple length must be 2.')
+                raise InvalidArgumentError(
+                    'Renderable#contains(): tuple arguments must contain exactly two values.'
+                )
         elif len(args) == 2:
             verify(args[0], (float, int), args[1], (float, int))
             if type(args[0]) is not float and type(args[0]) is not int \
                     and type(args[1]) is not float and type(args[1]) is not int:
-                raise InvalidArgumentError('Passed arguments must be numbers (x, y), '
-                                           'or you may pass a location/tuple.')
+                raise InvalidArgumentError(
+                    'Renderable#contains(): expected a tuple/Location or two numbers (x, y).'
+                )
             x = args[0]
             y = args[1]
         else:
-            raise InvalidArgumentError('You must pass in a tuple, Location, or two numbers (x, y)!')
+            raise InvalidArgumentError(
+                'Renderable#contains(): expected a tuple/Location or two numbers (x, y).'
+            )
 
         # If the point isn't remotely near us, we don't need to perform any calculations.
         if not isinstance(self, CustomRenderable) and self._angle == 0:
@@ -2464,7 +2501,9 @@ class CustomPolygon(CustomRenderable):
         self._screen._add(self)
 
         if len(vertices) < 3:
-            raise InvalidArgumentError('Must pass at least 3 vertices to CustomPolygon!')
+            raise InvalidArgumentError(
+                'CustomPolygon(): expected at least three vertices.'
+            )
 
         xmin = vertices[0][0]
         xmax = vertices[0][0]
@@ -2654,31 +2693,43 @@ class CustomPolygon(CustomRenderable):
                 location.moveto(args[0])
             elif type(args[0]) == float or type(args[0]) is int:
                 if len(args) != 2:
-                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.")
+                    raise InvalidArgumentError(
+                        'CustomPolygon#center(): expected both x and y.'
+                    )
                 elif type(args[1]) is not float and type(args[1]) is not int:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
                 location.moveto(args[0], args[1])
             else:
-                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                raise InvalidArgumentError(
+                    'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
+                )
 
         if len(kwargs) != 0:
             if 'move_to' in kwargs:
                 if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
                     location.moveto(kwargs['move_to'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
             if 'x' in kwargs:
                 if type(kwargs['x']) is float or type(kwargs['x']) is int:
                     location.x(kwargs['x'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
             if 'y' in kwargs:
                 if type(kwargs['y']) is float or type(kwargs['y']) is int:
                     location.y(kwargs['y'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
         return self._center(location)
 
@@ -2925,8 +2976,7 @@ class Oval(Renderable):
         if wedges is not None:
             verify(wedges, int)
             if wedges < 20:
-                raise InvalidArgumentError('Ovals can be at least 20 wedges. If you need less, '
-                                           'just multiply your desired amount by 2 until it is above 20!')
+                raise InvalidArgumentError('Oval(): wedges must be at least 20.')
             self._shape = self._generate_vertices(PIXEL_RATIO / 2, wedges=wedges)
             self._wedges = wedges
             self._update_coords()
@@ -3022,7 +3072,7 @@ class Polygon(Renderable):
                  rotation: float = 0,
                  visible: bool = True):
         if num_sides < 3:
-            raise InvalidArgumentError('num_sides must be at least 3 to create a Polygon')
+            raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
 
         self._num_sides = num_sides
         radius = PIXEL_RATIO / 2
@@ -3042,7 +3092,7 @@ class Polygon(Renderable):
                  rotation: float = 0,
                  visible: bool = True):
         if num_sides < 3:
-            raise InvalidArgumentError('num_sides must be at least 3 to create a Polygon')
+            raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
 
         x = location.x()
         y = location.y()
@@ -3225,10 +3275,12 @@ class Image(Renderable):
         import os
         filetype = os.path.splitext(image)[1].lower()
         if not filetype:
-            raise PydrawError('File must have extension filetype:', self._image_name)
+            raise PydrawError('Image(): path must include a file extension.')
 
         if not os.path.isfile(image):
-            raise InvalidArgumentError(f'Image does not exist or is directory: {image}')
+            raise InvalidArgumentError(
+                f"Image(): path does not reference an existing file: '{image}'."
+            )
 
         if filetype in self.TKINTER_TYPES:
             self._image = tk.PhotoImage(name=image, file=image)
@@ -3240,8 +3292,10 @@ class Image(Renderable):
 
                 self._image = ImageTk.PhotoImage(image)
             except:
-                raise UnsupportedError('As PIL is not installed, only .png, .gif, and .ppm images are supported! '
-                                       'Install Pillow via: \'pip install pillow\'.')
+                raise UnsupportedError(
+                    "Image(): Pillow is required for formats other than PNG, GIF, and PPM. "
+                    "Install it with 'pip install pillow'."
+                )
 
         self._width = self._image.width()
         self._height = self._image.height()
@@ -3428,8 +3482,9 @@ class Image(Renderable):
         if transform is not None:
             verify(transform, tuple)
             if not len(transform) == 3:
-                raise InvalidArgumentError('Ensure you are passing in a Transform from another object or a '
-                                           'tuple in the following order: (width, height, rotation)')
+                raise InvalidArgumentError(
+                    'Image#transform(): expected (width, height, rotation).'
+                )
             verify(transform[0], (float, int), transform[1], (float, int), transform[2], (float, int))
 
             update_width = transform[0] != self._width
@@ -3470,31 +3525,41 @@ class Image(Renderable):
                 location.moveto(args[0])
             elif type(args[0]) == float or type(args[0]) is int:
                 if len(args) != 2:
-                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.")
+                    raise InvalidArgumentError('Image#center(): expected both x and y.')
                 elif type(args[1]) is not float and type(args[1]) is not int:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Image#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
                 location.moveto(args[0], args[1])
             else:
-                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                raise InvalidArgumentError(
+                    'Image#center(): expected a tuple/Location or two numbers (x, y).'
+                )
 
         if len(kwargs) != 0:
             if 'move_to' in kwargs:
                 if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
                     location.moveto(kwargs['move_to'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Image#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
             if 'x' in kwargs:
                 if type(kwargs['x']) is float or type(kwargs['x']) is int:
                     location.x(kwargs['x'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Image#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
             if 'y' in kwargs:
                 if type(kwargs['y']) is float or type(kwargs['y']) is int:
                     location.y(kwargs['y'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Image#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
         return self._center(location)
 
@@ -3526,7 +3591,7 @@ class Image(Renderable):
         Unsupported: This doesn't make sense for images.
         """
 
-        raise UnsupportedError('This method is not supported for Images!')
+        raise UnsupportedError('Image#fill(): fill is unsupported for images.')
 
     def vertices(self) -> list:
         """
@@ -3595,7 +3660,7 @@ class Image(Renderable):
         elif axis == 'y':
             self._flip_y = not self._flip_y
         else:
-            raise InvalidArgumentError("Image#flip() axis must be either 'x' or 'y'.")
+            raise InvalidArgumentError("Image#flip(): axis must be 'x' or 'y'.")
 
         self.update(True)
 
@@ -3614,7 +3679,7 @@ class Image(Renderable):
             self._frames = image.n_frames
             self._frame = 0
         else:
-            raise PydrawError('GIF is not animated, so it cannot be loaded!')
+            raise PydrawError('Image#load(): image is not an animated GIF.')
 
     def next(self) -> None:
         """
@@ -3722,7 +3787,10 @@ class Image(Renderable):
                     try:
                         self._original.seek(self._frame)  # we have to seek on original for some reason.
                     except EOFError:
-                        raise PydrawError(f'No more frames in GIF: {self._image_name}!')
+                        raise PydrawError(
+                            f"Image#update(): no GIF frame exists at index {self._frame} "
+                            f"for '{self._image_name}'."
+                        )
                     image = self._original.copy()
                 else:
                     image = self._original # Removed unnecessary copy of original here.
@@ -3763,8 +3831,10 @@ class Image(Renderable):
             except (RuntimeError, AttributeError):
                 pass  # Swallow Tkinter/PIL errors from image redraws that race program shutdown.
             except ImportError:
-                raise UnsupportedError('As PIL is not installed, you cannot modify images! '
-                                       'Install Pillow via: \'pip install pillow\'.')
+                raise UnsupportedError(
+                    "Image#update(): Pillow is required to modify images. "
+                    "Install it with 'pip install pillow'."
+                )
 
         try:
             old_ref = self._ref
@@ -4027,7 +4097,9 @@ class Text(CustomRenderable):
         if align is not None:
             verify(align, str)
             if align.lower() not in self._aligns:
-                raise PydrawError(f'Passed alignment ("{align}") is not a valid alignment. Options: left, center, right')
+                raise PydrawError(
+                    f"Text#align(): expected 'left', 'center', or 'right'; received '{align}'."
+                )
 
             self._align = align.lower()
             self._screen._canvas.itemconfigure(self._ref, justify=self._aligns[self._align])
@@ -4135,7 +4207,9 @@ class Text(CustomRenderable):
         if isinstance(obj, Object):
             obj = obj.location()
         elif type(obj) is not Location and type(obj) is not tuple:
-            raise InvalidArgumentError('Text#lookat() must be passed either a renderable or a location!')
+            raise InvalidArgumentError(
+                f'Text#lookat(): expected a Renderable or Location; received {type(obj)} ({obj!r}).'
+            )
 
         location = Location(obj[0], obj[1])
 
@@ -4165,31 +4239,41 @@ class Text(CustomRenderable):
                 location.moveto(args[0])
             elif type(args[0]) == float or type(args[0]) is int:
                 if len(args) != 2:
-                    raise InvalidArgumentError(".center() requires both x and y passed unless using keywords.")
+                    raise InvalidArgumentError('Text#center(): expected both x and y.')
                 elif type(args[1]) is not float and type(args[1]) is not int:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Text#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
                 location.moveto(args[0], args[1])
             else:
-                raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                raise InvalidArgumentError(
+                    'Text#center(): expected a tuple/Location or two numbers (x, y).'
+                )
 
         if len(kwargs) != 0:
             if 'move_to' in kwargs:
                 if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
                     location.moveto(kwargs['move_to'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Text#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
             if 'x' in kwargs:
                 if type(kwargs['x']) is float or type(kwargs['x']) is int:
                     location.x(kwargs['x'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Text#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
             if 'y' in kwargs:
                 if type(kwargs['y']) is float or type(kwargs['y']) is int:
                     location.y(kwargs['y'])
                 else:
-                    raise InvalidArgumentError(".center() requires either a Location/tuple or two numbers!")
+                    raise InvalidArgumentError(
+                        'Text#center(): expected a tuple/Location or two numbers (x, y).'
+                    )
 
         return self._center(location)
 
@@ -4259,7 +4343,7 @@ class Text(CustomRenderable):
         """
 
         if transform is not None:
-            raise UnsupportedError('This feature has yet to be implemented for Text')
+            raise UnsupportedError('Text#transform(): setting transforms is unsupported.')
 
         return self.width(), self.height(), self.rotation()
 
@@ -4359,8 +4443,8 @@ class Line(Object):
             excess = args[2:]
         else:
             raise InvalidArgumentError(
-                'Incorrect Argumentation: Line requires either two Locations, tuples, or four '
-                'numbers (x1, y1, x2, y2).')
+                'Line(): expected two tuples/Locations or four numbers (x1, y1, x2, y2).'
+            )
 
         if len(excess) > 0:  # noqa
             count = 0
@@ -4469,14 +4553,17 @@ class Line(Object):
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 diff = (args[0], args[1])
             else:
-                raise InvalidArgumentError('Object#move() must take either a tuple/location or two numbers (dx, dy)!')
+                raise InvalidArgumentError(
+                    'Line#move(): expected a tuple/Location or two numbers (dx, dy).'
+                )
 
         verify_keywords(kwargs, ('dx', 'dy', 'point'), 'Line#move()', case_sensitive=False)
         point = 0
         for (name, value) in kwargs.items():
             if type(value) is not int and type(value) is not float:
-                raise InvalidArgumentError('Object#move() must take either a tuple/location '
-                                           'or two numbers (dx, dy)!')
+                raise InvalidArgumentError(
+                    'Line#move(): expected a tuple/Location or two numbers (dx, dy).'
+                )
 
             name = name.lower()
             if name == 'dx':
@@ -4495,7 +4582,7 @@ class Line(Object):
             self._pos1.move(diff[0], diff[1])
             self._pos2.move(diff[0], diff[1])
         else:
-            raise InvalidArgumentError('You must pass either 1 or 2 in as a point, or 0 for both points!')
+            raise InvalidArgumentError('Line#move(): point must be 0, 1, or 2.')
 
         if point != 0:
             self._update_angle()
@@ -4535,18 +4622,24 @@ class Line(Object):
                 key = key.lower()
                 if key == 'pos1':
                     if type(value) is not tuple and type(value) is not Location:
-                        raise InvalidArgumentError('Line#moveto() pos1 must be a tuple or Location.')
+                        raise InvalidArgumentError(
+                            'Line#moveto(): pos1 must be a tuple or Location.'
+                        )
                     pos1 = value
                     verify(pos1[0], (float, int), pos1[1], (float, int))
                     self._pos1 = Location(pos1[0], pos1[1])
                 elif key == 'pos2':
                     if type(value) is not tuple and type(value) is not Location:
-                        raise InvalidArgumentError('Line#moveto() pos2 must be a tuple or Location.')
+                        raise InvalidArgumentError(
+                            'Line#moveto(): pos2 must be a tuple or Location.'
+                        )
                     pos2 = value
                     verify(pos2[0], (float, int), pos2[1], (float, int))
                     self._pos2 = Location(pos2[0], pos2[1])
                 elif type(value) is not float and type(value) is not int:
-                    raise InvalidArgumentError(f'Line#moveto() {key} must be a number.')
+                    raise InvalidArgumentError(
+                        f'Line#moveto(): {key} must be a number.'
+                    )
                 elif key == 'x1':
                     self._pos1.x(value)
                 elif key == 'y1':
@@ -4589,11 +4682,13 @@ class Line(Object):
             if len(args) > 2 and type(args[2]) is int:
                 point = args[2]
         else:
-            raise InvalidArgumentError('You must pass either two numbers (x, y), or a tuple/Location!')
+            raise InvalidArgumentError(
+                'Line#lookat(): expected a tuple/Location or two numbers (x, y).'
+            )
 
         for name, value in kwargs.items():
             if type(value) is not int:
-                raise InvalidArgumentError('Point must be an int.')
+                raise InvalidArgumentError('Line#lookat(): point must be an int.')
 
             if name.lower() == 'point':
                 point = value
@@ -4617,7 +4712,7 @@ class Line(Object):
             theta = math.atan2(self.pos2().y() - location.y(), self.pos2().x() - location.x()) \
                     - math.atan2(self.pos2().y() - self.pos1().y(), self.pos2().x() - self.pos1().x())
         else:
-            raise InvalidArgumentError('Point is not 1 or 2! (2 by default)')
+            raise InvalidArgumentError('Line#lookat(): point must be 1 or 2.')
 
         self.rotate(math.degrees(theta))
 
@@ -4644,7 +4739,7 @@ class Line(Object):
         """
 
         if point not in (1, 2):
-            raise InvalidArgumentError('Point must be 1 or 2.')
+            raise InvalidArgumentError('Line#rotate(): point must be 1 or 2.')
 
         origin = self._pos1 if point == 1 else self._pos2
         point = self._pos2 if point == 1 else self._pos1
@@ -4790,7 +4885,7 @@ class Line(Object):
         """
 
         if transform is not None:
-            raise UnsupportedError('This feature has yet to be implemented!')
+            raise UnsupportedError('Line#transform(): setting transforms is unsupported.')
 
         return self.length(), self.rotation()
 
@@ -4821,10 +4916,15 @@ class Line(Object):
         elif type(obj) == list or type(obj) == tuple:
             shape2 = obj
         else:
-            raise InvalidArgumentError('Line.intersects() accepts only: Lines, Renderables, Lists or Tuples')
+            raise InvalidArgumentError(
+                f'Line#intersects(): expected a Line, Renderable, list, or tuple; '
+                f'received {type(obj)} ({obj!r}).'
+            )
 
         if len(shape2) < 2:
-            raise InvalidArgumentError('Passed object did not have more than 1 vertex!')
+            raise InvalidArgumentError(
+                'Line#intersects(): expected at least two vertices.'
+            )
 
         # Orientation method that will determine if it is a triangle (and in what direction [cc or ccw]) or a line.
         def orientation(point1: Location, point2: Location, point3: Location) -> str:

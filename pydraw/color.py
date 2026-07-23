@@ -174,7 +174,7 @@ class Color:
             except tk.TclError as e:
                 if hasattr(e, 'message') and e.message == 'can\'t invoke "winfo" command: application has been destroyed':
                     return 255, 255, 255
-                raise PydrawError('Color-string does not exist: ', color.name())
+                raise PydrawError(f"Color(): unknown color name '{color.name()}'.")
             except turtle.Terminator:
                 return 255, 255, 255  # Just return black if Program is shutting down.
         elif color.hex() is not None:
@@ -184,8 +184,10 @@ class Color:
                 if len(hexval) == 3:
                     hexval = ''.join([char * 2 for char in hexval])  # Optimized string manipulation.
                 else:
-                    raise InvalidArgumentError('A color hex must be six or three characers long. '
-                                               'Ex: "#FFFFFF" or "#FFF"')
+                    raise InvalidArgumentError(
+                        "Color(): hex values must contain three or six characters "
+                        "(for example, '#FFF' or '#FFFFFF')."
+                    )
 
             rgb = tuple(int(hexval[i:i + 2], 16) for i in (0, 2, 4))
         else:

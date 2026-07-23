@@ -29,8 +29,9 @@ def verify(*args):
     :return: True if all args meet their expected types, throws an error if not.
     """
     if len(args) % 2 != 0:
-        raise InvalidArgumentError('The verify() method must be passed an even number of arguments, '
-                                   'Ex: (some_number, float, some_location, Location).')
+        raise InvalidArgumentError(
+            'verify(): arguments must be provided as object/type pairs.'
+        )
 
     for i in range(0, len(args), 2):
         obj = args[i]
@@ -38,7 +39,9 @@ def verify(*args):
         # print(f'Obj: {obj}, Expected Type: {expected_type}, Meets: {verify_type(obj, expected_type)}')
 
         if not verify_type(obj, expected_type):
-            raise InvalidArgumentError(f'Type does not match: {type(obj)} ({obj}) : {expected_type}')
+            raise InvalidArgumentError(
+                f'verify(): expected {expected_type}; received {type(obj)} ({obj!r}).'
+            )
 
 
 def verify_keywords(kwargs, allowed, method: str, case_sensitive: bool = True):
@@ -55,4 +58,4 @@ def verify_keywords(kwargs, allowed, method: str, case_sensitive: bool = True):
     for keyword in kwargs:
         comparison = keyword if case_sensitive else keyword.lower()
         if comparison not in allowed:
-            raise InvalidArgumentError(f'Unknown keyword for {method}: {keyword}')
+            raise InvalidArgumentError(f"{method}: unknown keyword '{keyword}'.")
