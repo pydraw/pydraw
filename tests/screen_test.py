@@ -1,6 +1,8 @@
 """Integration tests for Screen state and its real Tk canvas."""
 
 import unittest
+from unittest import mock
+
 from pydraw import Screen, Color, Location, Rectangle
 from pydraw.errors import PydrawError
 
@@ -79,6 +81,39 @@ class ScreenTest(unittest.TestCase):
 
         self.assertEqual(rect.location(), Location(35, 55))
         self.assertEqual(self.screen._canvas.itemcget(rect._ref, 'fill'), 'blue')
+
+    def test_reset_disables_input_before_removing_objects(self):
+        rect = Rectangle(self.screen, 10, 10, 20, 20)
+        events = []
+        self.screen.registry['keydown'] = lambda key: events.append(key)
+        original_remove = rect.remove
+
+        def remove_during_queued_input():
+            self.screen._keydown('q')
+            original_remove()
+
+        rect.remove = remove_during_queued_input
+        self.screen.reset()
+
+        self.assertEqual(events, [])
+        self.assertEqual(self.screen.registry, {})
+        self.assertEqual(self.screen.objects(), ())
+
+    def test_exit_disables_input_before_destroying_screen(self):
+        events = []
+        self.screen.registry['keydown'] = lambda key: events.append(key)
+
+        def clear_during_queued_input():
+            self.screen._keydown('q')
+
+        with mock.patch.object(self.screen._screen, 'clear',
+                               side_effect=clear_during_queued_input), \
+                mock.patch.object(self.screen._root, 'destroy'), \
+                self.assertRaises(SystemExit):
+            self.screen.exit()
+
+        self.assertEqual(events, [])
+        self.assertEqual(self.screen.registry, {})
 
 
 if __name__ == '__main__':

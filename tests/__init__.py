@@ -1,2 +1,1 @@
-import sys
-sys.path.append('../pydraw')
+"""pydraw's automated test package."""
