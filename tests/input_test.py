@@ -1,5 +1,5 @@
 """
-Input Test: End-to-end coverage of Screen input handling registered through
+Integration coverage of Screen input handling registered through
 Screen.listen(), which scans this module for functions named after the input
 types (keydown, mousedown, ...) and wires them up as callbacks.
 
@@ -75,6 +75,24 @@ class InputTest(unittest.TestCase):
         self.assertEqual(_events[-1], ('mousemove', Location(5, 5)))
         # _mousemove also caches the position, exposed via screen.mouse().
         self.assertEqual(self.screen.mouse(), Location(5, 5))
+
+    def test_tk_events_reach_registered_handlers(self):
+        """Exercise the actual widget bindings installed by Screen.listen()."""
+        # Turtle's ScrolledCanvas forwards bind(), but event_generate() itself
+        # belongs to its inner Tk Canvas.
+        canvas = self.screen._canvas._canvas
+        canvas.event_generate('<Motion>', x=25, y=35)
+        canvas.event_generate('<Button-1>', x=40, y=50)
+        self.screen.update()
+
+        event_names = [event[0] for event in _events]
+        self.assertIn('mousemove', event_names)
+        self.assertIn('mousedown', event_names)
+        self.assertEqual(
+            next(event[2] for event in _events if event[0] == 'mousedown'),
+            1
+        )
+        self.assertNotEqual(self.screen.mouse(), Location(5, 5))
 
     def test_unregistered_event_is_ignored(self):
         # keypress has no handler in this module; dispatching it must be a no-op.

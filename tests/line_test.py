@@ -4,7 +4,7 @@ Line Test: Test methods in the Line class
 
 
 import unittest
-from pydraw.errors import *
+from pydraw.errors import InvalidArgumentError, UnsupportedError
 from pydraw import Screen, Location, Color, Line
 
 
@@ -169,6 +169,18 @@ class LineTest(unittest.TestCase):
         # An invalid point selector is rejected
         self.assertRaises(InvalidArgumentError, line.move, 1, 1, point=3)
 
+    def test_move_point_zero_moves_both_endpoints(self):
+        line = Line(self.screen, 100, 100, 200, 100)
+        line.move(10, 20, point=0)
+
+        self.assertEqual(line.pos1(), Location(110, 120))
+        self.assertEqual(line.pos2(), Location(210, 120))
+
+    def test_move_rejects_unknown_keywords(self):
+        line = Line(self.screen, 100, 100, 200, 100)
+        with self.assertRaises(InvalidArgumentError):
+            line.move(10, 20, endpoint=1)
+
     def test_moveto(self):
         line = Line(self.screen, 0, 0, 10, 0)
 
@@ -187,6 +199,15 @@ class LineTest(unittest.TestCase):
         self.assertEqual(line.pos1(), Location(1, 2))
         self.assertEqual(line.pos2(), Location(3, 4))
 
+    def test_moveto_rejects_unknown_keywords_without_moving(self):
+        line = Line(self.screen, 0, 0, 10, 0)
+        before = line.location()
+
+        with self.assertRaises(InvalidArgumentError):
+            line.moveto((20, 20), (30, 30), endpoint=1)
+
+        self.assertEqual(line.location(), before)
+
     def test_lookat(self):
         # Line points along +x; look at a point directly above pos1.
         line = Line(self.screen, 0, 0, 10, 0)
@@ -196,6 +217,11 @@ class LineTest(unittest.TestCase):
         self.assertAlmostEqual(line.length(), 10.0)
         self.assertAlmostEqual(line.pos2().x(), 0)
         self.assertAlmostEqual(line.pos2().y(), 10)
+
+    def test_lookat_rejects_unknown_keywords(self):
+        line = Line(self.screen, 0, 0, 10, 0)
+        with self.assertRaises(InvalidArgumentError):
+            line.lookat(0, 10, endpoint=2)
 
     def test_rotation(self):
         line = Line(self.screen, 0, 0, 10, 0)
@@ -221,6 +247,21 @@ class LineTest(unittest.TestCase):
         self.assertAlmostEqual(line.pos2().y(), 0)
         self.assertAlmostEqual(line.pos1().x(), 10)
         self.assertAlmostEqual(line.pos1().y(), -10)
+
+    def test_endpoint_changes_keep_rotation_in_sync(self):
+        line = Line(self.screen, 0, 0, 10, 0)
+        line.pos2(0, 10)
+        expected = Line(self.screen, line.pos1(), line.pos2()).rotation()
+        self.assertAlmostEqual(line.rotation(), expected)
+
+        line.moveto((0, 0), (-10, 0))
+        expected = Line(self.screen, line.pos1(), line.pos2()).rotation()
+        self.assertAlmostEqual(line.rotation(), expected)
+
+    def test_rotate_rejects_invalid_origin_point(self):
+        line = Line(self.screen, 0, 0, 10, 0)
+        self.assertRaises(InvalidArgumentError, line.rotate, 45, point=0)
+        self.assertRaises(InvalidArgumentError, line.rotate, 45, point=3)
 
     def test_transform(self):
         line = Line(self.screen, 0, 0, 3, 4)

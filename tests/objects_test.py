@@ -7,7 +7,7 @@ dispatch gap (missing 8/9-arg forms)
 """
 
 import unittest
-from pydraw.errors import *
+from pydraw.errors import InvalidArgumentError
 from pydraw import Screen, Location, Color, Rectangle, Oval, Triangle, Polygon, CustomPolygon, Renderable
 
 # Shapes that share the standard (x, y, w, h, ...) Renderable constructor.
@@ -241,6 +241,12 @@ class ConstructorTest(unittest.TestCase):
         self.assertEqual(obj.visible(), False)
         self.assertEqual(len(obj.vertices()), 5)
 
+    def test_polygon_requires_at_least_three_sides(self):
+        for num_sides in (0, 1, 2, -1):
+            with self.subTest(num_sides=num_sides):
+                with self.assertRaises(InvalidArgumentError):
+                    Polygon(self.screen, num_sides, 0, 0, 100, 100)
+
     def test_invalid_constructor(self):
         # A bogus argument type finds no matching signature.
         self.assertRaises(NotImplementedError, Rectangle, self.screen, 'x', 'y', 50, 50)
@@ -328,6 +334,11 @@ class MethodTest(unittest.TestCase):
             self.assertEqual(obj.center(), Location(300, 400))
             obj.center(y=250)                        # y keyword
             self.assertEqual(obj.center(), Location(300, 250))
+
+    def test_center_rejects_unknown_keywords(self):
+        for obj in self.each():
+            with self.assertRaises(InvalidArgumentError):
+                obj.center(horizontal=300)
 
     def test_rotation_and_rotate(self):
         for obj in self.each():
@@ -573,6 +584,11 @@ class CustomPolygonTest(unittest.TestCase):
         self.assertEqual(p.center(), Location(cx, cy))
         self.assertEqual(p.center(), Location(200, 200))
 
+    def test_center_rejects_unknown_keywords(self):
+        p = self.make()
+        with self.assertRaises(InvalidArgumentError):
+            p.center(horizontal=300)
+
     def test_rotate_after_move_pivots_on_current_center(self):
         p = self.make()
         p.move(100, 100)
@@ -597,6 +613,45 @@ class CustomPolygonTest(unittest.TestCase):
         self.assertTrue(p.contains((150, 150)))
         self.assertFalse(p.contains(0, 0))
 
+    def assertVerticesAlmostEqual(self, actual, expected):
+        self.assertEqual(len(actual), len(expected))
+        for actual_vertex, expected_vertex in zip(actual, expected):
+            self.assertAlmostEqual(actual_vertex.x(), expected_vertex.x())
+            self.assertAlmostEqual(actual_vertex.y(), expected_vertex.y())
+
+    def test_constructor_rotation_is_applied_to_geometry(self):
+        constructed_rotated = self.make(rotation=20)
+        rotated_after_construction = self.make()
+        rotated_after_construction.rotation(20)
+
+        self.assertVerticesAlmostEqual(
+            constructed_rotated.vertices(), rotated_after_construction.vertices()
+        )
+
+    def test_repeated_rotation_does_not_accumulate_absolute_angle(self):
+        incremental = self.make()
+        incremental.rotate(10)
+        incremental.rotate(10)
+
+        single = self.make()
+        single.rotate(20)
+
+        self.assertEqual(incremental.rotation(), 20)
+        self.assertVerticesAlmostEqual(incremental.vertices(), single.vertices())
+
+    def test_resizing_rotated_polygon_does_not_rotate_it_again(self):
+        rotate_then_resize = self.make()
+        rotate_then_resize.rotate(20)
+        rotate_then_resize.width(200)
+
+        resize_then_rotate = self.make()
+        resize_then_rotate.width(200)
+        resize_then_rotate.rotate(20)
+
+        self.assertVerticesAlmostEqual(
+            rotate_then_resize.vertices(), resize_then_rotate.vertices()
+        )
+
     def test_distance(self):
         p = self.make()
         self.assertEqual(p.distance(p.center()), 0)
@@ -617,13 +672,36 @@ class CustomPolygonTest(unittest.TestCase):
         self.assertEqual(len(clone.vertices()), len(p.vertices()))
         self.assertEqual(clone.color(), Color('purple'))
 
+    def test_clone_preserves_live_geometry(self):
+        p = self.make(color=Color('purple'))
+        p.move(75, 40)
+        p.width(160)
+        p.height(80)
+        clone = p.clone()
+
+        self.assertEqual(clone.location(), p.location())
+        self.assertEqual(clone.width(), p.width())
+        self.assertEqual(clone.height(), p.height())
+        self.assertVerticesAlmostEqual(clone.vertices(), p.vertices())
+
     def test_transform_getter(self):
         p = self.make()
         self.assertEqual(p.transform(), (100, 100, 0))
 
-    def test_transform_set_unsupported(self):
+    def test_transform_setter(self):
         p = self.make()
-        self.assertRaises(UnsupportedError, p.transform, (50, 50, 45))
+        original_ref = p._ref
+        p.transform((50, 75, 45))
+
+        self.assertEqual(p.transform(), (50, 75, 45))
+        self.assertEqual(p.location(), Location(100, 100))
+        self.assertEqual(p._ref, original_ref)
+
+        expected = self.make()
+        expected.width(50)
+        expected.height(75)
+        expected.rotation(45)
+        self.assertVerticesAlmostEqual(p.vertices(), expected.vertices())
 
 
 if __name__ == '__main__':

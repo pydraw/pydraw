@@ -7,9 +7,11 @@ PNG assets are tkinter-native so most tests need no PIL/Pillow. Image mutation
 are skipped when Pillow is not installed.
 """
 
+import builtins
 import os
 import unittest
-from pydraw.errors import *
+from unittest.mock import patch
+from pydraw.errors import InvalidArgumentError, PydrawError, UnsupportedError
 from pydraw import Screen, Location, Color, Image, Renderable
 
 IMAGES = os.path.join(os.path.dirname(__file__), '..', 'images')
@@ -98,6 +100,21 @@ class ImageConstructorTest(unittest.TestCase):
         self.assertGreater(img.width(), 1)
         self.assertGreater(img.height(), 1)
 
+    def test_png_loads_without_pillow(self):
+        """PNG is documented as a tkinter-native format and must not import PIL."""
+        real_import = builtins.__import__
+
+        def import_without_pillow(name, *args, **kwargs):
+            if name == 'PIL' or name.startswith('PIL.'):
+                raise ImportError('Pillow intentionally unavailable for this test')
+            return real_import(name, *args, **kwargs)
+
+        with patch('builtins.__import__', side_effect=import_without_pillow):
+            img = Image(self.screen, PNG)
+
+        self.assertGreater(img.width(), 0)
+        self.assertGreater(img.height(), 0)
+
     def test_missing_file(self):
         self.assertRaises(InvalidArgumentError, Image, self.screen,
                           os.path.join(IMAGES, 'does_not_exist.png'))
@@ -177,6 +194,10 @@ class ImageMethodTest(unittest.TestCase):
         self.assertEqual(self.img.center(), Location(400, 300))
         self.assertEqual(self.img.location(), Location(375, 275))
 
+    def test_center_rejects_unknown_keywords(self):
+        with self.assertRaises(InvalidArgumentError):
+            self.img.center(horizontal=400)
+
     def test_contains(self):
         self.assertTrue(self.img.contains(Location(120, 120)))
         self.assertFalse(self.img.contains(Location(500, 500)))
@@ -196,9 +217,6 @@ class ImageMethodTest(unittest.TestCase):
 
     def test_fill_unsupported(self):
         self.assertRaises(UnsupportedError, self.img.fill, True)
-
-    def test_flip_is_noop(self):
-        self.assertIsNone(self.img.flip('x'))
 
     def test_frames_default(self):
         # A non-animated image reports -1 frames.
@@ -250,6 +268,24 @@ class ImagePILMethodTest(unittest.TestCase):
         self.img.transform((70, 40, 15))
         self.assertEqual(self.img.transform(), (70, 40, 15))
 
+    def test_flip_toggles_and_persists_axis_state(self):
+        self.assertIsNone(self.img.flip('x'))
+        self.assertTrue(self.img._flip_x)
+        self.assertFalse(self.img._flip_y)
+
+        self.img.width(80)
+        self.assertTrue(self.img._flip_x)
+
+        self.img.flip('x')
+        self.assertFalse(self.img._flip_x)
+
+        self.img.flip('Y')
+        self.assertTrue(self.img._flip_y)
+
+    def test_flip_rejects_invalid_axis(self):
+        self.assertRaises(InvalidArgumentError, self.img.flip, 'z')
+        self.assertRaises(InvalidArgumentError, self.img.flip, 1)
+
     def test_clone_preserves_dimensions(self):
         # Regression: clone() used to swap width/height into the constructor.
         clone = self.img.clone()
@@ -257,6 +293,14 @@ class ImagePILMethodTest(unittest.TestCase):
         self.assertEqual(clone.height(), self.img.height())
         self.assertEqual(clone.location(), self.img.location())
         self.assertEqual(clone.visible(), self.img.visible())
+
+    def test_clone_preserves_flip_state(self):
+        self.img.flip('x')
+        self.img.flip('y')
+        clone = self.img.clone()
+
+        self.assertTrue(clone._flip_x)
+        self.assertTrue(clone._flip_y)
 
 
 if __name__ == '__main__':

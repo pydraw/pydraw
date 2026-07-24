@@ -7,7 +7,7 @@ class is exercisable without Pillow.
 """
 
 import unittest
-from pydraw.errors import *
+from pydraw.errors import InvalidArgumentError, PydrawError, UnsupportedError
 from pydraw import Screen, Location, Color, Text, Rectangle, Renderable
 
 
@@ -152,6 +152,10 @@ class TextMethodTest(unittest.TestCase):
     def test_center_move_to(self):
         self.text.center(move_to=Location(400, 300))
         self.assertEqual(self.text.center(), Location(400, 300))
+
+    def test_center_rejects_unknown_keywords(self):
+        with self.assertRaises(InvalidArgumentError):
+            self.text.center(horizontal=400)
 
     def test_vertices(self):
         verts = self.text.vertices()

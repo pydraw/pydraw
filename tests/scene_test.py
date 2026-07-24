@@ -1,5 +1,5 @@
 """
-Scene Test: End-to-end coverage of the Scene abstraction - subclassing a Scene,
+Integration coverage of the Scene abstraction - subclassing a Scene,
 applying it to a Screen via Screen.scene(), the start()/run() lifecycle, and
 input handlers registered from the Scene's methods.
 
@@ -8,7 +8,7 @@ input handlers registered from the Scene's methods.
 
 import unittest
 from pydraw import Screen, Scene, Location, Color, Rectangle
-from pydraw.errors import *
+from pydraw.errors import InvalidArgumentError
 
 
 class RecordingScene(Scene):

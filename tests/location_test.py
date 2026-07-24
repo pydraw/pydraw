@@ -3,8 +3,8 @@ Location Test: Tests methods in the Location class
 """
 
 import unittest
-from pydraw import Screen, Location, Rectangle
-from pydraw.errors import *
+from pydraw import Location
+from pydraw.errors import InvalidArgumentError
 
 
 class LocationTest(unittest.TestCase):
@@ -37,6 +37,26 @@ class LocationTest(unittest.TestCase):
         location1.moveto(x=500)
         self.assertEqual(location1, (500, 300))
 
+    def test_value_and_sequence_protocols(self):
+        location = Location(3, 4)
+        clone = location.clone()
+
+        self.assertEqual(location.distance(Location(0, 0)), 5)
+        self.assertEqual(tuple(location), (3, 4))
+        self.assertEqual(location[0], 3)
+        self.assertEqual(location[1], 4)
+        self.assertEqual(len(location), 2)
+        self.assertEqual(hash(location), hash(clone))
+        self.assertIsNot(location, clone)
+        with self.assertRaises(IndexError):
+            _ = location[2]
+
+    def test_coordinate_setters(self):
+        location = Location(1, 2)
+        self.assertEqual(location.x(10), 10)
+        self.assertEqual(location.y(20), 20)
+        self.assertEqual(location, Location(10, 20))
+
     def test_move_forms(self):
         # move()/moveto() accept two numbers, a tuple, or a Location.
         loc = Location(0, 0)
@@ -59,6 +79,16 @@ class LocationTest(unittest.TestCase):
         loc = Location(0, 0)
         self.assertRaises(InvalidArgumentError, loc.move, 'a', 'b')
         self.assertRaises(InvalidArgumentError, loc.moveto, 'a', 'b')
+
+    def test_rejects_unknown_keywords(self):
+        with self.assertRaises(InvalidArgumentError):
+            Location(horizontal=10)
+
+        loc = Location(0, 0)
+        with self.assertRaises(InvalidArgumentError):
+            loc.move(distance=10)
+        with self.assertRaises(InvalidArgumentError):
+            loc.moveto(horizontal=10)
 
 
 if __name__ == '__main__':

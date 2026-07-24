@@ -1,5 +1,5 @@
 """
-Compound Test: End-to-end coverage of CompoundObject - grouping objects and
+Integration coverage of CompoundObject - grouping objects and
 moving, centering, coloring, adding/removing, z-ordering, and rotating them as a
 unit.
 
@@ -10,7 +10,7 @@ import os
 import unittest
 from pydraw import Screen, Location, Color, Rectangle, Polygon, Triangle, Image
 from pydraw.compound import CompoundObject
-from pydraw.errors import *
+from pydraw.errors import InvalidArgumentError
 
 IMAGES = os.path.join(os.path.dirname(__file__), '..', 'images')
 PNG = os.path.join(IMAGES, 'earth.png')
@@ -61,8 +61,9 @@ class CompoundObjectTest(unittest.TestCase):
 
     def test_center_centroid(self):
         a, b, comp = self._pair()
-        # centroid averages child origins: ((0+100)/2, (0+0)/2)
-        self.assertEqual(comp.center(centroid=True), Location(50, 0))
+        # The compound centroid averages the centers around which its children
+        # rotate: ((10+110)/2, (10+10)/2).
+        self.assertEqual(comp.center(centroid=True), Location(60, 10))
 
     def test_color_applies_to_all(self):
         a, b, comp = self._pair()
@@ -95,9 +96,9 @@ class CompoundObjectTest(unittest.TestCase):
         self.assertAlmostEqual(obj.y(), y)
 
     def test_rotate_around_centroid(self):
-        # Rotating a group revolves each child's origin around the pivot (the
-        # centroid by default) AND spins each child in place by the same angle.
-        # Pivot = (50, 0). A 90 deg turn sends:
+        # Rotating a group revolves each child's center around the pivot AND
+        # spins each child in place by the same angle. Pivot = (60, 10). Since
+        # both children have the same dimensions, their anchors land at:
         #   (0,0)   -> (50, -50)
         #   (100,0) -> (50,  50)
         a, b, comp = self._pair()
@@ -120,14 +121,48 @@ class CompoundObjectTest(unittest.TestCase):
         self.assertAlmostEqual(comp.rotation(), 360)
 
     def test_rotate_around_explicit_pivot(self):
-        # 180 deg about the origin flips each child through (0,0):
-        #   (0,0)   -> (0, 0)
-        #   (100,0) -> (-100, 0)
+        # 180 deg about the origin flips all of each child's geometry through
+        # (0,0), so their top-left anchors account for their dimensions:
+        #   (0,0)   -> (-20, -20)
+        #   (100,0) -> (-120, -20)
         a, b, comp = self._pair()
         comp.rotate(180, pivot=Location(0, 0))
 
-        self._assert_at(a, 0, 0)
-        self._assert_at(b, -100, 0)
+        self._assert_at(a, -20, -20)
+        self._assert_at(b, -120, -20)
+
+    def test_rotate_unequal_children_as_rigid_body(self):
+        # Regression: rotating top-left anchors while spinning each child about
+        # its center deformed compounds containing differently sized objects.
+        a = Rectangle(self.screen, 0, 0, 20, 40)
+        b = Rectangle(self.screen, 100, 0, 60, 20)
+        comp = CompoundObject(a, b)
+
+        # Child centers are (10,20) and (130,10), so the compound pivot is
+        # (70,15). A 90 degree rotation moves those centers to (65,-45) and
+        # (75,75), respectively.
+        pivot = comp.center()
+        comp.rotate(90)
+
+        self.assertEqual(pivot, Location(70, 15))
+        self._assert_at(a, 55, -65)
+        self._assert_at(b, 45, 65)
+        self._assert_at(comp.center(), pivot.x(), pivot.y())
+        self.assertAlmostEqual(comp.width(), 40)
+        self.assertAlmostEqual(comp.height(), 160)
+
+    def test_rotate_then_inverse_restores_unequal_children(self):
+        a = Rectangle(self.screen, 5, 15, 20, 40, rotation=17)
+        b = Rectangle(self.screen, 100, 30, 60, 20, rotation=-23)
+        comp = CompoundObject(a, b)
+        originals = [(obj.location().clone(), obj.rotation()) for obj in (a, b)]
+
+        comp.rotate(37)
+        comp.rotate(-37)
+
+        for obj, (location, rotation) in zip((a, b), originals):
+            self._assert_at(obj, location.x(), location.y())
+            self.assertAlmostEqual(obj.rotation(), rotation)
 
     def test_rotation_setter(self):
         a, b, comp = self._pair()

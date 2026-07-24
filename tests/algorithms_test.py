@@ -5,6 +5,7 @@ Algorithms Test: Tests all algorithms (IE: overlaps(), contains(), etc).
 import os
 import unittest
 from pydraw import Screen, Color, Location, Rectangle, Triangle, Oval, Line, CustomPolygon, Image
+from pydraw.errors import InvalidArgumentError
 
 IMAGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'images', 'cool_barry.jpg')
 
@@ -62,6 +63,29 @@ class AlgorithmsTest(unittest.TestCase):
             self.assertTrue(custom_shape.contains(200, 200))
 
             self.screen.clear()
+
+    def test_contains_rejects_malformed_single_argument(self):
+        shape = Rectangle(self.screen, 100, 100, 100, 100)
+
+        for invalid in ((1, 2, 3), 'not-a-location', [1, 2]):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(InvalidArgumentError):
+                    shape.contains(invalid)
+
+    def test_nested_bounding_boxes_do_not_imply_polygon_overlap(self):
+        # The small square is inside the diamond's axis-aligned bounding box,
+        # but lies entirely outside the diamond itself.
+        diamond = CustomPolygon(
+            self.screen,
+            [(50, 0), (100, 50), (50, 100), (0, 50)]
+        )
+        corner_square = CustomPolygon(
+            self.screen,
+            [(2, 2), (10, 2), (10, 10), (2, 10)]
+        )
+
+        self.assertFalse(diamond.overlaps(corner_square))
+        self.assertFalse(corner_square.overlaps(diamond))
 
     def test_intersects(self):
         """
