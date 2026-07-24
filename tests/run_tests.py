@@ -1,85 +1,135 @@
 #!/usr/bin/env python3
-"""
-Run the pydraw unittest suite.
+"""Run the pydraw test suite, one module at a time in the foreground.
 
-Each test module is executed in its OWN subprocess. This is required: every
-pydraw test creates a tkinter Screen, and tkinter keeps a single global root.
-Running several Screen-creating modules in one interpreter - as a plain
-`python -m unittest discover` does - tears that root down mid-run and produces
-spurious "application has been destroyed" failures. Isolating each module in a
-fresh subprocess sidesteps the problem entirely.
+Tk owns process-global state, so GUI modules must not share an interpreter.
+They must also never be started as background or detached processes: Tk needs
+the foreground window-system session. ``subprocess.run`` intentionally blocks
+until each module exits before the next module starts.
 
-The suite runs against the pydraw SOURCE in this repo: the repo root is placed
-at the front of PYTHONPATH so an installed site-package copy never shadows it.
+The explicit manifest is deliberate. Scratch programs placed under ``tests/``
+must never become part of CI merely because their filename happens to match a
+glob.
 
 Usage:
-    python tests/run_tests.py                # run the whole suite
-    python tests/run_tests.py line text      # run only line_test.py / text_test.py
-    python tests/run_tests.py -v             # verbose (flags pass through to unittest)
+    python tests/run_tests.py                 # all tests
+    python tests/run_tests.py headless        # no Tk window
+    python tests/run_tests.py gui             # GUI API/integration tests
+    python tests/run_tests.py e2e             # complete user workflows
+    python tests/run_tests.py line text -v    # selected modules, verbose
 """
 
 import os
 import sys
-import glob
 import subprocess
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(TESTS_DIR)
 
-# Non-suite scratch/demo files in tests/ that are not meant to run in CI.
-SKIP = set()
+SUITES = {
+    'headless': (
+        'color_test',
+        'location_test',
+        'sleep_test',
+    ),
+    'gui': (
+        'algorithms_test',
+        'compound_test',
+        'image_test',
+        'input_test',
+        'line_test',
+        'objects_test',
+        'pen_test',
+        'scene_test',
+        'screen_test',
+        'text_test',
+    ),
+    'e2e': (
+        'workflow_e2e_test',
+    ),
+}
 
 # `python -m unittest` returns this when a module contains no tests (Py 3.12+).
 NO_TESTS_EXIT = 5
 
 
 def discover():
-    """Return the sorted names of runnable *_test.py modules (minus SKIP)."""
-    modules = []
-    for path in sorted(glob.glob(os.path.join(TESTS_DIR, '*_test.py'))):
-        name = os.path.splitext(os.path.basename(path))[0]
-        if name not in SKIP:
-            modules.append(name)
-    return modules
+    """Return each declared module once, in suite order."""
+    return list(dict.fromkeys(
+        module
+        for suite in SUITES.values()
+        for module in suite
+    ))
+
+
+def select(filters):
+    """Resolve category names and short module names."""
+    if not filters or filters == ['all']:
+        return discover()
+
+    selected = []
+    unknown = []
+    available = set(discover())
+    for value in filters:
+        if value in SUITES:
+            selected.extend(SUITES[value])
+            continue
+
+        module = value if value.endswith('_test') else value + '_test'
+        if module not in available and value.endswith('_e2e'):
+            module += '_test'
+        if module in available:
+            selected.append(module)
+        else:
+            unknown.append(value)
+
+    if unknown:
+        choices = ', '.join((*SUITES, *discover()))
+        raise ValueError(
+            f'Unknown suite/module: {", ".join(unknown)}\n'
+            f'Available: {choices}'
+        )
+    return list(dict.fromkeys(selected))
+
+
+def describe_returncode(returncode):
+    if returncode < 0:
+        return f'signal {-returncode}'
+    if returncode == NO_TESTS_EXIT:
+        return 'no tests collected'
+    return f'exit {returncode}'
 
 
 def main(argv):
     flags = [a for a in argv if a.startswith('-')]
     filters = [a for a in argv if not a.startswith('-')]
 
-    modules = discover()
-
-    if filters:
-        # Accept either 'line' or 'line_test'.
-        wanted = {f if f.endswith('_test') else f + '_test' for f in filters}
-        modules = [m for m in modules if m in wanted]
-        if not modules:
-            print(f'No matching test modules for: {" ".join(filters)}')
-            return 1
+    try:
+        modules = select(filters)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 2
 
     env = dict(os.environ)
     env['PYTHONPATH'] = REPO_ROOT + os.pathsep + env.get('PYTHONPATH', '')
+    env['PYTHONUNBUFFERED'] = '1'
 
     results = {}
     for mod in modules:
         print(f'\n===== {mod} =====', flush=True)
+        # Foreground only. Do not replace this with Popen or shell backgrounding.
         proc = subprocess.run(
             [sys.executable, '-m', 'unittest', f'tests.{mod}'] + flags,
             cwd=REPO_ROOT, env=env)
         results[mod] = proc.returncode
 
     passed = [m for m, rc in results.items() if rc == 0]
-    empty = [m for m, rc in results.items() if rc == NO_TESTS_EXIT]
-    failed = [m for m, rc in results.items() if rc not in (0, NO_TESTS_EXIT)]
+    failed = [m for m, rc in results.items() if rc != 0]
 
     print('\n' + '=' * 60)
-    print(f'SUMMARY: {len(passed)}/{len(passed) + len(failed)} suites passed')
+    print(f'SUMMARY: {len(passed)}/{len(results)} suites passed')
     if failed:
-        print('FAILED:  ' + ', '.join(failed))
-    if empty:
-        print('no tests: ' + ', '.join(empty))
-    if SKIP:
-        print('skipped (non-suite scratch files): ' + ', '.join(sorted(SKIP)))
+        for module in failed:
+            print(f'FAILED:  {module} ({describe_returncode(results[module])})')
 
     return 1 if failed else 0
 
