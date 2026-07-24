@@ -698,6 +698,12 @@ class Screen:
         self._last_frame_time = None
         self._next_frame_time = None
 
+        # Disable callbacks before removing objects. Tk may dispatch a queued
+        # input event while canvas state is being torn down; leaving the old
+        # registry live would let that event reach a scene whose objects have
+        # already been detached from this Screen.
+        self.registry.clear()
+
         self.toggle_grid(False)
         for line in self._gridlines:
             line.remove()
@@ -709,7 +715,6 @@ class Screen:
         self._helperstate = False
 
         self.clear()
-        self.registry.clear()
 
     def sleep(self, delay: float, delta: bool = False) -> Optional[float]:
         """
@@ -831,6 +836,9 @@ class Screen:
         :return: None
         """
 
+        # Prevent queued Tk events from reaching callbacks while the canvas and
+        # its objects are being destroyed.
+        self.registry.clear()
         self._screen.clear()
         self._root.destroy()
         exit(0)
