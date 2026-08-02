@@ -1,8 +1,10 @@
 from pydraw.errors import *
+from pydraw.serial import serializable
 from pydraw.util import verify_keywords
 import math
 
 
+@serializable
 class Location:
     __slots__ = ('_x', '_y')
 
@@ -188,6 +190,21 @@ class Location:
         """
 
         return Location._raw(self._x, self._y)
+
+    def __serialize__(self):
+        return [self._x, self._y]
+
+    @classmethod
+    def __deserialize__(cls, data):
+        # Checked rather than trusted. This is handed whatever arrived under a
+        # Location tag, and a string would index just as happily as a pair --
+        # 'no' would quietly become Location('n', 'o') instead of being refused.
+        if not isinstance(data, (list, tuple)) or len(data) != 2:
+            raise ValueError(f'a Location is a pair of numbers; received {data!r}')
+        x, y = data
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            raise ValueError(f'a Location is a pair of numbers; received {data!r}')
+        return cls._raw(x, y)
 
     def __str__(self):
         return f'(X: {self._x}, Y: {self._y})'

@@ -16,7 +16,13 @@ INPUT_TYPES = [
     'mousemove',
     'keydown',
     'keyup',
-    'keypress'
+    'keypress',
+    # Networking handlers (see pydraw.network). These are discovered the same way as
+    # the mouse/keyboard handlers above, but are dispatched by a Network rather
+    # than by Tk, so listen()/scene() only need to register them.
+    'playerjoin',
+    'playerquit',
+    'networkevent',
 ]
 
 ALPHABET = [
@@ -192,6 +198,11 @@ class Screen:
         self._root.protocol("WM_DELETE_WINDOW", onclose)
 
         self.registry = {}  # The input function registry (stores input callbacks)
+
+        # Callbacks run once per update() before the canvas is refreshed. This is
+        # how a Network (pydraw.network) gets a turn every frame without the game loop
+        # having to know it exists; the Screen stays unaware of what the hook does.
+        self._frame_hooks = []
 
         # Memoized canvas size. width()/height() are called extremely often (e.g.
         # per-vertex in Renderable._update_coords), and each was a live winfo/Tcl
@@ -788,17 +799,51 @@ class Screen:
         self._last_frame_time = completed_at
         return frame_time
 
+    def on_frame(self, hook) -> None:
+        """
+        Register a callback to run once per update(), just before the canvas is
+        redrawn. Used by pydraw.network so the network is pumped every frame; games
+        do not need to call this directly.
+
+        :param hook: a zero-argument callable
+        :return: None
+        """
+
+        if not callable(hook):
+            raise InvalidArgumentError(
+                f'Screen#on_frame(): expected a callable; received {type(hook)} ({hook!r}).'
+            )
+        self._frame_hooks.append(hook)
+
     def update(self) -> None:
         """
         Updates the screen.
 
         :return: None
         """
-        try:
-            if Screen._TERMINATING:
-                print('Terminated.')
-                exit(0)
+        if Screen._TERMINATING:
+            print('Terminated.')
+            exit(0)
 
+        # Give per-frame hooks (e.g. a Network) their turn before we redraw, so
+        # anything they change in the scene is visible this frame.
+        #
+        # Deliberately outside the try below. A hook is not Tk work -- it is a
+        # Network pumping sockets, and through it the game's own networkevent(),
+        # playerjoin() and playerquit(). Those are ordinary game code, and a
+        # mistake in one has to reach the person who wrote it. Inside the try, an
+        # AttributeError from a student's handler read as a closing window and
+        # left them with 'Terminated.' and no traceback at all.
+        #
+        # It is safe to run them out here because of the check above: onclose()
+        # sets _TERMINATING before it destroys the root, and Tk only runs that
+        # callback inside self._canvas.update() -- the end of the previous frame.
+        # So by the time a canvas could be gone, we have already exited above,
+        # and a hook never meets a dead canvas through the ordinary close.
+        for hook in self._frame_hooks:
+            hook()
+
+        try:
             # self._screen._screenupdate()
             self._canvas.update()
         except (turtle.Terminator, tk.TclError, AttributeError):

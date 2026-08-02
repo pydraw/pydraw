@@ -1,8 +1,10 @@
 import turtle
 import tkinter as tk
 from pydraw.errors import *
+from pydraw.serial import serializable
 
 
+@serializable
 class Color:
     """
     An immutable class that contains a color values, usually by name or RGB.
@@ -141,8 +143,11 @@ class Color:
         return Color(self.__value__())
 
     def __str__(self):
+        # The braces below hold three values, not one -- so this is a tuple, and a
+        # tuple prints its own brackets. Interpolate the numbers separately or the
+        # parentheses come out doubled: '((255, 0, 0))'.
         if self._mode == 0:
-            string = f'({self._r, self._g, self._b})'
+            string = f'({self._r}, {self._g}, {self._b})'
         elif self._mode == 1:
             string = self._name
         else:
@@ -216,8 +221,44 @@ class Color:
         import random
         return random.choice(COLORS).clone()
 
+    def __serialize__(self):
+        """
+        How this color was asked for, so it arrives asked for the same way.
+
+        Sending the rgb of every color would be simpler and would compare equal
+        -- Color('red') and Color(255, 0, 0) already do -- but a named color that
+        turned into numbers in transit would print as '(255, 0, 0)' on every other
+        machine, and that is a difference somebody would eventually have to chase.
+        """
+        if self._mode == 1:
+            return self._name
+        if self._mode == 2:
+            return self._hex_value
+        return [self._r, self._g, self._b]
+
+    @classmethod
+    def __deserialize__(cls, data):
+        # Whatever arrived under a Color tag, so it is checked rather than trusted.
+        # The constructor turns down anything else on its own, and pydraw.serial
+        # treats that as "not really a Color" and hands back the plain dict.
+        if isinstance(data, (list, tuple)):
+            return cls(*data)
+        if isinstance(data, str):
+            return cls(data)
+        raise ValueError(f'a Color is a name, a hex string, or three numbers; '
+                         f'received {data!r}')
+
     def __repr__(self):
-        return self.__str__()
+        """
+        The unambiguous form -- what you would type to get this Color back.
+
+        Kept apart from __str__, which is the plain one a person reads: there, a
+        named color is simply its name. This is what turns up in an error message
+        and in a debugger, where 'red' on its own does not even say it is a Color.
+        """
+        if self._mode == 0:
+            return f'Color({self._r}, {self._g}, {self._b})'
+        return f'Color({str(self)!r})'
 
 
 Color.NONE = Color('')

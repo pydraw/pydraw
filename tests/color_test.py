@@ -39,6 +39,26 @@ class ColorTest(unittest.TestCase):
                 with self.assertRaises(NameError):
                     Color(*arguments)
 
+    def test_str_is_the_plain_form(self):
+        """
+        An rgb color used to come out as '((255, 0, 0))'. The f-string held three
+        values, so it interpolated a tuple, and the tuple brought its own brackets.
+        """
+        self.assertEqual(str(Color('red')), 'red')
+        self.assertEqual(str(Color('#ff8800')), '#ff8800')
+        self.assertEqual(str(Color(255, 0, 0)), '(255, 0, 0)')
+
+    def test_repr_says_what_it_is(self):
+        """__str__ is for a person; __repr__ has to be unambiguous."""
+        self.assertEqual(repr(Color('red')), "Color('red')")
+        self.assertEqual(repr(Color('#ff8800')), "Color('#ff8800')")
+        self.assertEqual(repr(Color(255, 0, 0)), 'Color(255, 0, 0)')
+
+    def test_repr_rebuilds_the_color(self):
+        for color in (Color('red'), Color('#ff8800'), Color(12, 34, 56)):
+            with self.subTest(color=color):
+                self.assertEqual(eval(repr(color)), color)      # noqa: S307
+
 
 if __name__ == '__main__':
     unittest.main()

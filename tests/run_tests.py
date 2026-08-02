@@ -29,6 +29,7 @@ SUITES = {
     'headless': (
         'color_test',
         'location_test',
+        'network_test',
         'sleep_test',
     ),
     'gui': (
