@@ -1953,75 +1953,19 @@ class CustomPolygon(CustomRenderable):
 
         return self._angle
 
-    def center(self, *args, **kwargs) -> Location:
-        """
-        Returns the location of the center
-
-        :param move_to: if defined, Move the center to a new Location (Easily center objects!)
-        :param x: if defined, move the center x-coordinate to the specified value
-        :param y: if defined, move the center y-coordinate to the specified value
-        :return: Location object representing centroid of CustomRenderable
-        """
-
-        verify_keywords(kwargs, ('move_to', 'x', 'y'), 'CustomPolygon#center()')
-
-        if len(args) == 0 and len(kwargs) == 0:
-            return self._center()
-
-        location = Location(self._center())
-        if len(args) != 0:
-            if type(args[0]) is Location or type(args[0]) is tuple:
-                location.moveto(args[0])
-            elif type(args[0]) == float or type(args[0]) is int:
-                if len(args) != 2:
-                    raise InvalidArgumentError(
-                        'CustomPolygon#center(): expected both x and y.'
-                    )
-                elif type(args[1]) is not float and type(args[1]) is not int:
-                    raise InvalidArgumentError(
-                        'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
-                    )
-
-                location.moveto(args[0], args[1])
-            else:
-                raise InvalidArgumentError(
-                    'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
-                )
-
-        if len(kwargs) != 0:
-            if 'move_to' in kwargs:
-                if type(kwargs['move_to']) is Location or type(kwargs['move_to']) is tuple:
-                    location.moveto(kwargs['move_to'])
-                else:
-                    raise InvalidArgumentError(
-                        'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
-                    )
-
-            if 'x' in kwargs:
-                if type(kwargs['x']) is float or type(kwargs['x']) is int:
-                    location.x(kwargs['x'])
-                else:
-                    raise InvalidArgumentError(
-                        'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
-                    )
-            if 'y' in kwargs:
-                if type(kwargs['y']) is float or type(kwargs['y']) is int:
-                    location.y(kwargs['y'])
-                else:
-                    raise InvalidArgumentError(
-                        'CustomPolygon#center(): expected a tuple/Location or two numbers (x, y).'
-                    )
-
-        return self._center(location)
-
-    def _center(self, moveto: Location = None, centroid = True) -> Location:
-
+    def _center(self, move_to: Location = None, centroid: bool = False) -> Location:
         if not centroid:
-            if moveto is not None:
-                verify(moveto, Location)
-                self.move(moveto.x() - self._location.x(), moveto.y() - self._location.y())
+            center = Location(
+                self._location.x() + self._width / 2,
+                self._location.y() + self._height / 2,
+            )
 
-            return Location(self._location.x() + self._width / 2, self._location.y() + self._height / 2)
+            if move_to is not None:
+                verify(move_to, Location)
+                self.move(move_to.x() - center.x(), move_to.y() - center.y())
+                center.moveto(move_to)
+
+            return center
 
         # We are going to create a centroid, so we can rotate the points around a realistic center
         # Sorry for those of you that get weird rotations..
@@ -2035,16 +1979,14 @@ class CustomPolygon(CustomRenderable):
         centroid_x = sum(x_list) / len(y_list)
         centroid_y = sum(y_list) / len(x_list)
 
-        diff_x = 0
-        diff_y = 0
+        center = Location(centroid_x, centroid_y)
 
-        if moveto is not None:
-            verify(moveto, Location)
-            diff_x = moveto.x() - centroid_x
-            diff_y = moveto.y() - centroid_y
-            self.move(diff_x, diff_y)
+        if move_to is not None:
+            verify(move_to, Location)
+            self.move(move_to.x() - center.x(), move_to.y() - center.y())
+            center.moveto(move_to)
 
-        return Location(centroid_x + diff_x, centroid_y + diff_y)
+        return center
 
     def _flush_vertices(self) -> None:
         # Fold any pending translation into the cached vertices. Called by every

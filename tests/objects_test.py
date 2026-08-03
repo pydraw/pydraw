@@ -564,6 +564,30 @@ class CustomPolygonTest(unittest.TestCase):
         p = self.make()
         self.assertEqual(p.center(), Location(150, 150))
 
+        asymmetric = CustomPolygon(
+            self.screen,
+            [(100, 100), (200, 100), (100, 200)],
+        )
+        self.assertEqual(asymmetric.center(), Location(150, 150))
+        self.assertEqual(
+            asymmetric.center(centroid=True),
+            Location(400 / 3, 400 / 3),
+        )
+
+    def test_center_setter_uses_selected_center(self):
+        p = CustomPolygon(
+            self.screen,
+            [(100, 100), (200, 100), (100, 200)],
+        )
+
+        p.center(300, 400)
+        self.assertEqual(p.center(), Location(300, 400))
+
+        p.center(500, 600, centroid=True)
+        centroid = p.center(centroid=True)
+        self.assertAlmostEqual(centroid.x(), 500)
+        self.assertAlmostEqual(centroid.y(), 600)
+
     def test_move_is_exact(self):
         # move() uses a relative canvas move, so vertices track the delta exactly
         # (no 1px bounding-box rounding from canvas.moveto()).
