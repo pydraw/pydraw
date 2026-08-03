@@ -59,6 +59,14 @@ class CompoundObjectTest(unittest.TestCase):
         comp.move(5, 5)
         self.assertEqual(comp.center(centroid=False), Location(65, 15))
 
+    def test_moveto_translates_children_and_bounds_once(self):
+        a, b, comp = self._pair()
+        comp.moveto(50, 75)
+        self.assertEqual(a.location(), Location(50, 75))
+        self.assertEqual(b.location(), Location(150, 75))
+        self.assertEqual(comp.x(), 50)
+        self.assertEqual(comp.y(), 75)
+
     def test_center_centroid(self):
         a, b, comp = self._pair()
         # The compound centroid averages the centers around which its children

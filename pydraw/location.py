@@ -77,6 +77,30 @@ class Location:
         :return: the location (after change)
         """
 
+        # Hot paths: avoid tuple construction, keyword verification, and the
+        # general parser for the overwhelmingly common complete-coordinate
+        # forms used by animation loops.
+        if not kwargs:
+            if len(args) == 2:
+                dx, dy = args
+                if ((type(dx) is float or type(dx) is int)
+                        and (type(dy) is float or type(dy) is int)):
+                    self._x += dx
+                    self._y += dy
+                    return self
+            elif len(args) == 1:
+                value = args[0]
+                if type(value) is Location:
+                    self._x += value._x
+                    self._y += value._y
+                    return self
+                if (type(value) is tuple and len(value) == 2
+                        and (type(value[0]) is float or type(value[0]) is int)
+                        and (type(value[1]) is float or type(value[1]) is int)):
+                    self._x += value[0]
+                    self._y += value[1]
+                    return self
+
         diff = (0, 0)
 
         # Basically we don't have an empty tuple at the start.
@@ -123,6 +147,30 @@ class Location:
         :param y: the y to move to
         :return: the location (after change)
         """
+
+        # See move(): complete positional forms dominate sprite placement and
+        # can update the two slots directly without allocating an intermediate
+        # tuple or running keyword validation.
+        if not kwargs:
+            if len(args) == 2:
+                x, y = args
+                if ((type(x) is float or type(x) is int)
+                        and (type(y) is float or type(y) is int)):
+                    self._x = x
+                    self._y = y
+                    return self
+            elif len(args) == 1:
+                value = args[0]
+                if type(value) is Location:
+                    self._x = value._x
+                    self._y = value._y
+                    return self
+                if (type(value) is tuple and len(value) == 2
+                        and (type(value[0]) is float or type(value[0]) is int)
+                        and (type(value[1]) is float or type(value[1]) is int)):
+                    self._x = value[0]
+                    self._y = value[1]
+                    return self
 
         location = (self._x, self._y)
 
