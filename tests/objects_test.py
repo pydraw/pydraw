@@ -7,6 +7,7 @@ dispatch gap (missing 8/9-arg forms)
 """
 
 import unittest
+from unittest.mock import patch
 from pydraw.errors import InvalidArgumentError
 from pydraw import Screen, Location, Color, Rectangle, Oval, Triangle, Polygon, CustomPolygon, Renderable
 
@@ -300,6 +301,13 @@ class MethodTest(unittest.TestCase):
             obj.moveto(Location(150, 150))        # Location
             self.assertEqual(obj.location(), Location(150, 150))
 
+    def test_numeric_move_and_moveto_do_not_clone_locations(self):
+        obj = Rectangle(self.screen, 100, 100, 50, 50)
+        with patch.object(Location, 'clone', side_effect=AssertionError):
+            obj.move(10, 20)
+            obj.moveto(300, 400)
+        self.assertEqual(obj.location(), Location(300, 400))
+
     def test_width_height(self):
         for obj in self.each():
             self.assertEqual(obj.width(), 50)
@@ -325,6 +333,19 @@ class MethodTest(unittest.TestCase):
             self.assertEqual(obj.center(), Location(300, 300))
             obj.center((250, 250))                # tuple
             self.assertEqual(obj.center(), Location(250, 250))
+
+    def test_complete_center_setter_calculates_center_once(self):
+        obj = Rectangle(self.screen, 100, 100, 50, 50)
+        with patch.object(obj, '_center', wraps=obj._center) as center:
+            self.assertEqual(obj.center(400, 400), Location(400, 400))
+        self.assertEqual(center.call_count, 1)
+
+        with patch.object(obj, '_center', wraps=obj._center) as center:
+            self.assertEqual(
+                obj.center(move_to=Location(300, 350)),
+                Location(300, 350),
+            )
+        self.assertEqual(center.call_count, 1)
 
     def test_center_keyword_forms(self):
         for obj in self.each():

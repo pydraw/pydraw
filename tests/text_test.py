@@ -7,6 +7,7 @@ class is exercisable without Pillow.
 """
 
 import unittest
+from unittest.mock import patch
 from pydraw.errors import InvalidArgumentError, PydrawError, UnsupportedError
 from pydraw import Screen, Location, Color, Text, Rectangle, Renderable
 
@@ -69,6 +70,15 @@ class TextMethodTest(unittest.TestCase):
         self.text.text('changed')
         self.assertEqual(self.text.text(), 'changed')
         self.assertRaises(InvalidArgumentError, self.text.text, 123)
+
+    def test_unchanged_text_skips_canvas_and_measurement_work(self):
+        canvas = self.text._screen._canvas
+        with patch.object(canvas, 'itemconfigure') as itemconfigure, \
+                patch.object(self.text, '_update_coords') as update_coords:
+            self.assertEqual(self.text.text('hello'), 'hello')
+
+        itemconfigure.assert_not_called()
+        update_coords.assert_not_called()
 
     def test_move_is_exact(self):
         # A relative move must shift the location by exactly the delta and shift

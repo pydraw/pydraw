@@ -96,13 +96,22 @@ class CompoundObject(Object):
         :return: None
         """
 
-        old = self._location.clone()
-        self._location.moveto(*args, **kwargs)
+        current_x = self._location._x
+        current_y = self._location._y
 
-        dx = self._location.x() - old.x()
-        dy = self._location.y() - old.y()
+        if not kwargs and len(args) == 2 \
+                and all(type(value) is int or type(value) is float for value in args):
+            target_x, target_y = args
+        else:
+            target = Location._raw(current_x, current_y)
+            target.moveto(*args, **kwargs)
+            target_x, target_y = target._x, target._y
+
+        dx = target_x - current_x
+        dy = target_y - current_y
+        if dx == 0 and dy == 0:
+            return
         self.move(dx, dy)
-        self.update()
 
     def width(self, width: float = None) -> float:
         """

@@ -569,9 +569,10 @@ class Renderable(Object):
         :return: None
         """
 
-        before = self._location.clone()
+        before_x = self._location._x
+        before_y = self._location._y
         self._location.move(*args, **kwargs)
-        self._translate(self._location.x() - before.x(), self._location.y() - before.y())
+        self._translate(self._location._x - before_x, self._location._y - before_y)
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -580,9 +581,10 @@ class Renderable(Object):
         :return: None
         """
 
-        before = self._location.clone()
+        before_x = self._location._x
+        before_y = self._location._y
         self._location.moveto(*args, **kwargs)
-        self._translate(self._location.x() - before.x(), self._location.y() - before.y())
+        self._translate(self._location._x - before_x, self._location._y - before_y)
 
     def _translate(self, dx: float, dy: float) -> None:
         """
@@ -650,19 +652,64 @@ class Renderable(Object):
 
         verify_keywords(kwargs, ('move_to', 'x', 'y', 'centroid'), 'Renderable#center()')
 
-        centroid = False
-        if len(args) == 0:
-            if 'centroid' in kwargs:
-                if type(kwargs['centroid']) is bool:
-                    centroid = kwargs['centroid']
-                else:
-                    raise InvalidArgumentError(
-                        'Renderable#center(): centroid must be a bool.'
-                    )
+        centroid = kwargs.get('centroid', False)
+        if type(centroid) is not bool:
+            raise InvalidArgumentError(
+                'Renderable#center(): centroid must be a bool.'
+            )
 
+        has_keyword_move = any(key in kwargs for key in ('move_to', 'x', 'y'))
+
+        # Complete positional setters are the animation hot path. Dispatching
+        # directly to _center preserves CustomPolygon specialization while
+        # avoiding a current-center lookup, clone, and Location.moveto parse.
+        if not has_keyword_move and len(args) == 2:
+            x, y = args
+            if ((type(x) is float or type(x) is int)
+                    and (type(y) is float or type(y) is int)):
+                return self._center(Location._raw(x, y), centroid=centroid)
+
+        if not has_keyword_move and len(args) == 1:
+            target = args[0]
+            if type(target) is Location:
+                return self._center(
+                    Location._raw(target._x, target._y), centroid=centroid,
+                )
+            if (type(target) is tuple and len(target) == 2
+                    and (type(target[0]) is float or type(target[0]) is int)
+                    and (type(target[1]) is float or type(target[1]) is int)):
+                return self._center(
+                    Location._raw(target[0], target[1]), centroid=centroid,
+                )
+
+        # Complete keyword setters can skip the same current-center work. Keep
+        # mixed move_to/x/y calls on the compatibility parser below, where the
+        # later x/y values intentionally override move_to components.
+        if len(args) == 0 and 'move_to' in kwargs \
+                and 'x' not in kwargs and 'y' not in kwargs:
+            target = kwargs['move_to']
+            if type(target) is Location:
+                return self._center(
+                    Location._raw(target._x, target._y), centroid=centroid,
+                )
+            if (type(target) is tuple and len(target) == 2
+                    and (type(target[0]) is float or type(target[0]) is int)
+                    and (type(target[1]) is float or type(target[1]) is int)):
+                return self._center(
+                    Location._raw(target[0], target[1]), centroid=centroid,
+                )
+
+        if len(args) == 0 and 'move_to' not in kwargs \
+                and 'x' in kwargs and 'y' in kwargs:
+            x, y = kwargs['x'], kwargs['y']
+            if ((type(x) is float or type(x) is int)
+                    and (type(y) is float or type(y) is int)):
+                return self._center(Location._raw(x, y), centroid=centroid)
+
+        if len(args) == 0:
             # centroid is only a getter modifier; without an actual move request
             # (positional args or move_to/x/y) this is a pure getter.
-            if not any(key in kwargs for key in ('move_to', 'x', 'y')):
+            if not has_keyword_move:
                 return self._center(centroid=centroid)
 
         location = Location(self._center(centroid=centroid))
@@ -710,38 +757,24 @@ class Renderable(Object):
                     raise InvalidArgumentError(
                         'Renderable#center(): expected a tuple/Location or two numbers (x, y).'
                     )
-            if 'centroid' in kwargs:
-                if type(kwargs['centroid']) is bool:
-                    centroid = kwargs['centroid']
-                else:
-                    raise InvalidArgumentError(
-                        'Renderable#center(): centroid must be a bool.'
-                    )
-
         return self._center(location, centroid)
 
     def _center(self, move_to: Location = None, centroid: bool = False):
+        if centroid:
+            # This remains the historical vertex mean, not an area-weighted
+            # polygon centroid.
+            center_x = sum(vertex._x for vertex in self._vertices) / len(self._vertices)
+            center_y = sum(vertex._y for vertex in self._vertices) / len(self._vertices)
+        else:
+            center_x = self._location._x + self._width / 2
+            center_y = self._location._y + self._height / 2
+
         if move_to is not None:
             verify(move_to, Location)
-            self.moveto(move_to.x() - self.width() / 2, move_to.y() - self.height() / 2)
+            self.move(move_to._x - center_x, move_to._y - center_y)
+            return move_to
 
-        if not centroid:
-            return Location(self.x() + self.width() / 2, self.y() + self.height() / 2)
-
-        # We are going to create a centroid, so we can rotate the points around a realistic center
-        # Sorry for those of you that get weird rotations..
-        x_list = []
-        y_list = []
-
-        for vertex in self._vertices:
-            x_list.append(vertex.x())
-            y_list.append(vertex.y())
-
-        # Create a simple centroid (not full centroid)
-        centroid_x = sum(x_list) / len(y_list)
-        centroid_y = sum(y_list) / len(x_list)
-
-        return Location(centroid_x, centroid_y)
+        return Location._raw(center_x, center_y)
 
     def rotation(self, angle: float = None) -> float:
         """
@@ -1852,14 +1885,17 @@ class CustomPolygon(CustomRenderable):
         :return: None
         """
 
-        before = self._location.clone()
+        before_x = self._location._x
+        before_y = self._location._y
         self._location.move(*args, **kwargs)  # Does the arg parsing for us
 
         # Use a relative canvas move (exact) rather than moveto(), which
         # positions by the item's bounding box and lands 1px off because the
         # outline inflates the bbox beyond the geometry coordinates.
-        dx = self._location.x() - before.x()
-        dy = self._location.y() - before.y()
+        dx = self._location._x - before_x
+        dy = self._location._y - before_y
+        if dx == 0 and dy == 0:
+            return
         self._screen._canvas.move(self._ref, dx, dy)
         self._vertex_offset[0] += dx
         self._vertex_offset[1] += dy
@@ -1872,12 +1908,15 @@ class CustomPolygon(CustomRenderable):
         :return: None
         """
 
-        before = self._location.clone()
+        before_x = self._location._x
+        before_y = self._location._y
         self._location.moveto(*args, **kwargs)
 
         # Relative canvas move by the delta (see move() for why not moveto()).
-        dx = self._location.x() - before.x()
-        dy = self._location.y() - before.y()
+        dx = self._location._x - before_x
+        dy = self._location._y - before_y
+        if dx == 0 and dy == 0:
+            return
         self._screen._canvas.move(self._ref, dx, dy)
         self._vertex_offset[0] += dx
         self._vertex_offset[1] += dy
@@ -3185,6 +3224,8 @@ class Text(CustomRenderable):
 
         if text is not None:
             verify(text, str)
+            if self._text == text:
+                return self._text
             self._text = text
             try:
                 self._screen._canvas.itemconfigure(self._ref, text=self._text)
@@ -3202,9 +3243,10 @@ class Text(CustomRenderable):
         :return: None
         """
 
-        before = self._location.clone()
+        before_x = self._location._x
+        before_y = self._location._y
         self._location.move(*args, **kwargs)
-        self._translate(self._location.x() - before.x(), self._location.y() - before.y())
+        self._translate(self._location._x - before_x, self._location._y - before_y)
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -3213,9 +3255,10 @@ class Text(CustomRenderable):
         :return: None
         """
 
-        before = self._location.clone()
+        before_x = self._location._x
+        before_y = self._location._y
         self._location.moveto(*args, **kwargs)
-        self._translate(self._location.x() - before.x(), self._location.y() - before.y())
+        self._translate(self._location._x - before_x, self._location._y - before_y)
 
     def _translate(self, dx: float, dy: float) -> None:
         """
