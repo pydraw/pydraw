@@ -1,4 +1,5 @@
 from typing import Union, Tuple
+from itertools import count
 
 from pydraw import Object, Renderable, verify
 from pydraw import Location, Color
@@ -13,6 +14,7 @@ class CompoundObject(Object):
     """
 
     _PEN_SUPPORTED = False
+    _TAG_IDS = count()
 
     def __init__(self, *args, **kwargs):
         """
@@ -41,6 +43,12 @@ class CompoundObject(Object):
 
         if len(self._objects) == 0:
             raise InvalidArgumentError('CompoundObject(): expected at least one Object.')
+
+        # Tk can translate every canvas item carrying one tag in a single Tcl
+        # call. Tag membership is populated lazily on the first move and then
+        # refreshed only when a child is added, removed, or recreates its item.
+        self._canvas_tag = f'pydraw_compound_{next(self._TAG_IDS)}'
+        self._tagged_refs = {}
 
         self._location, self._end = self._calculate_bounds()
 
@@ -81,13 +89,31 @@ class CompoundObject(Object):
         :return: None
         """
 
-        for obj in self._objects.values():
-            obj.move(*args, **kwargs)
+        if not kwargs and len(args) == 2 \
+                and all(type(value) is int or type(value) is float for value in args):
+            dx, dy = args
+        else:
+            delta = Location._raw(0, 0)
+            delta.move(*args, **kwargs)
+            dx, dy = delta._x, delta._y
 
-        # Shift the tracked bounds once (not once per child, which would
-        # multiply the delta by the number of objects).
-        self._location.move(*args, **kwargs)
-        self._end.move(*args, **kwargs)
+        if dx == 0 and dy == 0:
+            return
+
+        leaves = tuple(self._leaf_objects())
+        if leaves and all(self._batchable(obj) for obj in leaves):
+            canvases = self._refresh_canvas_tags(leaves)
+            for canvas in canvases:
+                canvas.move(self._canvas_tag, dx, dy)
+            self._move_cached(dx, dy)
+            return
+
+        # Preserve compatibility for unusual Object implementations that do
+        # not expose a normal Renderable canvas item/cache layout.
+        for obj in self._objects.values():
+            obj.move(dx, dy)
+
+        self._shift_bounds(dx, dy)
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -150,7 +176,12 @@ class CompoundObject(Object):
 
         verify(angle_diff, (float, int), pivot, Location)
 
+        if angle_diff == 0:
+            return
+
         pivot = self.center(centroid=True) if pivot is None else pivot
+        pivot_x = pivot._x
+        pivot_y = pivot._y
 
         # Convert the angle_diff to radians
         angle_diff_rad = math.radians(angle_diff)
@@ -158,6 +189,28 @@ class CompoundObject(Object):
         sine = math.sin(angle_diff_rad)
 
         for obj in self._objects.values():
+            if self._rotation_batchable(obj):
+                # Renderables define their ordinary center from the top-left
+                # location and dimensions. Move that location to its revolved
+                # destination before rebuilding the child's rotated coords.
+                # The rebuild therefore writes the final geometry to Tk once,
+                # instead of writing the rotation and following it with a
+                # separate canvas.move() translation.
+                center_x = obj._location._x + obj._width / 2
+                center_y = obj._location._y + obj._height / 2
+                dx = center_x - pivot_x
+                dy = center_y - pivot_y
+
+                obj._location._x = (
+                    dx * cosine - dy * sine + pivot_x - obj._width / 2
+                )
+                obj._location._y = (
+                    dx * sine + dy * cosine + pivot_y - obj._height / 2
+                )
+                obj.rotate(angle_diff)
+                obj._sync_pen()
+                continue
+
             # An object's location is its unrotated top-left anchor, but
             # Object#rotate() spins it around its center.  Revolving that anchor
             # and then spinning around the center applies two incompatible
@@ -380,6 +433,95 @@ class CompoundObject(Object):
         """Updates values of the compound object."""
 
         self._location, self._end = self._calculate_bounds()
+
+    def _leaf_objects(self):
+        """Yield the concrete canvas-backed children of nested compounds."""
+        for obj in self._objects.values():
+            if isinstance(obj, CompoundObject):
+                yield from obj._leaf_objects()
+            else:
+                yield obj
+
+    @staticmethod
+    def _batchable(obj) -> bool:
+        """Whether CompoundObject knows how to shift this object's cache."""
+        return (
+            isinstance(obj, Renderable)
+            and getattr(obj, '_ref', None) is not None
+            and getattr(obj, '_screen', None) is not None
+            and getattr(obj, '_location', None) is not None
+        )
+
+    @staticmethod
+    def _rotation_batchable(obj) -> bool:
+        """Whether rotation can place final coords without a second Tk move."""
+        return (
+            isinstance(obj, Renderable)
+            and getattr(obj, '_location', None) is not None
+            and getattr(obj, '_width', None) is not None
+            and getattr(obj, '_height', None) is not None
+        )
+
+    def _refresh_canvas_tags(self, leaves):
+        """Make this compound's tag describe its current set of canvas items."""
+        current = {}
+        canvases = {}
+        for obj in leaves:
+            canvas = obj._screen._canvas
+            ref = obj._ref
+            key = id(obj)
+            current[key] = (canvas, ref)
+            canvases[id(canvas)] = canvas
+
+            previous = self._tagged_refs.get(key)
+            if previous == (canvas, ref):
+                continue
+            if previous is not None:
+                previous[0].dtag(previous[1], self._canvas_tag)
+            canvas.addtag_withtag(self._canvas_tag, ref)
+
+        for key, (canvas, ref) in self._tagged_refs.items():
+            if key not in current:
+                canvas.dtag(ref, self._canvas_tag)
+
+        self._tagged_refs = current
+        return tuple(canvases.values())
+
+    @staticmethod
+    def _move_child_cached(obj, dx, dy):
+        """Mirror a Renderable.move() in Python after Tk moved its canvas tag."""
+        obj._location._x += dx
+        obj._location._y += dy
+
+        # CustomPolygon keeps translations lazy so repeated movement remains
+        # O(1) until geometry is read. Ordinary Renderables cache live vertices
+        # directly; Text has neither cache and needs only its location shifted.
+        vertex_offset = getattr(obj, '_vertex_offset', None)
+        if vertex_offset is not None:
+            vertex_offset[0] += dx
+            vertex_offset[1] += dy
+        else:
+            for vertex in getattr(obj, '_vertices', ()):
+                vertex._x += dx
+                vertex._y += dy
+
+        obj._sync_pen()
+
+    def _move_cached(self, dx, dy):
+        """Shift this compound tree's Python state without touching Tk."""
+        for obj in self._objects.values():
+            if isinstance(obj, CompoundObject):
+                obj._move_cached(dx, dy)
+            else:
+                self._move_child_cached(obj, dx, dy)
+        self._shift_bounds(dx, dy)
+
+    def _shift_bounds(self, dx, dy):
+        """Translate the already-computed axis-aligned bounds exactly once."""
+        self._location._x += dx
+        self._location._y += dy
+        self._end._x += dx
+        self._end._y += dy
 
     def _calculate_bounds(self) -> Tuple[Location, Location]:
         """Return the axis-aligned bounds of the children's live geometry."""

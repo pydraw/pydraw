@@ -8,6 +8,8 @@ unit.
 
 import os
 import unittest
+from unittest.mock import patch
+
 from pydraw import Screen, Location, Color, Rectangle, Polygon, Triangle, Image
 from pydraw.compound import CompoundObject
 from pydraw.errors import InvalidArgumentError
@@ -46,7 +48,12 @@ class CompoundObjectTest(unittest.TestCase):
 
     def test_move_translates_all_children(self):
         a, b, comp = self._pair()
-        comp.move(5, 5)
+        with patch.object(
+                self.screen._canvas, 'move',
+                wraps=self.screen._canvas.move) as canvas_move:
+            comp.move(5, 5)
+
+        self.assertEqual(canvas_move.call_count, 1)
         self.assertEqual(a.location(), Location(5, 5))
         self.assertEqual(b.location(), Location(105, 5))
 
@@ -110,8 +117,12 @@ class CompoundObjectTest(unittest.TestCase):
         #   (0,0)   -> (50, -50)
         #   (100,0) -> (50,  50)
         a, b, comp = self._pair()
-        comp.rotate(90)
+        with patch.object(
+                self.screen._canvas, 'move',
+                wraps=self.screen._canvas.move) as canvas_move:
+            comp.rotate(90)
 
+        self.assertEqual(canvas_move.call_count, 0)
         self._assert_at(a, 50, -50)
         self._assert_at(b, 50, 50)
         self.assertAlmostEqual(a.rotation(), 90)
