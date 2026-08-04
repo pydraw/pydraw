@@ -420,6 +420,15 @@ class CompoundObject(Object):
 
         return tuple(self._objects.values())
 
+    def visible(self, visible: bool):
+        """Set the visibility of all the objects in the compound object."""
+
+        if visible is None:
+            raise InvalidArgumentError('visible must be true or false - query visible on child objects for info')
+
+        for obj in self._objects.values():
+            obj.visible(visible)
+
     def color(self, color: Color):
         """Change the color of all the objects in the compound object."""
 
