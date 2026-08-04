@@ -34,6 +34,8 @@ touches.
 
 import builtins
 import contextlib
+from collections import deque
+from collections.abc import Mapping
 import errno
 import importlib.util
 import json
@@ -80,6 +82,14 @@ WINDOW = 32 << 10       # how far back zlib can refer; see _Server._body
 VERIFY = 1.0            # seconds between full re-checks of the room's state, in
                         # case a change slipped past the tracking in _Tracked
 RESYNC_COOLDOWN = 1.0   # least time between two snapshots for the same client
+SMOOTH_SNAPSHOTS = 3    # render this many replication intervals behind the room
+SMOOTH_HISTORY = 12     # enough room for jitter without unbounded pose retention
+
+# A timestamped server frame is wrapped internally before compression. Games
+# never see this envelope: _Connection removes it and leaves timing metadata on
+# a private dict subclass used by Network's interpolation timeline.
+FRAME_TIME_KEY = '~pydraw-frame-time'
+FRAME_MESSAGES_KEY = '~pydraw-frame-messages'
 
 # Prefixes that tag a state key's owner on the wire. A plain key is the neutral
 # world (server-owned, read as net.state); 'player:N' is client N's own slice;
@@ -109,12 +119,29 @@ class Network:
     """
 
     def __init__(self, screen, host: str = 'localhost',
-                 port: int = DEFAULT_PORT, room=None, rate: int = OWN_RATE):
+                 port: int = DEFAULT_PORT, room=None, rate: int = OWN_RATE,
+                 precision: dict = None):
         verify(host, str, port, int)
         if rate is not None and (not isinstance(rate, (int, float)) or rate <= 0):
             raise InvalidArgumentError(
                 f'Network: rate must be how many times a second to send your own '
                 f'position, or None to send every frame; received {rate!r}.')
+        if precision is not None and not isinstance(precision, Mapping):
+            raise InvalidArgumentError(
+                'Network: precision must map owned field names to non-negative '
+                f'decimal places, or be None; received {precision!r}.'
+            )
+        precision = {} if precision is None else dict(precision)
+        for field, places in precision.items():
+            if (not isinstance(field, str)
+                    or not isinstance(places, int)
+                    or isinstance(places, bool)
+                    or places < 0):
+                raise InvalidArgumentError(
+                    'Network: precision must map owned field names to '
+                    'non-negative decimal places; '
+                    f'received {field!r}: {places!r}.'
+                )
 
         self._screen = screen
         self._conn = None
@@ -131,11 +158,19 @@ class Network:
         # How often your own position goes out, whatever the frame rate. See _pump.
         self._rate = rate
         self._next_own = 0.0
+        # Quantization is applied only to the copy placed on the wire. The local
+        # owner slice stays exact, so a 120 Hz movement integrator never feeds its
+        # rounded transport coordinates back into the next frame.
+        self._precision = precision
 
         # Fields of *other* players to blend between updates -- see smooth().
         self._smooth = ()
-        self._history = {}      # id -> (older, when, newer, when)
+        self._smooth_angles = ()
+        self._history = {}      # id -> deque[(server time, complete owner slice)]
         self._blend = {}        # id -> the values this frame, computed in _pump
+        self._pending_pose_samples = None
+        self._server_clock_offset = None
+        self._interpolation_delay = SMOOTH_SNAPSHOTS / OWN_RATE
 
         # The server numbers what it sends us, so a hole in the count is proof we
         # missed something. See _dispatch.
@@ -218,17 +253,56 @@ class Network:
 
         Name the fields rather than having the library guess. Position is safe to
         blend; health is not -- a smoothed `hp` would read 13.7 on its way down and
-        a game asking `if hp <= 0` would be wrong for a moment. Angles are not safe
-        either: blending 359 to 1 sweeps the long way round, so turn those yourself.
+        a game asking `if hp <= 0` would be wrong for a moment. Degree-valued
+        headings need their cyclic geometry handled by smooth_angle() instead.
 
-        The cost is one update of lag (about 17ms at the default rate), since a
-        value can only be blended once the one after it has arrived.
+        The cost is a short visual delay for other players. The client keeps a
+        few timestamped server snapshots and draws between them, which absorbs
+        ordinary packet and frame-time jitter without changing your own input.
         """
         for field in fields:
             verify(field, str)
         self._smooth = tuple(fields)
         self._history.clear()
         self._blend = {}
+
+    def smooth_angle(self, *fields: str) -> None:
+        """
+        Blend cyclic degree fields of other players along the shortest path.
+
+            net.smooth_angle('a')
+
+        Ordinary numeric interpolation would turn 359 -> 1 into a nearly full
+        backwards rotation through 180. Angle smoothing instead treats that as
+        the two-degree step it represents. Values are normalized to [0, 360).
+        """
+        for field in fields:
+            verify(field, str)
+        self._smooth_angles = tuple(fields)
+        self._history.clear()
+        self._blend = {}
+
+    def clear_smoothing(self, player: int = None) -> None:
+        """
+        Discard buffered interpolation for one remote player, or for everyone.
+
+        Most movement should remain on the smooth timeline. Call this only when
+        gameplay deliberately teleports an entity -- for example, after a
+        respawn -- so its next position is drawn immediately instead of blended
+        across the world from its previous one.
+
+            net.clear_smoothing(player_id)
+
+        Omitting ``player`` clears every remote interpolation timeline.
+        """
+        if player is None:
+            self._history.clear()
+            self._blend = {}
+            if self._pending_pose_samples is not None:
+                self._pending_pose_samples.clear()
+            return
+        verify(player, int)
+        self._forget(player)
 
     def connected(self) -> bool:
         return self._conn is not None and self._conn.alive
@@ -272,6 +346,11 @@ class Network:
         self.id = hello['id']
         self.players = list(hello.get('players', []))
         self._seq = hello.get('n')
+        replication_rate = hello.get('replication_rate')
+        if (isinstance(replication_rate, (int, float))
+                and not isinstance(replication_rate, bool)
+                and replication_rate > 0):
+            self._interpolation_delay = SMOOTH_SNAPSHOTS / replication_rate
         self._conn.nonblocking()
 
     def _send(self, message: dict) -> None:
@@ -291,7 +370,12 @@ class Network:
         # message carries a slightly newer position.
         now = time.perf_counter()
         if self._mine_dirty and (self._rate is None or now >= self._next_own):
-            self._conn.send({'t': 'own', 'slice': dict(self._owner[self.id])})
+            slice_ = dict(self._owner[self.id])
+            for key, places in self._precision.items():
+                value = slice_.get(key)
+                if isinstance(value, float):
+                    slice_[key] = round(value, places)
+            self._conn.send({'t': 'own', 'slice': slice_})
             self._mine_dirty = False
             if self._rate is not None:
                 self._next_own = now + 1 / self._rate
@@ -309,17 +393,39 @@ class Network:
             self._conn = None
             return
 
-        for message in arrived:
-            self._dispatch(message)
+        # A batched frame may legitimately contain pose A, an event, then pose B
+        # for the same player. Preserve that ordering in raw state/event dispatch,
+        # but let only the final pose in each server frame advance interpolation.
+        # Otherwise two poses unpacked in one poll appear microseconds apart and
+        # collapse a whole movement interval into one rendered frame.
+        smoothing = bool(self._smooth or self._smooth_angles)
+        if smoothing:
+            received_at = time.perf_counter()
+            observed_frames = set()
+            for message in arrived:
+                frame_number = getattr(message, '_frame_number', None)
+                frame_at = getattr(message, '_frame_time', None)
+                if frame_number not in observed_frames:
+                    self._observe_server_clock(frame_at, received_at)
+                    observed_frames.add(frame_number)
 
-        if self._smooth:
+            self._pending_pose_samples = {}
+            for message in arrived:
+                self._dispatch(message)
+            self._commit_pose_samples(received_at)
+            self._pending_pose_samples = None
             self._blend_others()
+        else:
+            for message in arrived:
+                self._dispatch(message)
 
         if self._resyncing:
             self._ask_to_resync()     # still nothing back -- ask again when due
 
     def _dispatch(self, message: dict) -> None:
         kind = message.get('t')
+        frame_at = getattr(message, '_frame_time', None)
+        frame_number = getattr(message, '_frame_number', None)
 
         # One count per player, so what we see runs 1, 2, 3... with nothing
         # missing. A skipped number means everything after it may be built on a
@@ -332,11 +438,11 @@ class Network:
             self._seq = number
 
         if kind == 'set':
-            self._apply(message['key'], message['value'])
+            self._apply(message['key'], message['value'], frame_at, frame_number)
         elif kind == 'del':
             self._remove(message['key'])
         elif kind == 'snapshot':
-            self._snapshot(message)
+            self._snapshot(message, frame_at, frame_number)
         elif kind == 'event':
             # No 'player' key means the room sent it, so the sender is None --
             # never a magic id, since player numbers start at 1 and a 0 would read
@@ -356,44 +462,102 @@ class Network:
             self._forget(pid)
             self._handler('playerquit', pid)
 
-    def _remember(self, pid: int, slice_: dict) -> None:
-        """Keep the last two poses a player sent, and when each of them landed."""
-        now = time.perf_counter()
-        previous = self._history.get(pid)
-        if previous is None:
-            self._history[pid] = (slice_, now, slice_, now)
-        else:
-            _, _, newest, when = previous
-            self._history[pid] = (newest, when, slice_, now)
+    def _observe_server_clock(self, sent_at, received_at) -> None:
+        """Map the server's monotonic clock onto this process's clock."""
+        if (not isinstance(sent_at, (int, float))
+                or isinstance(sent_at, bool)):
+            return
+        candidate = received_at - sent_at
+        # Queueing and network delay can only make a sample larger. Retaining the
+        # smallest observed offset gives us the least-delayed clock relationship
+        # without allowing every jitter spike to move the render timeline.
+        if (self._server_clock_offset is None
+                or candidate < self._server_clock_offset):
+            self._server_clock_offset = candidate
+
+    def _stage_pose(self, pid: int, slice_: dict, sample_at, frame_number) -> None:
+        if self._pending_pose_samples is None:
+            self._remember(pid, slice_, sample_at)
+            return
+        # All messages unpacked from one transport frame carry its number, even
+        # though only the first exposes public sequence field `n`.
+        group = frame_number if frame_number is not None else 'this-pump'
+        self._pending_pose_samples[(group, pid)] = (pid, slice_, sample_at)
+
+    def _commit_pose_samples(self, received_at) -> None:
+        for pid, slice_, sample_at in self._pending_pose_samples.values():
+            self._remember(
+                pid, slice_, received_at if sample_at is None else sample_at,
+            )
+
+    def _remember(self, pid: int, slice_: dict, sample_at=None) -> None:
+        """Append one complete owner slice to a player's snapshot timeline."""
+        sample_at = time.perf_counter() if sample_at is None else sample_at
+        history = self._history.setdefault(pid, deque(maxlen=SMOOTH_HISTORY))
+        if history and sample_at <= history[-1][0]:
+            if sample_at == history[-1][0]:
+                history[-1] = (sample_at, slice_)
+            # TCP preserves server-frame order. An older timestamp here can only
+            # be a stale resync or malformed peer, neither of which should rewind
+            # a visual timeline.
+            return
+        history.append((sample_at, slice_))
 
     def _blend_others(self) -> None:
         """
-        Work out where every other player is *now*, once for the frame, so that
-        two reads in the same frame agree with each other.
+        Work out where every other player is on a fixed delayed server timeline,
+        once for the frame, so two reads in the same frame agree with each other.
 
-        We draw each player one update behind, which is what makes this an
-        interpolation rather than a guess: the pose we are heading towards has
-        already arrived. A player who stops sending settles on their last known
-        pose instead of drifting off.
+        Keeping several already-arrived snapshots turns uneven packet delivery
+        into an even render path. A player who stops sending settles on their last
+        known pose instead of being extrapolated into the distance.
         """
         now = time.perf_counter()
+        server_now = (
+            now if self._server_clock_offset is None
+            else now - self._server_clock_offset
+        )
+        render_at = server_now - self._interpolation_delay
         self._blend = {}
 
-        for pid, (older, older_at, newer, newer_at) in self._history.items():
-            span = newer_at - older_at
-            if span <= 0:
-                self._blend[pid] = {field: newer[field]
-                                    for field in self._smooth if field in newer}
+        fields = tuple(dict.fromkeys(self._smooth + self._smooth_angles))
+        angle_fields = set(self._smooth_angles)
+        for pid, history in self._history.items():
+            if not history:
                 continue
 
-            share = (now - span - older_at) / span
-            share = 0.0 if share < 0 else (1.0 if share > 1 else share)
+            # Discard snapshots wholly behind the render cursor, retaining the
+            # last one before it as the left side of the interpolation pair.
+            while len(history) > 2 and history[1][0] <= render_at:
+                history.popleft()
+
+            older_at, older = history[0]
+            newer_at, newer = history[-1]
+            if render_at <= older_at or len(history) == 1:
+                newer_at, newer = older_at, older
+                share = 0.0
+            elif render_at >= newer_at:
+                older_at, older = newer_at, newer
+                share = 1.0
+            else:
+                for index in range(1, len(history)):
+                    candidate_at, candidate = history[index]
+                    if render_at <= candidate_at:
+                        older_at, older = history[index - 1]
+                        newer_at, newer = candidate_at, candidate
+                        break
+                span = newer_at - older_at
+                share = ((render_at - older_at) / span) if span > 0 else 1.0
 
             blended = {}
-            for field in self._smooth:
+            for field in fields:
                 start, end = older.get(field), newer.get(field)
                 if isinstance(start, (int, float)) and isinstance(end, (int, float)):
-                    blended[field] = start + (end - start) * share
+                    if field in angle_fields:
+                        delta = (end - start + 180) % 360 - 180
+                        blended[field] = (start + delta * share) % 360
+                    else:
+                        blended[field] = start + (end - start) * share
                 elif end is not None:
                     blended[field] = end          # nothing sensible to blend
             self._blend[pid] = blended
@@ -401,6 +565,10 @@ class Network:
     def _forget(self, pid: int) -> None:
         self._history.pop(pid, None)
         self._blend.pop(pid, None)
+        if self._pending_pose_samples is not None:
+            for key, sample in tuple(self._pending_pose_samples.items()):
+                if sample[0] == pid:
+                    self._pending_pose_samples.pop(key)
 
     def _ask_to_resync(self) -> None:
         """
@@ -420,7 +588,7 @@ class Network:
         self._resyncing = True
         self._send({'t': 'resync'})
 
-    def _snapshot(self, message: dict) -> None:
+    def _snapshot(self, message: dict, frame_at=None, frame_number=None) -> None:
         """
         Take the server's whole world as ours.
 
@@ -445,11 +613,11 @@ class Network:
                 self._server.pop(pid)
 
         for key, value in state.items():
-            self._apply(key, value)
+            self._apply(key, value, frame_at, frame_number)
 
         self._resyncing = False
 
-    def _apply(self, key: str, value) -> None:
+    def _apply(self, key: str, value, frame_at=None, frame_number=None) -> None:
         # Nothing is announced here: state is what you *read*, and a room that wants
         # to say something happened sends an event for it. So applying a snapshot
         # and applying a single change are the same operation.
@@ -458,8 +626,8 @@ class Network:
             # We are the source of truth for our OWN slice -- never let the server
             # overwrite it (that is what removes input lag). Others' slices we take.
             if pid != self.id:
-                if self._smooth:
-                    self._remember(pid, value)
+                if self._smooth or self._smooth_angles:
+                    self._stage_pose(pid, value, frame_at, frame_number)
                 self._owner[pid] = value
         elif key.startswith(SERVER_PREFIX):
             self._server[int(key[len(SERVER_PREFIX):])] = value
@@ -644,6 +812,12 @@ class Room:
     self.state (the world) and player.state (a player's server fields) are writable
     here and only here. Clients read the results; they cannot change them.
     """
+
+    #: Optional server-to-client replication cadence. When set to a positive
+    #: number, messages produced between two deadlines share one compressed
+    #: frame. Repeated state writes are coalesced, while events remain ordered.
+    #: None preserves the original immediate-delivery transport.
+    replication_rate = None
 
     def __init__(self):
         self._changes = _Changes()
@@ -1025,6 +1199,20 @@ class _Server:
         self._last_tick = 0.0
         self._next_tick = 0.0
         self._next_verify = 0.0
+        replication_rate = getattr(room, 'replication_rate', None)
+        if (replication_rate is not None
+                and (not isinstance(replication_rate, (int, float))
+                     or isinstance(replication_rate, bool)
+                     or replication_rate <= 0)):
+            raise InvalidArgumentError(
+                'Room.replication_rate must be a positive number or None; '
+                f'received {replication_rate!r}.'
+            )
+        self._replication_interval = (
+            None if replication_rate is None else 1 / replication_rate
+        )
+        self._replication_rate = replication_rate
+        self._next_replication = 0.0
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -1088,12 +1276,17 @@ class _Server:
         self._last_tick = started
         self._next_tick = started + TICK
         self._next_verify = started + VERIFY
+        if self._replication_interval is not None:
+            self._next_replication = started + self._replication_interval
         if ready is not None:
             ready.set()
 
         while self._running:
             now = time.perf_counter()
-            timeout = max(0.0, self._next_tick - now)
+            deadline = self._next_tick
+            if self._replication_interval is not None:
+                deadline = min(deadline, self._next_replication)
+            timeout = max(0.0, deadline - now)
             readable, _, _ = select.select(
                 [self._listener] + list(self._conns), [], [], timeout)
 
@@ -1119,8 +1312,9 @@ class _Server:
                 self._last_tick = now
                 self._next_tick = now + TICK
 
-            # One place syncs the world and server slices; owner slices sync
-            # immediately in _handle_own (so a mover feels no round-trip).
+            # One place syncs the world and server slices. Owner slices are
+            # accepted immediately; rooms without replication batching also
+            # publish them immediately from _handle_own.
             self._sync()
             self._flush_all()
 
@@ -1150,7 +1344,8 @@ class _Server:
         # that order, so a late joiner is correct the moment it starts drawing.
         self._send_to(conn, {'t': 'hello', 'id': player_id,
                              'players': list(self._ids.values()),
-                             'room': type(self._room).__name__})
+                             'room': type(self._room).__name__,
+                             'replication_rate': self._replication_rate})
         self._guarded('join()', self._room.join, player)
         self._resync(conn, forced=True)
         for event in self._replay:
@@ -1451,15 +1646,34 @@ class _Server:
         body = self._body(message)
         if body is None:
             return
+        sent_at = time.perf_counter()
         for sock, conn in list(self._conns.items()):
             if sock is skip:
                 continue
-            self._push(conn, body)
+            if self._replication_interval is None:
+                self._push(conn, body, sent_at=sent_at)
+            else:
+                self._push(conn, body, self._coalesce_key(message))
 
     def _send_to(self, conn, message: dict) -> None:
         body = self._body(message)
         if body is not None:
-            self._push(conn, body)
+            if self._replication_interval is None:
+                self._push(conn, body, sent_at=time.perf_counter())
+            else:
+                self._push(conn, body, self._coalesce_key(message))
+
+    @staticmethod
+    def _coalesce_key(message: dict):
+        """Identify state writes that can replace one another inside a batch."""
+        if message.get('t') not in ('set', 'del'):
+            return None
+        key = message.get('key')
+        try:
+            hash(key)
+        except TypeError:
+            return None
+        return 'state', key
 
     def _body(self, message: dict):
         """Encode a message, or say so once and drop it if it cannot be encoded."""
@@ -1487,17 +1701,30 @@ class _Server:
                 about=('oversized', message.get('key')))
         return raw
 
-    def _push(self, conn, body: bytes) -> None:
+    def _push(self, conn, body: bytes, coalesce_key=None, sent_at=None) -> None:
         # Each player counts separately: plenty of what we send goes to everyone
         # *but* one person (your own ship coming back to you, an event you are the
         # author of), and a shared count would leave gaps that look like loss.
         #
         # Nothing to catch here -- flush() owns the socket, so a peer that has gone
         # is marked dead there and _flush_all sweeps it on this pass.
-        conn.send_body(body)
+        if self._replication_interval is None:
+            conn.send_body(body, sent_at=sent_at)
+        else:
+            conn.queue_body(body, coalesce_key)
 
-    def _flush_all(self) -> None:
+    def _flush_all(self, force_batch: bool = False) -> None:
         """Push out buffered bytes, and drop anyone who has gone or fallen behind."""
+        now = time.perf_counter()
+        batch_due = (
+            self._replication_interval is not None
+            and (force_batch or now >= self._next_replication)
+        )
+        if batch_due:
+            for conn in self._conns.values():
+                conn.send_queued(sent_at=now)
+            self._next_replication = now + self._replication_interval
+
         for sock, conn in list(self._conns.items()):
             conn.flush()
             if not conn.alive:
@@ -1520,6 +1747,15 @@ def _encode(message: dict) -> bytes:
                       default=_encode_values).encode()
 
 
+class _FramedMessage(dict):
+    """A normal message carrying private metadata from its transport frame."""
+
+    def __init__(self, message, frame_number, frame_time):
+        super().__init__(message)
+        self._frame_number = frame_number
+        self._frame_time = frame_time
+
+
 class _Connection:
     """
     Wraps a socket and turns its byte stream into whole JSON messages.
@@ -1535,6 +1771,8 @@ class _Connection:
         self._buffer = b''
         self._outgoing = b''
         self._pending = []
+        self._queued_bodies = []
+        self._queued_keys = {}
         self.alive = True
         self.seq = 0            # server side: how many messages this peer has been
         self.resync_at = 0.0    # sent, and when it may next ask for the world back
@@ -1570,7 +1808,7 @@ class _Connection:
         """
         self.send_body(_encode(message))
 
-    def send_body(self, raw: bytes) -> None:
+    def send_body(self, raw: bytes, sent_at=None) -> None:
         """
         Queue JSON that `_encode` already prepared, compressed into this peer's
         own stream and numbered for them.
@@ -1578,11 +1816,46 @@ class _Connection:
         Split out from send() so a broadcast serializes once rather than once per
         player -- the number is the only part of the frame that differs.
         """
+        if sent_at is not None:
+            # One clock sample wraps the complete frame. The payload is already
+            # encoded JSON, so this preserves serialize-once broadcasts and adds
+            # no timestamp to each individual player state.
+            raw = (
+                b'{' + json.dumps(FRAME_TIME_KEY).encode() + b':'
+                + json.dumps(float(sent_at), separators=COMPACT).encode() + b','
+                + json.dumps(FRAME_MESSAGES_KEY).encode() + b':' + raw + b'}'
+            )
+
         self.seq += 1
         body = self._deflate.compress(raw) + self._deflate.flush(zlib.Z_SYNC_FLUSH)
         self._outgoing += (self.seq.to_bytes(4, 'big')
                            + len(body).to_bytes(4, 'big') + body)
         self.flush()
+
+    def queue_body(self, raw: bytes, coalesce_key=None) -> None:
+        """Queue one encoded message for the next server replication frame."""
+        if coalesce_key is None:
+            self._queued_bodies.append(raw)
+            # An event or lifecycle message is an ordering barrier. A later state
+            # cannot replace a state that clients must observe before this event.
+            self._queued_keys.clear()
+            return
+
+        index = self._queued_keys.get(coalesce_key)
+        if index is None:
+            self._queued_keys[coalesce_key] = len(self._queued_bodies)
+            self._queued_bodies.append(raw)
+        else:
+            self._queued_bodies[index] = raw
+
+    def send_queued(self, sent_at=None) -> None:
+        """Compress all queued messages into one length-prefixed frame."""
+        if not self._queued_bodies:
+            return
+        bodies, self._queued_bodies = self._queued_bodies, []
+        self._queued_keys.clear()
+        raw = bodies[0] if len(bodies) == 1 else b'[' + b','.join(bodies) + b']'
+        self.send_body(raw, sent_at=sent_at)
 
     def flush(self) -> None:
         """Drain what we can of the outgoing buffer. Safe to call at any time."""
@@ -1659,15 +1932,29 @@ class _Connection:
             number = int.from_bytes(self._buffer[0:4], 'big')
             self._buffer = self._buffer[HEADER + size:]
 
-            message = json.loads(self._inflate.decompress(body).decode(),
+            decoded = json.loads(self._inflate.decompress(body).decode(),
                                  object_hook=_decode_values)
-            if number:
+            frame_at = None
+            if (isinstance(decoded, dict)
+                    and set(decoded) == {FRAME_TIME_KEY, FRAME_MESSAGES_KEY}
+                    and isinstance(decoded[FRAME_TIME_KEY], (int, float))):
+                frame_at = decoded[FRAME_TIME_KEY]
+                decoded = decoded[FRAME_MESSAGES_KEY]
+
+            raw_messages = decoded if isinstance(decoded, list) else [decoded]
+            if not all(isinstance(message, dict) for message in raw_messages):
+                raise ValueError('a network frame must contain messages')
+            messages = [
+                _FramedMessage(message, number, frame_at)
+                for message in raw_messages
+            ]
+            if number and messages:
                 # Both ends number what they send, but only the client reads it
                 # back: a hole in the server's count means it missed a change and
                 # must ask for the world again. The server ignores the numbers
                 # coming the other way, since it is the one being told.
-                message['n'] = number
-            self._pending.append(message)
+                messages[0]['n'] = number
+            self._pending.extend(messages)
 
 
 # --------------------------------------------------------------------------- #

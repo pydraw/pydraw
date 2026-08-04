@@ -993,6 +993,39 @@ class SendRateTest(unittest.TestCase):
             with self.assertRaises(InvalidArgumentError):
                 Network(FakeScreen(), 'localhost', self.server._port, rate=bad)
 
+    def test_precision_quantizes_the_wire_but_not_the_local_slice(self):
+        screen, net = self.join(
+            rate=None,
+            precision={'x': 1, 'a': 0},
+        )
+        net.mine['x'] = 123.4567
+        net.mine['a'] = 89.9876
+        net.mine['charge'] = 0.0047
+        screen.update()
+
+        deadline = time.perf_counter() + 1
+        while (time.perf_counter() < deadline
+               and not self.server._owner.get(net.id)):
+            time.sleep(1 / 120)
+
+        self.assertEqual(net.mine['x'], 123.4567)
+        self.assertEqual(net.mine['a'], 89.9876)
+        self.assertEqual(net.mine['charge'], 0.0047)
+        self.assertEqual(self.server._owner[net.id]['x'], 123.5)
+        self.assertEqual(self.server._owner[net.id]['a'], 90.0)
+        self.assertEqual(self.server._owner[net.id]['charge'], 0.0047)
+
+    def test_invalid_precisions_are_refused(self):
+        for bad in (
+                -1, 0.5, 'tenths', True,
+                {'x': -1}, {'x': 0.5}, {'x': True}, {1: 1}):
+            with self.subTest(precision=bad):
+                with self.assertRaises(InvalidArgumentError):
+                    Network(
+                        FakeScreen(), 'localhost', self.server._port,
+                        precision=bad,
+                    )
+
 
 class SmoothingTest(unittest.TestCase):
     """net.smooth() blends other players between updates; nothing else moves."""
@@ -1004,7 +1037,11 @@ class SmoothingTest(unittest.TestCase):
             self.state = pydraw.network._State()
             self._owner, self._server = {}, {}
             self._conn, self._screen = None, None
-            self._smooth, self._history, self._blend = (), {}, {}
+            self._smooth, self._smooth_angles = (), ()
+            self._history, self._blend = {}, {}
+            self._pending_pose_samples = None
+            self._server_clock_offset = None
+            self._interpolation_delay = 0.1
             self.id, self.players = 1, [1, 2]
 
     def setUp(self):
@@ -1015,13 +1052,8 @@ class SmoothingTest(unittest.TestCase):
         return pydraw.network._Entity(self.net, pid)
 
     def arrive(self, slice_, at):
-        """Stand in for an update landing at a given moment."""
-        previous = self.net._history.get(2)
-        if previous is None:
-            self.net._history[2] = (slice_, at, slice_, at)
-        else:
-            _, _, newest, when = previous
-            self.net._history[2] = (newest, when, slice_, at)
+        """Stand in for a server-timestamped snapshot."""
+        self.net._remember(2, slice_, at)
         self.net._owner[2] = slice_
 
     def test_a_player_is_drawn_between_its_last_two_poses(self):
@@ -1046,6 +1078,26 @@ class SmoothingTest(unittest.TestCase):
         self.net._blend_others()
         self.assertEqual(self.entity()['x'], 100)
 
+    def test_angles_take_the_short_path_across_zero(self):
+        self.net.smooth_angle('a')
+        now = time.perf_counter()
+        self.arrive({'a': 350}, now - 0.15)
+        self.arrive({'a': 10}, now - 0.05)
+
+        self.net._blend_others()
+        angle = self.entity()['a']
+        self.assertTrue(angle > 350 or angle < 10)
+
+    def test_reverse_angles_also_take_the_short_path(self):
+        self.net.smooth_angle('a')
+        now = time.perf_counter()
+        self.arrive({'a': 10}, now - 0.15)
+        self.arrive({'a': 350}, now - 0.05)
+
+        self.net._blend_others()
+        angle = self.entity()['a']
+        self.assertTrue(angle > 350 or angle < 10)
+
     def test_server_managed_fields_are_never_blended(self):
         """A smoothed hp would read 13.7 on its way down, and a game may ask."""
         self.net.smooth('x', 'hp')
@@ -1068,11 +1120,92 @@ class SmoothingTest(unittest.TestCase):
         self.net._owner[1] = {'x': 42}
         self.assertEqual(pydraw.network._Mine(self.net, 1)['x'], 42)
 
+    def test_clearing_one_players_smoothing_snaps_to_the_latest_pose(self):
+        now = time.perf_counter()
+        self.arrive({'x': 0, 'y': 0}, now - 0.15)
+        self.arrive({'x': 100, 'y': 200}, now - 0.05)
+        self.net._blend_others()
+        self.assertLess(self.entity()['x'], 100)
+
+        self.net.clear_smoothing(2)
+
+        self.assertEqual(self.entity()['x'], 100)
+        self.assertNotIn(2, self.net._history)
+        self.assertNotIn(2, self.net._blend)
+
+    def test_clearing_all_smoothing_discards_every_timeline(self):
+        now = time.perf_counter()
+        self.arrive({'x': 10}, now)
+        self.net._history[3] = [(now, {'x': 30})]
+        self.net._blend = {2: {'x': 10}, 3: {'x': 30}}
+
+        self.net.clear_smoothing()
+
+        self.assertEqual(self.net._history, {})
+        self.assertEqual(self.net._blend, {})
+
+    def test_clearing_during_dispatch_drops_the_pending_old_pose(self):
+        now = time.perf_counter()
+        self.net._pending_pose_samples = {
+            (7, 2): (2, {'x': 100}, now),
+            (7, 3): (3, {'x': 300}, now),
+        }
+
+        self.net.clear_smoothing(2)
+        self.net._commit_pose_samples(now)
+        self.net._pending_pose_samples = None
+
+        self.assertNotIn(2, self.net._history)
+        self.assertEqual(self.net._history[3][-1][1]['x'], 300)
+
+    def test_only_the_final_pose_in_one_server_frame_advances_history(self):
+        """An event barrier may preserve two raw poses, but not two samples."""
+        now = time.perf_counter()
+        self.net._pending_pose_samples = {}
+        for x in (10, 20):
+            message = pydraw.network._FramedMessage(
+                {'t': 'set', 'key': 'player:2', 'value': {'x': x}},
+                frame_number=7, frame_time=now,
+            )
+            self.net._dispatch(message)
+        self.net._commit_pose_samples(now)
+        self.net._pending_pose_samples = None
+
+        history = self.net._history[2]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0][1]['x'], 20)
+        self.assertEqual(self.net._owner[2]['x'], 20)
+
+    def test_distinct_server_frames_in_one_pump_remain_distinct_samples(self):
+        now = time.perf_counter()
+        self.net._pending_pose_samples = {}
+        for frame, x in ((7, 10), (8, 20)):
+            self.net._dispatch(pydraw.network._FramedMessage(
+                {'t': 'set', 'key': 'player:2', 'value': {'x': x}},
+                frame_number=frame, frame_time=now + (frame - 7) / 30,
+            ))
+        self.net._commit_pose_samples(now + 1 / 30)
+        self.net._pending_pose_samples = None
+
+        history = self.net._history[2]
+        self.assertEqual([sample[1]['x'] for sample in history], [10, 20])
+
+    def test_server_timeline_not_packet_arrival_spacing_drives_blend(self):
+        """Bursty delivery cannot collapse a regularly timestamped path."""
+        now = time.perf_counter()
+        self.net._interpolation_delay = 0.1
+        self.arrive({'x': 0}, now - 0.15)
+        self.arrive({'x': 100}, now - 0.05)
+
+        self.net._blend_others()
+        self.assertAlmostEqual(self.entity()['x'], 50, delta=1)
+
     def test_off_by_default(self):
         plain = self.Fake()
         plain._owner[2] = {'x': 100}
         self.assertEqual(pydraw.network._Entity(plain, 2)['x'], 100)
         self.assertEqual(plain._smooth, ())
+        self.assertEqual(plain._smooth_angles, ())
 
 
 class FramingTest(unittest.TestCase):
@@ -1144,6 +1277,63 @@ class FramingTest(unittest.TestCase):
 
         self.assertEqual([m['name'] for m in self.receiver._pending],
                          [f'e{i}' for i in range(40)])
+
+    def test_a_batch_is_one_frame_but_many_messages(self):
+        messages = [
+            {'t': 'set', 'key': f'player:{i}', 'value': {'x': i}}
+            for i in range(1, 8)
+        ]
+        for message in messages:
+            self.sender.queue_body(pydraw.network._encode(message))
+        self.sender.send_queued()
+
+        arrived = self.receiver.poll()
+        self.assertEqual(self.sender.seq, 1)
+        self.assertEqual(
+            [{key: value for key, value in message.items() if key != 'n'}
+             for message in arrived],
+            messages,
+        )
+        self.assertEqual(arrived[0]['n'], 1)
+        self.assertTrue(all('n' not in message for message in arrived[1:]))
+
+    def test_timestamped_batch_shares_one_private_server_time(self):
+        messages = [
+            {'t': 'set', 'key': 'player:2', 'value': {'x': 1}},
+            {'t': 'event', 'name': 'fire', 'data': {}},
+            {'t': 'set', 'key': 'player:2', 'value': {'x': 2}},
+        ]
+        for message in messages:
+            self.sender.queue_body(pydraw.network._encode(message))
+        self.sender.send_queued(sent_at=1234.5)
+
+        arrived = self.receiver.poll()
+        self.assertEqual(len(arrived), 3)
+        self.assertEqual(
+            [message._frame_number for message in arrived], [1, 1, 1],
+        )
+        self.assertEqual(
+            [message._frame_time for message in arrived], [1234.5] * 3,
+        )
+
+    def test_state_coalescing_stops_at_an_event_barrier(self):
+        def queue(message, key=None):
+            self.sender.queue_body(pydraw.network._encode(message), key)
+
+        state_key = ('state', 'player:2')
+        queue({'t': 'set', 'key': 'player:2', 'value': {'x': 1}}, state_key)
+        queue({'t': 'set', 'key': 'player:2', 'value': {'x': 2}}, state_key)
+        queue({'t': 'event', 'name': 'fire', 'data': {'x': 2}})
+        queue({'t': 'set', 'key': 'player:2', 'value': {'x': 3}}, state_key)
+        queue({'t': 'set', 'key': 'player:2', 'value': {'x': 4}}, state_key)
+        self.sender.send_queued()
+
+        arrived = self.receiver.poll()
+        self.assertEqual(
+            [(message['t'], message.get('value', {}).get('x'))
+             for message in arrived],
+            [('set', 2), ('event', None), ('set', 4)],
+        )
 
     def test_frames_really_do_contain_newline_bytes(self):
         """The reason for length-prefixed framing, asserted rather than assumed."""
@@ -1238,9 +1428,9 @@ class BroadcastEncodingTest(unittest.TestCase):
             encoded.append(message.get('t'))
             return real_body(message)
 
-        def watch_push(conn, body):
+        def watch_push(conn, body, **options):
             pushed.append(conn)
-            return real_push(conn, body)
+            return real_push(conn, body, **options)
 
         server._body, server._push = watch_body, watch_push
         server._broadcast({'t': 'event', 'name': 'boom', 'data': {}})
@@ -1257,6 +1447,130 @@ class BroadcastEncodingTest(unittest.TestCase):
 
         self.assertEqual(conns[0].seq, 1)              # skipped the second one
         self.assertEqual(conns[1].seq, 2)
+
+
+class ReplicationBatchTest(unittest.TestCase):
+    """A Room can opt into paced, transparent server-to-client batches."""
+
+    class Batched(Room):
+        replication_rate = 30
+
+    def setUp(self):
+        self.server = _Server(self.Batched(), free_port())
+        self.server.start_background()
+        self.networks = []
+
+    def tearDown(self):
+        for network in self.networks:
+            network.close()
+        self.server.stop()
+
+    def join(self, **handlers):
+        screen = FakeScreen(**handlers)
+        network = Network(screen, 'localhost', self.server._port, rate=None)
+        self.networks.append(network)
+        return screen, network
+
+    def pump(self, screens, seconds=0.3):
+        deadline = time.perf_counter() + seconds
+        while time.perf_counter() < deadline:
+            for screen in screens:
+                screen.update()
+            time.sleep(1 / 120)
+
+    def test_handshake_state_and_events_are_transparent(self):
+        heard = []
+        mover_screen, mover = self.join()
+        watcher_screen, watcher = self.join(
+            networkevent=lambda *args: heard.append(args),
+        )
+
+        for x in range(40):
+            mover.mine['x'] = x
+            mover_screen.update()
+        mover.send('wave', x=39)
+        self.pump([mover_screen, watcher_screen])
+
+        other = next(entity for pid, entity in watcher.others() if pid == mover.id)
+        self.assertEqual(other['x'], 39)
+        self.assertEqual([(name, data) for name, data, _ in heard],
+                         [('wave', {'x': 39})])
+
+    def test_many_owner_writes_use_far_fewer_server_frames(self):
+        mover_screen, mover = self.join()
+        watcher_screen, watcher = self.join()
+        self.pump([mover_screen, watcher_screen], 0.1)
+
+        watcher_connection = next(
+            conn for sock, conn in self.server._conns.items()
+            if self.server._ids[sock] == watcher.id
+        )
+        starting_sequence = watcher_connection.seq
+        for x in range(100):
+            mover.mine['x'] = x
+            mover_screen.update()
+        self.pump([mover_screen, watcher_screen], 0.25)
+
+        other = next(entity for pid, entity in watcher.others() if pid == mover.id)
+        self.assertEqual(other['x'], 99)
+        self.assertLess(watcher_connection.seq - starting_sequence, 15)
+
+    def test_room_cadence_sets_three_snapshot_interpolation_delay(self):
+        _, network = self.join()
+        self.assertAlmostEqual(network._interpolation_delay, 3 / 30)
+
+    def test_event_barriers_do_not_collapse_remote_motion(self):
+        mover_screen, mover = self.join()
+        watcher_screen, watcher = self.join()
+        watcher.smooth('x')
+        self.pump([mover_screen, watcher_screen], 0.15)
+
+        rendered = []
+        snapshot_times = set()
+        started = time.perf_counter()
+        frame = 0
+        while time.perf_counter() - started < 0.8:
+            mover.mine['x'] = frame
+            mover_screen.update()
+            if frame % 3 == 0:
+                mover.send('wave', frame=frame)
+            watcher_screen.update()
+
+            history = watcher._history.get(mover.id, ())
+            snapshot_times.update(sample_at for sample_at, _ in history)
+            if time.perf_counter() - started > 0.25:
+                other = next(
+                    entity for pid, entity in watcher.others()
+                    if pid == mover.id
+                )
+                if 'x' in other:
+                    rendered.append(other['x'])
+            frame += 1
+            time.sleep(1 / 120)
+
+        spacings = [
+            newer - older
+            for older, newer in zip(
+                sorted(snapshot_times), sorted(snapshot_times)[1:],
+            )
+        ]
+        self.assertTrue(spacings)
+        self.assertGreater(min(spacings), 0.01)
+        self.assertGreater(len(rendered), 10)
+        self.assertLess(
+            max(abs(newer - older)
+                for older, newer in zip(rendered, rendered[1:])),
+            3,
+        )
+
+    def test_invalid_replication_rates_are_refused(self):
+        for bad in (0, -1, 'fast', True):
+            class Invalid(Room):
+                replication_rate = bad
+
+            with self.subTest(rate=bad):
+                with self.assertRaises(InvalidArgumentError):
+                    _Server(Invalid(), free_port())
 
 
 class BrokenAcceptTest(unittest.TestCase):
