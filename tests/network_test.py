@@ -25,12 +25,14 @@ import types
 import unittest
 
 import pydraw.network
+import pydraw._network.protocol as network_protocol
 import pydraw.screen
 from pydraw import Color, Location
 from pydraw.errors import InvalidArgumentError, PydrawError
-from pydraw.network import (HEADER, MAX_CATCHUP, RESYNC_COOLDOWN, TICK, VERIFY,
+from pydraw.network import (CONNECTION_TIMEOUT, HEADER, MAX_BACKLOG, MAX_CATCHUP,
+                            RESYNC_COOLDOWN, TICK_RATE, VERIFY,
                             Network, Room, _Connection, _Server,
-                            _client_boundary, _load_room, event)
+                            _client_boundary, _load_room, action, event)
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(TESTS_DIR)
@@ -42,6 +44,14 @@ def free_port():
     with socket.socket() as probe:
         probe.bind(('', 0))
         return probe.getsockname()[1]
+
+
+def finish_handshake(connection):
+    """Complete the private hello -> ready exchange for a raw test client."""
+    hello = connection.read_until(lambda message: message.get('t') == 'hello')
+    connection.send({'t': 'ready'})
+    connection.read_until(lambda message: message.get('t') == 'connected')
+    return hello
 
 
 class LoaderFixture(unittest.TestCase):
@@ -632,16 +642,184 @@ class HandshakeTest(unittest.TestCase):
         net.close()
 
 
+class LifecycleTest(unittest.TestCase):
+    """A socket has one bounded path into and out of one Player lifecycle."""
+
+    class Recording(Room):
+        def __init__(self):
+            super().__init__()
+            self.events = []
+            self.departed = []
+
+        def start(self):
+            self.events.append('start')
+
+        def join(self, player):
+            assert player in self.players
+            self.events.append(('join', player.id))
+
+        def leave(self, player):
+            assert player not in self.players
+            self.departed.append(player)
+            self.events.append(('leave', player.id))
+
+        def stop(self):
+            assert self.players == []
+            self.events.append('stop')
+
+    @staticmethod
+    def wait_until(test, seconds=2):
+        deadline = time.perf_counter() + seconds
+        while time.perf_counter() < deadline:
+            if test():
+                return
+            time.sleep(0.01)
+        raise AssertionError('lifecycle condition did not become true')
+
+    def test_close_is_idempotent_and_callbacks_have_one_order(self):
+        room = self.Recording()
+        server = _Server(room, free_port())
+        server.start_background()
+        network = Network(FakeScreen(), 'localhost', server._port)
+        self.wait_until(lambda: len(room.events) >= 2)
+
+        network.close()
+        network.close()
+        self.wait_until(lambda: any(
+            isinstance(item, tuple) and item[0] == 'leave'
+            for item in room.events
+        ))
+        server.stop()
+        server.stop()
+
+        self.assertEqual(room.events, [
+            'start', ('join', network.id), ('leave', network.id), 'stop',
+        ])
+
+    def test_server_shutdown_leaves_every_player_before_stop(self):
+        room = self.Recording()
+        server = _Server(room, free_port())
+        server.start_background()
+        first = Network(FakeScreen(), 'localhost', server._port)
+        second = Network(FakeScreen(), 'localhost', server._port)
+        self.wait_until(lambda: len(room.players) == 2)
+
+        server.stop()
+        first.close()
+        second.close()
+
+        self.assertEqual(
+            [item[0] for item in room.events if isinstance(item, tuple)],
+            ['join', 'join', 'leave', 'leave'],
+        )
+        self.assertEqual(room.events[-1], 'stop')
+        self.assertEqual(len(room.departed), 2)
+
+    def test_an_unfinished_hello_never_becomes_a_player(self):
+        room = self.Recording()
+        server = _Server(room, free_port())
+        server.start_background()
+        connection = _Connection.connect('localhost', server._port)
+        connection.read_until(lambda message: message.get('t') == 'hello')
+        self.wait_until(lambda: len(server._conns) == 1)
+
+        sock = next(iter(server._conns))
+        server._conns[sock].handshake_deadline = 0
+        self.wait_until(lambda: not server._conns)
+        connection.close()
+        server.stop()
+
+        self.assertEqual(room.events, ['start', 'stop'])
+
+    def test_ready_is_the_point_that_creates_the_player(self):
+        room = self.Recording()
+        server = _Server(room, free_port())
+        server.start_background()
+        connection = _Connection.connect('localhost', server._port)
+        hello = connection.read_until(lambda message: message.get('t') == 'hello')
+        self.assertEqual(room.players, [])
+
+        connection.send({'t': 'ready'})
+        connection.read_until(lambda message: message.get('t') == 'snapshot')
+        self.wait_until(lambda: len(room.players) == 1)
+        self.assertEqual(room.events, ['start', ('join', hello['id'])])
+
+        connection.close()
+        self.wait_until(lambda: len(room.departed) == 1)
+        server.stop()
+
+    def test_a_peer_that_does_not_answer_heartbeat_is_released(self):
+        room = self.Recording()
+        server = _Server(room, free_port())
+        server.start_background()
+        network = Network(FakeScreen(), 'localhost', server._port)
+        self.wait_until(lambda: len(room.players) == 1)
+
+        conn = next(conn for conn in server._conns.values() if conn.established)
+        conn.awaiting_pong_at = time.perf_counter() - CONNECTION_TIMEOUT
+        self.wait_until(lambda: not room.players)
+
+        # A stale Player reference cannot resurrect a transient message.
+        room.departed[0].send('too_late', value=1)
+        network.close()
+        server.stop()
+        self.assertEqual(
+            [item for item in room.events if isinstance(item, tuple)
+             and item[0] == 'leave'],
+            [('leave', network.id)],
+        )
+
+    def test_connection_close_is_idempotent_and_releases_queues(self):
+        left, right = socket.socketpair()
+        connection = _Connection(left)
+        connection._outgoing = b'x' * (MAX_BACKLOG + 1)
+        connection._pending.append({'t': 'event'})
+        connection._queued_bodies.append(b'{}')
+
+        connection.close()
+        connection.close()
+        right.close()
+
+        self.assertFalse(connection.alive)
+        self.assertEqual(connection._outgoing, b'')
+        self.assertEqual(connection._pending, [])
+        self.assertEqual(connection._queued_bodies, [])
+
+    def test_a_failed_start_still_gets_one_stop_and_releases_the_port(self):
+        events = []
+
+        class Broken(Room):
+            def start(self):
+                events.append('start')
+                raise RuntimeError('broken setup')
+
+            def stop(self):
+                events.append('stop')
+
+        port = free_port()
+        server = _Server(Broken(), port)
+        with self.assertRaises(PydrawError):
+            server.start_background()
+        server.stop()
+
+        self.assertEqual(events, ['start', 'stop'])
+        replacement = _Server(Room(), port)
+        replacement.start_background()
+        replacement.stop()
+
 class AnnounceByReturnTest(unittest.TestCase):
     """What a Room action returns is what the other players are told happened."""
 
     class Announcing(Room):
+        @action
         def fire(self, player):
             return {'shooter': player.id, 'hit': 7}
 
+        @action
         def quiet(self, player):
             return None                       # a private request, like paddle_move
 
+        @action
         def confused(self, player):
             return 'not a dict'               # should be reported, not broadcast
 
@@ -693,6 +871,69 @@ class AnnounceByReturnTest(unittest.TestCase):
     def test_returning_a_non_dict_announces_nothing(self):
         _, other_heard, _ = self.call('confused')
         self.assertEqual(other_heard, [])
+
+
+class ActionDecoratorTest(unittest.TestCase):
+    """Only deliberately exposed Room methods are reachable from a client."""
+
+    class Arena(Room):
+        def __init__(self):
+            super().__init__()
+            self.called = []
+
+        @action
+        def fire(self, player, power=1):
+            self.called.append(('fire', power))
+
+        def helper(self, player):
+            self.called.append(('helper', player.id))
+
+        @property
+        def dangerous(self):
+            self.called.append(('property', None))
+            raise RuntimeError('a client should never run this getter')
+
+    def setUp(self):
+        self.room = self.Arena()
+        self.server = _Server(self.room, free_port())
+        self.player = types.SimpleNamespace(id=7)
+
+    def test_a_decorated_method_is_an_action(self):
+        self.server._run_action(None, self.player, 'fire', {'power': 3})
+        self.assertEqual(self.room.called, [('fire', 3)])
+
+    def test_an_ordinary_room_method_is_not_remotely_callable(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.server._run_action(None, self.player, 'helper', {})
+
+        self.assertEqual(self.room.called, [])
+        self.assertIn('add @action', output.getvalue())
+
+    def test_looking_up_an_action_does_not_run_room_properties(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.server._run_action(None, self.player, 'dangerous', {})
+        self.assertEqual(self.room.called, [])
+
+    def test_actions_are_inherited(self):
+        class Child(self.Arena):
+            pass
+
+        self.assertIn('fire', Child._actions)
+
+    def test_an_override_has_to_opt_in_again(self):
+        class Child(self.Arena):
+            def fire(self, player, power=1):
+                self.called.append(('replacement', power))
+
+        self.assertNotIn('fire', Child._actions)
+
+    def test_reserved_methods_cannot_be_actions(self):
+        with self.assertRaises(InvalidArgumentError):
+            class Broken(Room):
+                @action
+                def tick(self, player):
+                    pass
 
 
 class TrackedStateTest(unittest.TestCase):
@@ -815,21 +1056,27 @@ class StateSyncTest(StateSyncFixture):
             self.state['score'] = 0
             self.state['rocks'] = [{'x': 0}]
 
+        @action
         def bump(self, player):
             self.state['score'] += 1
 
+        @action
         def nudge(self, player):
             self.state['rocks'][0]['x'] += 1
 
+        @action
         def rewrite(self, player):
             self.state['score'] = self.state['score']     # written, but unchanged
 
+        @action
         def drop(self, player):
             del self.state['rocks']
 
+        @action
         def unsendable(self, player):
             self.state['color'] = {1, 2, 3}      # a set: JSON cannot carry it
 
+        @action
         def sneak(self, player):
             # A change made behind the tracking's back, standing in for a Room that
             # kept its own reference to something it put in state. Only the sweep
@@ -926,6 +1173,108 @@ class StateSyncTest(StateSyncFixture):
         self.assertEqual(net.state['hidden'], 7)       # the sweep did
 
 
+class DeepOwnershipTest(StateSyncFixture):
+    """Ownership holds through every dict/list nested inside replicated state."""
+
+    class Nested(Room):
+        def start(self):
+            self.state['world'] = {
+                'rocks': [{'x': 1}],
+                'route': ({'x': 2},),
+            }
+
+        def join(self, player):
+            player.state['profile'] = {
+                'badges': ['rookie'],
+                'stats': {'wins': 0},
+            }
+
+    ROOM = Nested
+
+    def two_players(self):
+        first_screen, first = self.join()
+        second_screen, second = self.join()
+        self.pump([first_screen, second_screen], 0.25)
+        return first_screen, first, second_screen, second
+
+    @staticmethod
+    def entity(net, player_id):
+        return dict(net.others())[player_id]
+
+    def test_world_and_server_player_state_are_read_only_all_the_way_down(self):
+        screen, net = self.join()
+        self.pump([screen], 0.2)
+
+        attempts = (
+            lambda: net.state['world']['rocks'][0].__setitem__('x', 999),
+            lambda: net.state['world']['rocks'].append({'x': 2}),
+            lambda: net.state['world']['route'][0].__setitem__('x', 999),
+            lambda: net.mine['profile']['badges'].append('admin'),
+            lambda: net.mine['profile']['stats'].__setitem__('wins', 999),
+        )
+        for attempt in attempts:
+            with self.subTest(attempt=attempt), self.assertRaises(PydrawError):
+                attempt()
+
+        self.assertEqual(net.state['world']['rocks'], [{'x': 1}])
+        # JSON carries tuples as lists; the dict nested inside is still frozen.
+        self.assertEqual(net.state['world']['route'], [{'x': 2}])
+        self.assertEqual(net.mine['profile'], {
+            'badges': ['rookie'], 'stats': {'wins': 0},
+        })
+
+    def test_nested_owned_changes_replicate_and_remote_copies_are_read_only(self):
+        owner_screen, owner, watcher_screen, watcher = self.two_players()
+
+        original = {'weapons': [{'name': 'starter'}]}
+        owner.mine['loadout'] = original
+        original['weapons'].append({'name': 'changed behind its back'})
+        self.assertEqual(owner.mine['loadout'], {
+            'weapons': [{'name': 'starter'}],
+        })
+        self.pump([owner_screen, watcher_screen], 0.25)
+
+        owner.mine['loadout']['weapons'].append({'name': 'laser'})
+        self.assertTrue(owner._mine_dirty)
+        self.pump([owner_screen, watcher_screen], 0.25)
+
+        remote = self.entity(watcher, owner.id)
+        self.assertEqual(remote['loadout']['weapons'], [
+            {'name': 'starter'}, {'name': 'laser'},
+        ])
+        with self.assertRaises(PydrawError):
+            remote['loadout']['weapons'][0]['name'] = 'hacked'
+        with self.assertRaises(PydrawError):
+            remote['loadout']['weapons'].clear()
+
+    def test_player_slice_is_deeply_read_only_on_the_server(self):
+        screen, net = self.join()
+        net.mine['pose'] = {'position': [10, 20]}
+        self.pump([screen], 0.25)
+
+        slice_ = self.room.player(net.id).slice
+        with self.assertRaises(PydrawError):
+            slice_['pose']['position'][0] = 999
+        with self.assertRaises(PydrawError):
+            slice_['pose'] = {}
+        self.assertEqual(slice_['pose'], {'position': [10, 20]})
+
+    def test_owned_fields_can_be_updated_and_deleted_as_a_mapping(self):
+        owner_screen, owner, watcher_screen, watcher = self.two_players()
+        owner.mine.update(x=10, y=20)
+        self.pump([owner_screen, watcher_screen], 0.25)
+
+        del owner.mine['x']
+        owner.mine.setdefault('name', 'Ada')
+        self.assertEqual(owner.mine.pop('y'), 20)
+        self.pump([owner_screen, watcher_screen], 0.25)
+
+        remote = self.entity(watcher, owner.id)
+        self.assertEqual(dict(remote), {'name': 'Ada', 'profile': {
+            'badges': ['rookie'], 'stats': {'wins': 0},
+        }})
+
+
 class SendRateTest(unittest.TestCase):
     """How fast a game draws must not decide how much it sends."""
 
@@ -984,9 +1333,23 @@ class SendRateTest(unittest.TestCase):
         self.assertEqual(net._owner[net.id]['x'], 49)
 
     def test_rate_none_sends_every_frame(self):
+        """
+        A fixed number of frames rather than a spin: a spin here draws hundreds of
+        thousands of times a second, and rate=None would turn every one of those
+        into a message -- which is the flood Room.message_limit exists to stop.
+        """
         screen, net = self.join(rate=None)
-        frames, sent = self.spin(screen, net, 0.3)
-        self.assertEqual(sent, frames)
+        sent = []
+        real = net._conn.send
+        net._conn.send = lambda message: (
+            sent.append(message) if message.get('t') == 'own' else None,
+            real(message))[1]
+
+        for frame in range(100):
+            net.mine['x'] = frame
+            screen.update()
+
+        self.assertEqual(len(sent), 100)
 
     def test_a_nonsense_rate_is_refused(self):
         for bad in (0, -5, 'fast'):
@@ -1040,7 +1403,10 @@ class SmoothingTest(unittest.TestCase):
             self._smooth, self._smooth_angles = (), ()
             self._history, self._blend = {}, {}
             self._pending_pose_samples = None
+            self._rebasing = set()
             self._server_clock_offset = None
+            self._clock_window_min = None
+            self._clock_window_started = None
             self._interpolation_delay = 0.1
             self.id, self.players = 1, [1, 2]
 
@@ -1152,7 +1518,7 @@ class SmoothingTest(unittest.TestCase):
         }
 
         self.net.clear_smoothing(2)
-        self.net._commit_pose_samples(now)
+        self.net._commit_pose_samples()
         self.net._pending_pose_samples = None
 
         self.assertNotIn(2, self.net._history)
@@ -1168,7 +1534,7 @@ class SmoothingTest(unittest.TestCase):
                 frame_number=7, frame_time=now,
             )
             self.net._dispatch(message)
-        self.net._commit_pose_samples(now)
+        self.net._commit_pose_samples()
         self.net._pending_pose_samples = None
 
         history = self.net._history[2]
@@ -1184,7 +1550,7 @@ class SmoothingTest(unittest.TestCase):
                 {'t': 'set', 'key': 'player:2', 'value': {'x': x}},
                 frame_number=frame, frame_time=now + (frame - 7) / 30,
             ))
-        self.net._commit_pose_samples(now + 1 / 30)
+        self.net._commit_pose_samples()
         self.net._pending_pose_samples = None
 
         history = self.net._history[2]
@@ -1200,12 +1566,322 @@ class SmoothingTest(unittest.TestCase):
         self.net._blend_others()
         self.assertAlmostEqual(self.entity()['x'], 50, delta=1)
 
+    def test_naming_more_fields_adds_to_the_list(self):
+        """Smoothing a field is permanent, so a second call cannot undo the first."""
+        net = self.Fake()
+        net.smooth('x')
+        net.smooth('y')
+        net.smooth_angle('a')
+
+        self.assertEqual(net._smooth, ('x', 'y'))
+        self.assertEqual(net._smooth_angles, ('a',))
+
+    def test_naming_the_same_field_twice_changes_nothing(self):
+        self.net.smooth('x', 'y')
+        self.net._remember(2, {'x': 1}, time.perf_counter())
+
+        self.net.smooth('x')                    # already smoothed
+
+        self.assertEqual(self.net._smooth, ('x', 'y'))
+        self.assertIn(2, self.net._history)     # the timeline survives
+
+    def test_a_field_cannot_be_both_a_number_and_an_angle(self):
+        self.net.smooth('a')
+        with self.assertRaises(InvalidArgumentError):
+            self.net.smooth_angle('a')
+
+        plain = self.Fake()
+        plain.smooth_angle('a')
+        with self.assertRaises(InvalidArgumentError):
+            plain.smooth('a')
+
+    def test_a_refused_field_leaves_the_lists_alone(self):
+        net = self.Fake()
+        net.smooth('x')
+        net.smooth_angle('a')
+        with self.assertRaises(InvalidArgumentError):
+            net.smooth('a', 'y')            # 'y' is fine, 'a' is not
+
+        self.assertEqual(net._smooth, ('x',))
+        self.assertEqual(net._smooth_angles, ('a',))
+
+    def test_a_pose_with_no_server_time_is_dropped(self):
+        """Our clock and the server's have no relation, so a guess is worse."""
+        self.net.smooth('x')
+        self.net._pending_pose_samples = {}
+        self.net._stage_pose(2, {'x': 1}, None, 7)
+        self.net._commit_pose_samples()
+
+        self.assertNotIn(2, self.net._history)
+
     def test_off_by_default(self):
         plain = self.Fake()
         plain._owner[2] = {'x': 100}
         self.assertEqual(pydraw.network._Entity(plain, 2)['x'], 100)
         self.assertEqual(plain._smooth, ())
         self.assertEqual(plain._smooth_angles, ())
+
+
+class ServerClockTest(unittest.TestCase):
+    """
+    The client draws on the server's clock, so it has to keep working out what
+    that clock reads over here. Both ends call perf_counter(), but on two machines
+    those are two crystals, and two crystals walk apart.
+    """
+
+    def setUp(self):
+        self.net = SmoothingTest.Fake()
+
+    def observe(self, seconds, drift=0.0, latency=0.005, rate=20):
+        """
+        Play for `seconds`, with this machine's clock gaining `drift` a second on
+        the server's. Returns what the client believes the offset is.
+        """
+        started = self.net._clock_window_started or 0.0
+        step = 1 / rate
+        elapsed = 0.0
+        while elapsed < seconds:
+            elapsed += step
+            here = started + elapsed
+            # The server's clock reads a little less than ours by now, so the same
+            # instant carries a smaller stamp -- which makes our subtraction look
+            # like a longer and longer trip.
+            there = here - latency - elapsed * drift
+            self.net._observe_server_clock(there, here)
+        return self.net._server_clock_offset
+
+    def test_the_least_delayed_sample_wins_inside_a_window(self):
+        """A slow packet says nothing about the clocks -- only about the wire."""
+        self.net._observe_server_clock(100.000, 100.005)     # 5ms trip
+        self.net._observe_server_clock(100.050, 100.090)     # 40ms: congestion
+        self.net._observe_server_clock(100.100, 100.107)     # 7ms
+
+        self.assertAlmostEqual(self.net._server_clock_offset, 0.005, places=6)
+
+    def test_the_estimate_can_rise_again_when_this_clock_runs_fast(self):
+        """
+        The failure this replaces: the minimum was kept for the whole session, so
+        a client whose clock gained on the server's held its opening estimate for
+        ever. The render cursor walked toward the newest pose and then past it,
+        and smoothing stopped -- silently, half an hour in.
+        """
+        drift = 50e-6                       # 50ppm: an ordinary crystal
+        self.observe(seconds=1.0, drift=drift)
+        opening = self.net._server_clock_offset
+
+        after_an_hour = self.observe(seconds=3600, drift=drift)
+
+        # Truth after an hour: the same 5ms trip now measures 5ms + 180ms of drift.
+        self.assertAlmostEqual(after_an_hour, 0.005 + 3600 * drift, delta=0.002)
+        self.assertGreater(after_an_hour - opening, 0.15)
+
+    def test_the_estimate_is_never_more_than_two_windows_stale(self):
+        """What a window costs: the drift that accrues while a sample is alive."""
+        drift = 50e-6
+        self.observe(seconds=600, drift=drift)
+
+        truth = 0.005 + 600 * drift
+        behind = truth - self.net._server_clock_offset
+        self.assertGreaterEqual(behind, 0)
+        self.assertLess(behind, 2 * pydraw.network.CLOCK_WINDOW * drift)
+
+    def test_a_clock_that_runs_slow_is_still_followed_at_once(self):
+        """This direction always worked: every sample beats the one before it."""
+        self.observe(seconds=60, drift=-50e-6)
+
+        self.assertAlmostEqual(self.net._server_clock_offset,
+                               0.005 - 60 * 50e-6, delta=0.001)
+
+    def test_a_stamp_that_is_not_a_number_is_ignored(self):
+        for bad in (None, 'soon', True, [1]):
+            with self.subTest(sent_at=bad):
+                self.net._observe_server_clock(bad, 100.0)
+        self.assertIsNone(self.net._server_clock_offset)
+
+
+class RebaseTest(unittest.TestCase):
+    """
+    clear_smoothing() is for a deliberate teleport. The timeline starts again at
+    the point the screen is drawing, so the player sets off at their real speed
+    instead of standing still while it refills.
+    """
+
+    def setUp(self):
+        self.net = SmoothingTest.Fake()
+        self.net.smooth('x')
+        self.net._interpolation_delay = 0.15
+        self.net._server_clock_offset = 0.0
+
+    def entity(self, pid=2):
+        return pydraw.network._Entity(self.net, pid)
+
+    def arrive(self, x, at):
+        self.net._remember(2, {'x': x}, at)
+        self.net._owner[2] = {'x': x}
+
+    def test_the_next_pose_starts_the_timeline_at_the_render_cursor(self):
+        now = time.perf_counter()
+        self.arrive(0, now - 0.30)
+        self.arrive(20, now - 0.15)
+
+        self.net.clear_smoothing(2)
+        self.assertNotIn(2, self.net._history)
+        self.arrive(500, now)               # the respawn, one packet later
+
+        (sample_at, pose), = self.net._history[2]
+        self.assertEqual(pose, {'x': 500})
+        self.assertAlmostEqual(sample_at, self.net._render_at(), delta=0.01)
+
+    def test_a_teleport_is_never_slid_across_the_world(self):
+        """
+        The pose being cleared for is usually still in flight: a game calls this
+        from the event that announced the respawn. Rebasing on what is in hand at
+        that moment would start the new timeline at the death position and walk
+        the ship back across the map.
+        """
+        now = time.perf_counter()
+        self.arrive(0, now - 0.30)
+        self.arrive(20, now - 0.15)
+
+        self.net.clear_smoothing(2)         # net._owner[2] is still the old pose
+        self.net._blend_others()
+        self.assertEqual(self.entity()['x'], 20)      # the last real pose, exactly
+
+        self.arrive(500, now)
+        for _ in range(4):
+            self.net._blend_others()
+            self.assertEqual(self.entity()['x'], 500)  # at the spawn, never between
+
+    def test_the_player_moves_off_the_teleport_instead_of_standing_still(self):
+        now = time.perf_counter()
+        self.arrive(0, now - 0.30)
+        self.net.clear_smoothing(2)
+        self.arrive(500, now - 0.001)
+        self.arrive(520, now)               # moving again, 20 units on
+
+        self.net._blend_others()
+        first = self.entity()['x']
+        time.sleep(0.03)
+        self.net._blend_others()
+        second = self.entity()['x']
+
+        self.assertGreater(second, first)   # before the fix: pinned at 500
+        self.assertLessEqual(second, 520)
+
+    def test_clearing_everyone_rebases_everyone_but_you(self):
+        self.net.players = [1, 2, 3]
+        self.net.clear_smoothing()
+
+        self.assertEqual(self.net._rebasing, {2, 3})
+
+    def test_changing_the_smoothed_fields_rebases_rather_than_freezes(self):
+        """
+        smooth() throws every timeline away. It has to leave them rebasing like
+        clear_smoothing() does, or the one call a game makes at setup costs every
+        remote player the freeze this fix removed.
+        """
+        self.net.players = [1, 2, 3]
+        self.arrive(10, time.perf_counter() - 0.2)
+
+        self.net.smooth('x', 'y')
+
+        self.assertEqual(self.net._history, {})
+        self.assertEqual(self.net._rebasing, {2, 3})
+
+    def test_changing_the_smoothed_angles_rebases_too(self):
+        self.net.players = [1, 2]
+        self.net.smooth_angle('a')
+
+        self.assertEqual(self.net._rebasing, {2})
+
+    def test_a_rebase_before_the_server_clock_is_known_uses_the_sample(self):
+        """Two clocks in one timeline is worse than no head start."""
+        self.net._server_clock_offset = None
+        self.net.clear_smoothing(2)
+
+        self.net._remember(2, {'x': 1}, 12345.0)
+
+        self.assertEqual(self.net._history[2][0][0], 12345.0)
+
+    def test_a_player_who_leaves_takes_their_pending_rebase_with_them(self):
+        """A rebase waits for a pose. Somebody who has gone will not send one."""
+        self.net._screen = FakeScreen()
+        self.net.clear_smoothing(2)
+        self.assertIn(2, self.net._rebasing)
+
+        self.net._dispatch({'t': 'leave', 'id': 2})
+
+        self.assertNotIn(2, self.net._rebasing)
+
+
+class EntityReadTest(unittest.TestCase):
+    """
+    One player is three dictionaries: what they own, what the server manages for
+    them, and what the blend says this frame. Reading one field takes the first
+    of the three that has it; only reading the whole player merges them.
+    """
+
+    def setUp(self):
+        self.net = SmoothingTest.Fake()
+        self.net.smooth('x')
+        self.net._owner[2] = {'x': 100, 'y': 5, 'hp': 999, 'name': 'ada'}
+        self.net._server[2] = {'hp': 80, 'score': 3}
+        self.net._blend[2] = {'x': 97.5, 'hp': 91.2}
+
+    def entity(self, pid=2):
+        return pydraw.network._Entity(self.net, pid)
+
+    def test_one_field_reads_the_same_as_the_whole_player(self):
+        entity, merged = self.entity(), self.entity()._merged()
+        self.assertEqual(set(merged), set(entity.keys()))
+        for field, value in merged.items():
+            with self.subTest(field=field):
+                self.assertEqual(entity[field], value)
+                self.assertEqual(entity.get(field), value)
+                self.assertIn(field, entity)
+
+    def test_the_server_wins_over_a_blended_value(self):
+        """hp is the room's to say. 91.2 was never true on the way from 999."""
+        self.assertEqual(self.entity()['hp'], 80)
+
+    def test_a_blended_value_wins_over_the_owners_raw_one(self):
+        self.assertEqual(self.entity()['x'], 97.5)
+
+    def test_an_unblended_owned_field_is_exact(self):
+        self.assertEqual(self.entity()['y'], 5)
+        self.assertEqual(self.entity()['name'], 'ada')
+
+    def test_a_field_nobody_has(self):
+        with self.assertRaises(KeyError):
+            self.entity()['fuel']
+        self.assertIsNone(self.entity().get('fuel'))
+        self.assertEqual(self.entity().get('fuel', 12), 12)
+        self.assertNotIn('fuel', self.entity())
+
+    def test_a_player_who_has_not_sent_a_position_yet(self):
+        """They join before they move, and every game guards with `in`."""
+        self.net.players.append(3)
+        empty = self.entity(3)
+
+        self.assertNotIn('x', empty)
+        self.assertEqual(len(empty), 0)
+        self.assertEqual(empty.get('x', 0), 0)
+        with self.assertRaises(KeyError):
+            empty['x']
+
+    def test_your_own_write_reads_back_in_the_same_frame(self):
+        """net.mine['x'] = net.mine['x'] + 4 runs every frame in every game."""
+        self.net._owner[1] = {'x': 10}
+        mine = pydraw.network._Mine(self.net, 1)
+
+        mine['x'] = mine['x'] + 4
+
+        self.assertEqual(mine['x'], 14)
+        self.assertEqual(self.net._owner[1]['x'], 14)
+
+    def test_another_player_is_still_read_only(self):
+        with self.assertRaises(PydrawError):
+            self.entity()['x'] = 0
 
 
 class FramingTest(unittest.TestCase):
@@ -1349,6 +2025,18 @@ class FramingTest(unittest.TestCase):
         with self.assertRaises((zlib.error, ValueError)):
             self.receiver._collect()
 
+    def test_a_small_compressed_frame_cannot_expand_without_bound(self):
+        wire = self.sent({'t': 'event', 'name': 'blob',
+                          'data': {'body': 'x' * 1000}})
+        self.receiver._buffer = wire
+        old_limit = network_protocol.MAX_DECOMPRESSED_FRAME
+        network_protocol.MAX_DECOMPRESSED_FRAME = 128
+        try:
+            with self.assertRaisesRegex(ValueError, 'expanded past'):
+                self.receiver._collect()
+        finally:
+            network_protocol.MAX_DECOMPRESSED_FRAME = old_limit
+
     def test_json_never_emits_a_raw_newline(self):
         """Why the old framing was safe, so the reason is on record."""
         text = json.dumps({'text': 'hello\nworld'}, separators=(',', ':'))
@@ -1359,6 +2047,7 @@ class FramingTest(unittest.TestCase):
         server.start_background()
         try:
             conn = _Connection.connect('localhost', server._port)
+            finish_handshake(conn)
             conn.read_until(lambda m: m.get('t') == 'snapshot')
             for i in range(20):
                 conn.send({'t': 'event', 'name': f'e{i}', 'data': {}})
@@ -1421,32 +2110,262 @@ class BroadcastEncodingTest(unittest.TestCase):
         patch catches their traffic too.
         """
         server, _, _ = self.room(4)
-        encoded, pushed = [], []
-        real_body, real_push = server._body, server._push
+        encoded, queued = [], []
+        real_body = server._body
 
         def watch_body(message):
             encoded.append(message.get('t'))
             return real_body(message)
 
-        def watch_push(conn, body, **options):
-            pushed.append(conn)
-            return real_push(conn, body, **options)
-
-        server._body, server._push = watch_body, watch_push
+        server._body = watch_body
+        for conn in server._conns.values():
+            real_queue = conn.queue_body
+            conn.queue_body = lambda body, key=None, c=conn, q=real_queue: (
+                queued.append(c), q(body, key))[1]
         server._broadcast({'t': 'event', 'name': 'boom', 'data': {}})
 
         self.assertEqual(encoded, ['event'])        # serialized once...
-        self.assertEqual(len(pushed), 4)            # ...and handed to all four
+        self.assertEqual(len(queued), 4)            # ...and handed to all four
 
     def test_every_player_still_gets_its_own_number(self):
         """The count is per player, so a skipped message is not a gap for others."""
         server, conns, socks = self.room(2)
 
         server._broadcast({'t': 'event', 'name': 'all', 'data': {}})
+        server._flush_all(force_batch=True)
         server._broadcast({'t': 'event', 'name': 'most', 'data': {}}, skip=socks[0])
+        server._flush_all(force_batch=True)
 
         self.assertEqual(conns[0].seq, 1)              # skipped the second one
         self.assertEqual(conns[1].seq, 2)
+
+
+class OthersTest(unittest.TestCase):
+    """
+    net.others() is what a game draws from, so it yields players there is something
+    to draw -- net.players is the list of who is connected.
+    """
+
+    def setUp(self):
+        self.net = SmoothingTest.Fake()
+        self.net.players = [1, 2, 3]
+
+    def ids(self):
+        return [pid for pid, _ in self.net.others()]
+
+    def test_a_player_with_nothing_to_draw_yet_is_skipped(self):
+        """They are connected and playerjoin has run; their position has not come."""
+        self.net._owner[2] = {}
+
+        self.assertEqual(self.ids(), [])
+        self.assertEqual(self.net.players, [1, 2, 3])    # still connected
+
+    def test_a_player_appears_as_soon_as_they_send_anything(self):
+        self.net._owner[2] = {'x': 10, 'y': 20}
+
+        self.assertEqual(self.ids(), [2])
+
+    def test_room_managed_fields_are_enough_on_their_own(self):
+        """A game whose players are placed by the Room owns nothing itself."""
+        self.net._server[3] = {'hp': 100}
+
+        self.assertEqual(self.ids(), [3])
+
+    def test_you_are_never_one_of_the_others(self):
+        self.net._owner[1] = {'x': 1}
+        self.net._owner[2] = {'x': 2}
+
+        self.assertEqual(self.ids(), [2])
+
+    def test_what_is_yielded_reads_without_a_guard(self):
+        self.net._owner[2] = {'x': 10, 'y': 20}
+
+        for _, other in self.net.others():
+            self.assertEqual((other['x'], other['y']), (10, 20))
+
+
+class MessageLimitTest(unittest.TestCase):
+    """
+    The server pays for every message it reads, and what it reads is the one thing
+    a player chooses. A client that will not stop is dropped rather than served.
+    """
+
+    class Strict(Room):
+        message_limit = 20
+
+    def setUp(self):
+        self.server = _Server(self.Strict(), free_port())
+        self.server.start_background()
+        self.connections = []
+
+    def tearDown(self):
+        for connection in self.connections:
+            connection.close()
+        self.server.stop()
+
+    def raw(self):
+        connection = _Connection.connect('localhost', self.server._port)
+        finish_handshake(connection)
+        self.connections.append(connection)
+        return connection
+
+    def wait_for(self, players, seconds=1.0):
+        deadline = time.perf_counter() + seconds
+        while time.perf_counter() < deadline:
+            if len(self.server._conns) == players:
+                return
+            time.sleep(0.01)
+        self.fail(f'expected {players} connected, got {len(self.server._conns)}')
+
+    def test_a_flood_costs_that_player_the_game(self):
+        flooder = self.raw()
+        self.wait_for(1)
+
+        for _ in range(200):
+            flooder.send({'t': 'own', 'slice': {'x': 1}})
+
+        self.wait_for(0)
+
+    def test_a_busy_but_reasonable_client_is_left_alone(self):
+        player = self.raw()
+        self.wait_for(1)
+
+        for _ in range(10):
+            player.send({'t': 'own', 'slice': {'x': 1}})
+        time.sleep(0.2)
+
+        self.assertEqual(len(self.server._conns), 1)
+
+    def test_the_count_starts_again_each_second(self):
+        """Fifteen a second for an hour is a game. Two hundred at once is not."""
+        player = self.raw()
+        self.wait_for(1)
+
+        for _ in range(15):
+            player.send({'t': 'own', 'slice': {'x': 1}})
+        time.sleep(1.05)                    # a new second, a new count
+        for _ in range(15):
+            player.send({'t': 'own', 'slice': {'x': 1}})
+        time.sleep(0.2)
+
+        self.assertEqual(len(self.server._conns), 1)
+
+    def test_one_players_flood_does_not_cost_anyone_else_theirs(self):
+        quiet = self.raw()
+        flooder = self.raw()
+        self.wait_for(2)
+
+        for _ in range(200):
+            flooder.send({'t': 'own', 'slice': {'x': 1}})
+
+        self.wait_for(1)
+        self.assertTrue(quiet.alive)
+
+    def test_an_invalid_limit_is_refused(self):
+        for bad in (0, -1, 'lots', True, None):
+            with self.subTest(limit=bad):
+                room = type('Invalid', (Room,), {'message_limit': bad})()
+                with self.assertRaises(InvalidArgumentError):
+                    _Server(room, free_port())
+
+
+class ByteLimitTest(unittest.TestCase):
+    """A few huge messages are bounded separately from a flood of tiny ones."""
+
+    class Strict(Room):
+        byte_limit = 2048
+
+    def setUp(self):
+        self.server = _Server(self.Strict(), free_port())
+        self.server.start_background()
+        self.connections = []
+
+    def tearDown(self):
+        for connection in self.connections:
+            connection.close()
+        self.server.stop()
+
+    def raw(self):
+        connection = _Connection.connect('localhost', self.server._port)
+        finish_handshake(connection)
+        self.connections.append(connection)
+        return connection
+
+    def wait_for(self, players, seconds=1.0):
+        deadline = time.perf_counter() + seconds
+        while time.perf_counter() < deadline:
+            if len(self.server._conns) == players:
+                return
+            time.sleep(0.01)
+        self.fail(f'expected {players} connected, got {len(self.server._conns)}')
+
+    def test_a_large_wire_burst_drops_only_its_sender(self):
+        quiet = self.raw()
+        sender = self.raw()
+        self.wait_for(2)
+
+        body = base64.b64encode(os.urandom(4096)).decode()
+        sender.send({'t': 'event', 'name': 'blob', 'data': {'body': body}})
+
+        self.wait_for(1)
+        self.assertTrue(quiet.alive)
+
+    def test_a_small_message_is_left_alone(self):
+        player = self.raw()
+        self.wait_for(1)
+        player.send({'t': 'event', 'name': 'hello', 'data': {}})
+        time.sleep(0.1)
+        self.assertEqual(len(self.server._conns), 1)
+
+    def test_an_invalid_byte_limit_is_refused(self):
+        for bad in (0, -1, 1.5, 'lots', True, None):
+            with self.subTest(limit=bad):
+                room = type('Invalid', (Room,), {'byte_limit': bad})()
+                with self.assertRaises(InvalidArgumentError):
+                    _Server(room, free_port())
+
+
+class InterpolationDelayTest(unittest.TestCase):
+    """
+    Poses arrive at the slower of two rates -- how often a client sends, and how
+    often the room replicates. The delay has to follow whichever that is, or the
+    render cursor sits past the newest pose and the smoothing it asked for stops.
+    """
+
+    class Batched(Room):
+        replication_rate = 30
+
+    def setUp(self):
+        self.servers, self.networks = [], []
+
+    def tearDown(self):
+        for network in self.networks:
+            network.close()
+        for server in self.servers:
+            server.stop()
+
+    def join(self, room, **kwargs):
+        server = _Server(room, free_port())
+        server.start_background()
+        self.servers.append(server)
+        network = Network(FakeScreen(), 'localhost', server._port, **kwargs)
+        self.networks.append(network)
+        return network
+
+    def test_an_unbatched_room_follows_the_clients_own_rate(self):
+        for rate, cadence in ((60, 60), (10, 10), (None, pydraw.network.OWN_RATE)):
+            with self.subTest(rate=rate):
+                network = self.join(Room(), rate=rate)
+                self.assertAlmostEqual(network._interpolation_delay, 3 / cadence)
+
+    def test_a_batched_room_caps_the_rate_it_can_deliver(self):
+        """Sending at 60 through a room that replicates at 30 arrives at 30."""
+        network = self.join(self.Batched(), rate=60)
+        self.assertAlmostEqual(network._interpolation_delay, 3 / 30)
+
+    def test_a_slow_client_is_slower_than_the_room_it_joins(self):
+        network = self.join(self.Batched(), rate=10)
+        self.assertAlmostEqual(network._interpolation_delay, 3 / 10)
 
 
 class ReplicationBatchTest(unittest.TestCase):
@@ -1563,14 +2482,32 @@ class ReplicationBatchTest(unittest.TestCase):
             3,
         )
 
-    def test_invalid_replication_rates_are_refused(self):
-        for bad in (0, -1, 'fast', True):
-            class Invalid(Room):
-                replication_rate = bad
+    def test_invalid_cadences_are_refused(self):
+        """Both are a number of times a second. None is no longer one of them."""
+        for setting in ('replication_rate', 'tick_rate'):
+            for bad in (0, -1, 'fast', True, None):
+                with self.subTest(setting=setting, rate=bad):
+                    room = type('Invalid', (Room,), {setting: bad})()
+                    with self.assertRaises(InvalidArgumentError):
+                        _Server(room, free_port())
 
-            with self.subTest(rate=bad):
-                with self.assertRaises(InvalidArgumentError):
-                    _Server(Invalid(), free_port())
+    def test_the_defaults_pace_every_room(self):
+        """A room that says nothing still batches -- there is no unpaced path."""
+        server = _Server(Room(), free_port())
+
+        self.assertAlmostEqual(server._replication_interval, 1 / 60)
+        self.assertAlmostEqual(server._tick_interval, 1 / 30)
+
+    def test_a_room_sets_its_own_two_cadences(self):
+        """How finely the world is simulated, and how often players hear of it."""
+        class Slow(Room):
+            tick_rate = 10
+            replication_rate = 20
+
+        server = _Server(Slow(), free_port())
+
+        self.assertAlmostEqual(server._tick_interval, 1 / 10)
+        self.assertAlmostEqual(server._replication_interval, 1 / 20)
 
 
 class BrokenAcceptTest(unittest.TestCase):
@@ -1954,6 +2891,28 @@ class ReadOnlyStateTest(unittest.TestCase):
         self.assertEqual(json.loads(json.dumps(self.state)), {'score': 7,
                                                               'rocks': [1, 2]})
 
+    def test_nested_containers_are_ordinary_to_read_but_refuse_every_mutator(self):
+        self.state._assign('world', {'things': [{'x': 1}]})
+        world = self.state['world']
+
+        self.assertIsInstance(world, dict)
+        self.assertIsInstance(world['things'], list)
+        self.assertIsInstance(world['things'][0], dict)
+        self.assertEqual(json.loads(json.dumps(world)), {'things': [{'x': 1}]})
+
+        attempts = (
+            lambda: world.__setitem__('new', 1),
+            lambda: world.update(new=1),
+            lambda: world['things'].append({'x': 2}),
+            lambda: world['things'].__setitem__(slice(None), []),
+            lambda: world['things'][0].pop('x'),
+        )
+        for attempt in attempts:
+            with self.subTest(attempt=attempt), self.assertRaises(PydrawError):
+                attempt()
+
+        self.assertEqual(world, {'things': [{'x': 1}]})
+
     def test_the_server_can_still_write_it(self):
         """The refusal is for the game. Arriving state goes in the other way."""
         self.state._assign('score', 8)
@@ -2095,7 +3054,7 @@ class TickPacingTest(unittest.TestCase):
 
         self.assertTrue(stalled.is_set(), 'the stalling tick never ran')
         gaps = [later - earlier for earlier, later in zip(stamps, stamps[1:])]
-        crammed = [gap for gap in gaps if gap < TICK / 4]
+        crammed = [gap for gap in gaps if gap < 1 / TICK_RATE / 4]
         self.assertEqual(crammed, [], f'{len(crammed)} ticks ran back to back')
 
     def test_the_stalled_tick_is_told_how_long_it_really_took(self):
@@ -2113,7 +3072,7 @@ class TickPacingTest(unittest.TestCase):
         self.run_room(Stalling(), 1.0)
 
         self.assertGreaterEqual(max(seen), 0.2)
-        self.assertAlmostEqual(seen[0], TICK, delta=TICK)
+        self.assertAlmostEqual(seen[0], 1 / TICK_RATE, delta=1 / TICK_RATE)
 
     def test_no_tick_is_ever_told_more_than_the_cap(self):
         """Past the cap a truer dt stops helping and starts skipping collisions."""
@@ -2141,7 +3100,7 @@ class TickPacingTest(unittest.TestCase):
         self.run_room(Counting(), 1.0)
 
         self.assertGreater(len(seen), 20)            # ~30, with slack for load
-        self.assertLess(max(seen), TICK * 4)
+        self.assertLess(max(seen), 4 / TICK_RATE)
 
 
 class ServerShutdownTest(unittest.TestCase):
@@ -2319,8 +3278,9 @@ class SequenceTest(unittest.TestCase):
         return connection
 
     def test_the_first_messages_are_numbered_from_one(self):
+        """The provisional hello and established snapshot are separate frames."""
         connection = self.raw()
-        hello = connection.read_until(lambda m: m.get('t') == 'hello')
+        hello = finish_handshake(connection)
         snapshot = connection.read_until(lambda m: m.get('t') == 'snapshot')
         self.assertEqual(hello['n'], 1)
         self.assertEqual(snapshot['n'], 2)
@@ -2331,9 +3291,10 @@ class SequenceTest(unittest.TestCase):
         count shared across the room would show gaps that mean nothing.
         """
         first = self.raw()
+        finish_handshake(first)
         first.read_until(lambda m: m.get('t') == 'snapshot')
         second = self.raw()
-        hello = second.read_until(lambda m: m.get('t') == 'hello')
+        hello = finish_handshake(second)
         self.assertEqual(hello['n'], 1)         # its own count, not the room's
 
 
@@ -2344,6 +3305,7 @@ class ResyncTest(StateSyncFixture):
         def start(self):
             self.state['score'] = 0
 
+        @action
         def bump(self, player):
             self.state['score'] += 1
 
@@ -2479,7 +3441,7 @@ class ServedArenaTest(unittest.TestCase):
     def join(self, x, y, angle=0):
         connection = _Connection.connect('localhost', self.server._port)
         self.connections.append(connection)
-        hello = connection.read_until(lambda message: message.get('t') == 'hello')
+        hello = finish_handshake(connection)
         connection.send({'t': 'own', 'slice': {'x': x, 'y': y, 'a': angle}})
         return connection, hello['id']
 

@@ -1,43 +1,12 @@
-"""
-pydraw.network -- multiplayer for pydraw, with as little networking in sight as possible.
+"""Multiplayer state, events, and server Rooms for pydraw.
 
-State is a shared world where **every value has an owner**. You may change what you
-own; you may only read the rest. That one rule covers every kind of game.
-
-You own your player -- write it and it appears for everyone, instantly, no lag:
-
-    net = Network(screen, room=Room)          # one player hosts; the rest connect
-    net.mine['x'] += 5                         # move MY ship -> replicated
-    for pid, other in net.others():            # everyone else -> read-only
-        draw(other['x'], other['y'])
-
-The server owns everything neutral (asteroids, score) and any player field it must
-decide (health). You write a Room only for those, and only the Room can change them:
-
-    class Arena(Room):
-        def start(self):
-            self.state['rocks'] = make_field()     # the world -> net.state
-
-        def join(self, player):
-            player.state['hp'] = 100               # a server-managed player field
-
-        def hit(self, player, target):             # net.call('hit', target=..)
-            self.player(target).state['hp'] -= 10
-
-A player's server-managed fields (hp) are merged into that player's entity on the
-client, so `net.mine['hp']` and `other['hp']` just work -- read-only, because the
-server owns them.
-
-Everything below the classes is plumbing (sockets, framing, threads) a game never
-touches.
+Clients write their own ``net.mine`` fields and read the rest. A Room owns shared
+``state`` and each player's server-managed ``state``.
 """
 
-import builtins
-import contextlib
 from collections import deque
 from collections.abc import Mapping
 import errno
-import importlib.util
 import json
 import select
 import socket
@@ -45,78 +14,60 @@ import sys
 import threading
 import time
 import traceback
-import types
 import zlib
 
+from pydraw._network.loader import (
+    CLIENT_ONLY, _ClientHalfReached, _check_reachable, _client_boundary,
+    _describe, _globals_read, _load_room, _main, _no_screen, _server_side,
+    _top_level_lines, _window_opened,
+)
+from pydraw._network.protocol import (
+    COMPACT, COMPRESSION, FRAME_MESSAGES_KEY, FRAME_TIME_KEY, HEADER,
+    MAX_BACKLOG, MAX_DECOMPRESSED_FRAME, MAX_FRAME, _Connection, _FramedMessage,
+    _encode,
+)
+from pydraw._network.state import (
+    _Changes, _readonly, _track, _TrackedDict, _TrackedList,
+)
 from pydraw.errors import InvalidArgumentError, PydrawError
-from pydraw.serial import decode as _decode_values, encode as _encode_values
+from pydraw.serial import encode as _encode_values
 from pydraw.serial import is_serializable
 from pydraw.util import verify
 
-__all__ = ['Network', 'Room', 'Player', 'event', 'serve']
+__all__ = ['Network', 'Room', 'Player', 'action', 'event', 'serve']
 
 DEFAULT_PORT = 5005
-TICK = 1 / 30           # how often the server runs Room.tick()
-MAX_CATCHUP = 0.25      # most game time one tick is ever told has passed. Past
-                        # this a truer dt stops helping: anything fast enough
-                        # steps straight over what it should have hit
-OWN_RATE = 60           # times a second a player's own position goes out
-MAX_BACKLOG = 4 << 20   # unsent bytes we carry for one peer before giving up
-
-# --- framing ---------------------------------------------------------------
-# Every message goes out as [sequence: 4][size: 4][body], sizes big-endian.
-#
-# The size is counted rather than searched for, which is what lets the body be
-# compressed: zlib output is arbitrary bytes, newlines included, so a separator
-# would chop a compressed message into pieces.
-#
-# The sequence lives in the header so one broadcast can serialize its body once
-# -- the number is the only part that differs between players -- and so a gap in
-# the count is readable without decompressing anything.
-HEADER = 8
-MAX_FRAME = 64 << 20    # a size larger than this is a corrupt stream, not a message
-COMPACT = (',', ':')    # json separators; the default pads with spaces
-COMPRESSION = 1         # zlib level. 0 still streams, but leaves the JSON readable
-                        # in a packet capture -- the escape hatch for protocol work
+TICK_RATE = 30          # Room ticks per second
+REPLICATION_RATE = 60   # replication frames per second
+MAX_CATCHUP = 0.25      # largest dt passed to Room.tick()
+OWN_RATE = 60           # client updates per second
+MESSAGE_LIMIT = 600     # incoming messages per player per second
+BYTE_LIMIT = 4 << 20    # incoming compressed bytes per player per second
+HANDSHAKE_TIMEOUT = 5.0
+HEARTBEAT_INTERVAL = 5.0
+CONNECTION_TIMEOUT = 15.0
 WINDOW = 32 << 10       # how far back zlib can refer; see _Server._body
 VERIFY = 1.0            # seconds between full re-checks of the room's state, in
                         # case a change slipped past the tracking in _Tracked
 RESYNC_COOLDOWN = 1.0   # least time between two snapshots for the same client
 SMOOTH_SNAPSHOTS = 3    # render this many replication intervals behind the room
 SMOOTH_HISTORY = 12     # enough room for jitter without unbounded pose retention
+CLOCK_WINDOW = 15.0     # seconds per clock-offset sample window
 
-# A timestamped server frame is wrapped internally before compression. Games
-# never see this envelope: _Connection removes it and leaves timing metadata on
-# a private dict subclass used by Network's interpolation timeline.
-FRAME_TIME_KEY = '~pydraw-frame-time'
-FRAME_MESSAGES_KEY = '~pydraw-frame-messages'
-
-# Prefixes that tag a state key's owner on the wire. A plain key is the neutral
-# world (server-owned, read as net.state); 'player:N' is client N's own slice;
-# 'server:N' is the server-managed fields of player N. Games never see these.
+# Wire prefixes distinguish owner and server player slices.
 OWNER_PREFIX = 'player:'
 SERVER_PREFIX = 'server:'
 
-# Room method names pydraw.network reserves, so a game cannot use them as net.call
-# actions (net.call('tick') would be ambiguous).
-RESERVED = {'start', 'join', 'leave', 'tick', 'accept',
+# Room methods unavailable to net.call().
+RESERVED = {'start', 'stop', 'join', 'leave', 'tick', 'accept',
             'broadcast', 'state', 'players', 'player', 'clear_kept_events'}
-
-# Building one of these means the client half of a game has begun: they need a
-# window, and a server hasn't got one. When pulling a Room out of a game script to
-# serve it, we run the file only as far as the first line that mentions them.
-CLIENT_ONLY = ('Screen', 'Network')
-
 
 # --------------------------------------------------------------------------- #
 #  Client
 # --------------------------------------------------------------------------- #
 
 class Network:
-    """
-    A player's connection to a game. Attach it to a Screen and it runs itself
-    every frame -- the game loop is exactly the same as single-player.
-    """
+    """A player's Screen-driven connection to a game."""
 
     def __init__(self, screen, host: str = 'localhost',
                  port: int = DEFAULT_PORT, room=None, rate: int = OWN_RATE,
@@ -158,9 +109,7 @@ class Network:
         # How often your own position goes out, whatever the frame rate. See _pump.
         self._rate = rate
         self._next_own = 0.0
-        # Quantization is applied only to the copy placed on the wire. The local
-        # owner slice stays exact, so a 120 Hz movement integrator never feeds its
-        # rounded transport coordinates back into the next frame.
+        # Quantize only the wire copy; local state stays exact.
         self._precision = precision
 
         # Fields of *other* players to blend between updates -- see smooth().
@@ -169,11 +118,14 @@ class Network:
         self._history = {}      # id -> deque[(server time, complete owner slice)]
         self._blend = {}        # id -> the values this frame, computed in _pump
         self._pending_pose_samples = None
+        self._rebasing = set()  # ids whose timeline restarts at their next pose
         self._server_clock_offset = None
-        self._interpolation_delay = SMOOTH_SNAPSHOTS / OWN_RATE
+        self._clock_window_min = None      # best sample in the window now filling
+        self._clock_window_started = None
+        # Pose cadence is limited by both client and replication rates.
+        self._interpolation_delay = SMOOTH_SNAPSHOTS / (rate or OWN_RATE)
 
-        # The server numbers what it sends us, so a hole in the count is proof we
-        # missed something. See _dispatch.
+        # A sequence gap triggers a full resync.
         self._seq = None
         self._resyncing = False
         self._asked_at = None
@@ -184,10 +136,7 @@ class Network:
         #: Your own player number, assigned by the server.
         self.id = None
 
-        # Naming a room says two things: what game this is, and -- when the address
-        # is this machine -- that we are willing to host it. "Host" means "host if
-        # nobody here already is": whoever claims the port first runs the room, so
-        # running the same program twice on one machine gives you two players.
+        # A local Room hosts only when this process wins the port.
         room = _as_room(room) if room is not None else None
         self._expected = type(room).__name__ if room is not None else None
 
@@ -201,9 +150,22 @@ class Network:
                     raise
                 # Somebody beat us to the port: they host, we join.
 
-        self._connect(host, port)
+        try:
+            self._connect(host, port)
+        except Exception:
+            # Do not leak a hosted Room after a failed handshake.
+            server, self._host_server = self._host_server, None
+            if server is not None:
+                server.stop()
+            raise
 
-        self._owner.setdefault(self.id, {})
+        # Nested writes mark the owned slice dirty.
+        self._mine_changes = _Changes(
+            lambda: setattr(self, '_mine_dirty', True)
+        )
+        self._owner[self.id] = _track(
+            self._owner.get(self.id, {}), self._mine_changes, None
+        )
         #: Your entity: your own slice merged with your server-managed fields.
         #: Writing an owned field replicates instantly; writing a server field raises.
         self.mine = _Mine(self, self.id)
@@ -214,147 +176,152 @@ class Network:
     # -- what a game calls --------------------------------------------------
 
     def others(self):
-        """Iterate (id, entity) for every *other* player. Each entity is read-only."""
+        """Iterate over drawable ``(id, entity)`` pairs for other players."""
         for pid in self.players:
-            if pid != self.id:
+            if pid != self.id and (self._owner.get(pid) or self._server.get(pid)):
                 yield pid, _Entity(self, pid)
 
     def call(self, action: str, **data) -> None:
         """
-        Ask the room to do something it arbitrates (a verified hit, a spawn).
-        `action` names a Room method; keyword args become its arguments. Not for
-        moving yourself -- write net.mine for that.
-
-        Nothing comes back: this returns immediately (waiting would block the frame
-        loop), and an outcome reaches you later as an event or as replicated state.
+        Call an exposed Room action. Results arrive later through events or state;
+        use ``net.mine`` for player-owned movement.
         """
         verify(action, str)
         self._send({'t': 'call', 'action': action, 'data': data})
 
     def send(self, name: str, keep: bool = False, **data) -> None:
         """
-        Send a transient event to every other player, delivered to their
-        networkevent() handler. Pass keep=True only for something a late joiner
-        must still receive (an accumulating effect, e.g. a paint stroke).
+        Send an event to every other player. ``keep=True`` replays it to late
+        joiners until the Room clears its kept events.
         """
         verify(name, str, keep, bool)
         self._send({'t': 'event', 'name': name, 'data': data, 'keep': keep})
 
     def smooth(self, *fields: str) -> None:
         """
-        Blend these fields of *other* players between updates, so they glide
-        instead of stepping.
+        Interpolate numeric fields of other players between updates.
 
             net.smooth('x', 'y')
 
-        Other players arrive at the network's rate while you draw at whatever your
-        loop runs at, so without this they visibly jump. Your own ship never needs
-        it: you write it locally, every frame.
-
-        Name the fields rather than having the library guess. Position is safe to
-        blend; health is not -- a smoothed `hp` would read 13.7 on its way down and
-        a game asking `if hp <= 0` would be wrong for a moment. Degree-valued
-        headings need their cyclic geometry handled by smooth_angle() instead.
-
-        The cost is a short visual delay for other players. The client keeps a
-        few timestamped server snapshots and draws between them, which absorbs
-        ordinary packet and frame-time jitter without changing your own input.
+        Calls add fields; they do not replace earlier ones. Use ``smooth_angle``
+        for headings, and do not smooth gameplay state such as health.
         """
         for field in fields:
             verify(field, str)
-        self._smooth = tuple(fields)
-        self._history.clear()
-        self._blend = {}
+        self._set_smoothing(smooth=fields)
 
     def smooth_angle(self, *fields: str) -> None:
         """
-        Blend cyclic degree fields of other players along the shortest path.
+        Interpolate degree fields along the shortest path.
 
             net.smooth_angle('a')
 
-        Ordinary numeric interpolation would turn 359 -> 1 into a nearly full
-        backwards rotation through 180. Angle smoothing instead treats that as
-        the two-degree step it represents. Values are normalized to [0, 360).
+        Values are normalized to [0, 360). A field cannot use both smoothing
+        modes.
         """
         for field in fields:
             verify(field, str)
-        self._smooth_angles = tuple(fields)
-        self._history.clear()
-        self._blend = {}
+        self._set_smoothing(angles=fields)
+
+    def _set_smoothing(self, smooth=(), angles=()) -> None:
+        smoothed = tuple(dict.fromkeys(self._smooth + tuple(smooth)))
+        angled = tuple(dict.fromkeys(self._smooth_angles + tuple(angles)))
+
+        both = set(smoothed) & set(angled)
+        if both:
+            raise InvalidArgumentError(
+                f'Network: {", ".join(sorted(both))} cannot be smoothed both as a '
+                f'number and as an angle -- a field is one or the other.')
+
+        if (smoothed, angled) == (self._smooth, self._smooth_angles):
+            return                          # nothing new; keep the timelines
+        self._smooth, self._smooth_angles = smoothed, angled
+        self.clear_smoothing()
 
     def clear_smoothing(self, player: int = None) -> None:
         """
-        Discard buffered interpolation for one remote player, or for everyone.
-
-        Most movement should remain on the smooth timeline. Call this only when
-        gameplay deliberately teleports an entity -- for example, after a
-        respawn -- so its next position is drawn immediately instead of blended
-        across the world from its previous one.
+        Reset interpolation after a remote player teleports.
 
             net.clear_smoothing(player_id)
 
-        Omitting ``player`` clears every remote interpolation timeline.
+        Omit ``player`` to reset every remote player.
         """
         if player is None:
             self._history.clear()
             self._blend = {}
             if self._pending_pose_samples is not None:
                 self._pending_pose_samples.clear()
+            self._rebasing.update(pid for pid in self.players if pid != self.id)
             return
         verify(player, int)
         self._forget(player)
+        self._rebasing.add(player)
 
     def connected(self) -> bool:
         return self._conn is not None and self._conn.alive
 
     def close(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
-        if self._host_server is not None:
-            self._host_server.stop()
-            self._host_server = None
+        """End this client and any Room it hosts. Safe to call more than once."""
+        conn, self._conn = self._conn, None
+        server, self._host_server = self._host_server, None
+        if conn is not None:
+            conn.close()
+        if server is not None:
+            server.stop()
 
     # -- internals ----------------------------------------------------------
 
     def _connect(self, host: str, port: int) -> None:
         try:
-            self._conn = _Connection.connect(host, port)
+            conn = _Connection.connect(host, port)
         except OSError:
             raise PydrawError(
                 f"Network: couldn't find a game at {host}:{port} -- "
                 f"is the server running?"
             )
 
-        # Block just long enough to learn who we are; the game needs net.id before
-        # it builds the scene. The state snapshot that follows waits for _pump().
-        hello = self._conn.read_until(lambda m: m.get('t') == 'hello')
+        try:
+            # The server creates a Player only after `ready`.
+            conn.timeout(HANDSHAKE_TIMEOUT)
+            hello = conn.read_until(lambda m: m.get('t') == 'hello')
 
-        # A mispointed address, caught here rather than as a window where nothing
-        # happens.
-        serving = hello.get('room')
-        if self._expected is not None and serving is not None \
-                and serving != self._expected:
-            self._conn.close()
-            self._conn = None
+            serving = hello.get('room')
+            if self._expected is not None and serving is not None \
+                    and serving != self._expected:
+                raise PydrawError(
+                    f'Network: {host}:{port} is running {serving}, but this game is '
+                    f'{self._expected}. Two different games cannot share a port -- '
+                    f'give one of them its own, or point this at the right address.'
+                )
+
+            self.id = hello['id']
+            self.players = list(hello.get('players', []))
+            self._seq = hello.get('n')
+            replication_rate = hello.get('replication_rate')
+            if (isinstance(replication_rate, (int, float))
+                    and not isinstance(replication_rate, bool)
+                    and replication_rate > 0):
+                cadence = min(replication_rate, self._rate or OWN_RATE)
+                self._interpolation_delay = SMOOTH_SNAPSHOTS / cadence
+
+            # Commit the handshake and trigger join().
+            conn.send({'t': 'ready'})
+            conn.read_until(lambda m: m.get('t') == 'connected')
+            conn.nonblocking()
+        except PydrawError:
+            conn.close()
+            raise
+        except (OSError, ConnectionError, zlib.error, ValueError, KeyError) as error:
+            conn.close()
             raise PydrawError(
-                f'Network: {host}:{port} is running {serving}, but this game is '
-                f'{self._expected}. Two different games cannot share a port -- '
-                f'give one of them its own, or point this at the right address.'
-            )
+                f'Network: {host}:{port} accepted a connection but did not '
+                f'complete the hello ({error}).'
+            ) from error
 
-        self.id = hello['id']
-        self.players = list(hello.get('players', []))
-        self._seq = hello.get('n')
-        replication_rate = hello.get('replication_rate')
-        if (isinstance(replication_rate, (int, float))
-                and not isinstance(replication_rate, bool)
-                and replication_rate > 0):
-            self._interpolation_delay = SMOOTH_SNAPSHOTS / replication_rate
-        self._conn.nonblocking()
+        self._conn = conn
 
     def _send(self, message: dict) -> None:
-        if self._conn is None:
+        if self._conn is None or not self._conn.alive:
             raise PydrawError('Network: not connected.')
         self._conn.send(message)
 
@@ -363,11 +330,7 @@ class Network:
         if self._conn is None:
             return
 
-        # Coalesce a frame's worth of net.mine writes into one atomic message, so
-        # x and y never arrive torn -- and hold to `rate` a second, so how fast a
-        # game draws stops deciding how much it sends. Holding costs nothing: the
-        # slice is read as it goes out, so a skipped frame just means the next
-        # message carries a slightly newer position.
+        # Send the latest complete owned slice at the configured rate.
         now = time.perf_counter()
         if self._mine_dirty and (self._rate is None or now >= self._next_own):
             slice_ = dict(self._owner[self.id])
@@ -383,21 +346,17 @@ class Network:
         try:
             arrived = self._conn.poll()
         except (zlib.error, ValueError, ConnectionError) as error:
-            # A compressed stream has no resync point, so there is no way back.
-            # Close quietly rather than raise into the game loop -- that is how a
-            # server that goes away already behaves, and net.connected() is where
-            # a game asks.
+            # A corrupt compressed stream cannot be recovered.
             print(f'net: the connection stopped making sense ({error}); '
                   f'disconnected', flush=True)
-            self._conn.close()
-            self._conn = None
+            self._disconnect()
             return
 
-        # A batched frame may legitimately contain pose A, an event, then pose B
-        # for the same player. Preserve that ordering in raw state/event dispatch,
-        # but let only the final pose in each server frame advance interpolation.
-        # Otherwise two poses unpacked in one poll appear microseconds apart and
-        # collapse a whole movement interval into one rendered frame.
+        if not self._conn.alive:
+            self._disconnect()
+            return
+
+        # Only the last pose per transport frame advances interpolation.
         smoothing = bool(self._smooth or self._smooth_angles)
         if smoothing:
             received_at = time.perf_counter()
@@ -412,7 +371,7 @@ class Network:
             self._pending_pose_samples = {}
             for message in arrived:
                 self._dispatch(message)
-            self._commit_pose_samples(received_at)
+            self._commit_pose_samples()
             self._pending_pose_samples = None
             self._blend_others()
         else:
@@ -422,31 +381,38 @@ class Network:
         if self._resyncing:
             self._ask_to_resync()     # still nothing back -- ask again when due
 
+        if time.perf_counter() - self._conn.last_received_at > CONNECTION_TIMEOUT:
+            print('net: the server stopped responding; disconnected', flush=True)
+            self._disconnect()
+
+    def _disconnect(self) -> None:
+        """Forget and close the current transport once."""
+        conn, self._conn = self._conn, None
+        if conn is not None:
+            conn.close()
+
     def _dispatch(self, message: dict) -> None:
         kind = message.get('t')
         frame_at = getattr(message, '_frame_time', None)
         frame_number = getattr(message, '_frame_number', None)
 
-        # One count per player, so what we see runs 1, 2, 3... with nothing
-        # missing. A skipped number means everything after it may be built on a
-        # state that is already wrong, so ask for the world back. The message in
-        # hand is still newer than what we have, so apply it too.
+        # Apply the current message even when its sequence gap requests a resync.
         number = message.get('n')
         if number is not None:
             if self._seq is not None and number != self._seq + 1:
                 self._ask_to_resync()
             self._seq = number
 
-        if kind == 'set':
+        if kind == 'ping':
+            self._send({'t': 'pong'})
+        elif kind == 'set':
             self._apply(message['key'], message['value'], frame_at, frame_number)
         elif kind == 'del':
             self._remove(message['key'])
         elif kind == 'snapshot':
             self._snapshot(message, frame_at, frame_number)
         elif kind == 'event':
-            # No 'player' key means the room sent it, so the sender is None --
-            # never a magic id, since player numbers start at 1 and a 0 would read
-            # like a real one.
+            # Room events have no player id.
             self._handler('networkevent', message['name'], message['data'],
                           message.get('player'))
         elif kind == 'join':
@@ -468,9 +434,18 @@ class Network:
                 or isinstance(sent_at, bool)):
             return
         candidate = received_at - sent_at
-        # Queueing and network delay can only make a sample larger. Retaining the
-        # smallest observed offset gives us the least-delayed clock relationship
-        # without allowing every jitter spike to move the render timeline.
+
+        # Windowed minima reject latency without ignoring clock drift forever.
+        if self._clock_window_started is None:
+            self._clock_window_started = received_at
+        elif received_at - self._clock_window_started >= CLOCK_WINDOW:
+            self._server_clock_offset = self._clock_window_min
+            self._clock_window_min = None
+            self._clock_window_started = received_at
+
+        if (self._clock_window_min is None
+                or candidate < self._clock_window_min):
+            self._clock_window_min = candidate
         if (self._server_clock_offset is None
                 or candidate < self._server_clock_offset):
             self._server_clock_offset = candidate
@@ -479,45 +454,39 @@ class Network:
         if self._pending_pose_samples is None:
             self._remember(pid, slice_, sample_at)
             return
-        # All messages unpacked from one transport frame carry its number, even
-        # though only the first exposes public sequence field `n`.
+        # Group poses by their private transport-frame number.
         group = frame_number if frame_number is not None else 'this-pump'
         self._pending_pose_samples[(group, pid)] = (pid, slice_, sample_at)
 
-    def _commit_pose_samples(self, received_at) -> None:
+    def _commit_pose_samples(self) -> None:
         for pid, slice_, sample_at in self._pending_pose_samples.values():
-            self._remember(
-                pid, slice_, received_at if sample_at is None else sample_at,
-            )
+            self._remember(pid, slice_, sample_at)
 
     def _remember(self, pid: int, slice_: dict, sample_at=None) -> None:
         """Append one complete owner slice to a player's snapshot timeline."""
-        sample_at = time.perf_counter() if sample_at is None else sample_at
+        if sample_at is None:
+            return
+
+        if pid in self._rebasing:
+            # Seed teleports at the render cursor so motion resumes immediately.
+            self._rebasing.discard(pid)
+            at = sample_at if self._server_clock_offset is None else self._render_at()
+            self._history[pid] = deque([(at, slice_)], maxlen=SMOOTH_HISTORY)
+            return
+
         history = self._history.setdefault(pid, deque(maxlen=SMOOTH_HISTORY))
         if history and sample_at <= history[-1][0]:
             if sample_at == history[-1][0]:
                 history[-1] = (sample_at, slice_)
-            # TCP preserves server-frame order. An older timestamp here can only
-            # be a stale resync or malformed peer, neither of which should rewind
-            # a visual timeline.
+            # Never rewind a timeline with a stale timestamp.
             return
         history.append((sample_at, slice_))
 
     def _blend_others(self) -> None:
         """
-        Work out where every other player is on a fixed delayed server timeline,
-        once for the frame, so two reads in the same frame agree with each other.
-
-        Keeping several already-arrived snapshots turns uneven packet delivery
-        into an even render path. A player who stops sending settles on their last
-        known pose instead of being extrapolated into the distance.
+        Interpolate remote players on one delayed timeline for this frame.
         """
-        now = time.perf_counter()
-        server_now = (
-            now if self._server_clock_offset is None
-            else now - self._server_clock_offset
-        )
-        render_at = server_now - self._interpolation_delay
+        render_at = self._render_at()
         self._blend = {}
 
         fields = tuple(dict.fromkeys(self._smooth + self._smooth_angles))
@@ -526,8 +495,7 @@ class Network:
             if not history:
                 continue
 
-            # Discard snapshots wholly behind the render cursor, retaining the
-            # last one before it as the left side of the interpolation pair.
+            # Retain one sample before the render cursor.
             while len(history) > 2 and history[1][0] <= render_at:
                 history.popleft()
 
@@ -562,7 +530,17 @@ class Network:
                     blended[field] = end          # nothing sensible to blend
             self._blend[pid] = blended
 
+    def _render_at(self) -> float:
+        """The moment on the server's timeline that this frame draws."""
+        now = time.perf_counter()
+        server_now = (
+            now if self._server_clock_offset is None
+            else now - self._server_clock_offset
+        )
+        return server_now - self._interpolation_delay
+
     def _forget(self, pid: int) -> None:
+        self._rebasing.discard(pid)     # they have gone, not teleported
         self._history.pop(pid, None)
         self._blend.pop(pid, None)
         if self._pending_pose_samples is not None:
@@ -571,14 +549,7 @@ class Network:
                     self._pending_pose_samples.pop(key)
 
     def _ask_to_resync(self) -> None:
-        """
-        Ask the server for the whole world, because ours may be out of date.
-
-        Asked at most once per RESYNC_COOLDOWN, so a burst of missing messages is
-        one request rather than one each. The server turns down a second request
-        inside the same window, so _pump keeps asking until the snapshot lands
-        rather than waiting on a reply that is never coming.
-        """
+        """Request a rate-limited full snapshot until one arrives."""
         now = time.perf_counter()
         if self._conn is None:
             return
@@ -590,12 +561,9 @@ class Network:
 
     def _snapshot(self, message: dict, frame_at=None, frame_number=None) -> None:
         """
-        Take the server's whole world as ours.
+        Replace local replicated state with a full server snapshot.
 
-        Sent on join, and again whenever we notice we have missed something. It has
-        to *replace* rather than merge: a key deleted while we were behind is absent
-        here rather than mentioned. Our own slice is the one thing we keep -- we are
-        its author, and our copy is the newer one.
+        Keep the locally authored owner slice.
         """
         state = message['state']
         if 'players' in message:
@@ -618,19 +586,17 @@ class Network:
         self._resyncing = False
 
     def _apply(self, key: str, value, frame_at=None, frame_number=None) -> None:
-        # Nothing is announced here: state is what you *read*, and a room that wants
-        # to say something happened sends an event for it. So applying a snapshot
-        # and applying a single change are the same operation.
         if key.startswith(OWNER_PREFIX):
             pid = int(key[len(OWNER_PREFIX):])
-            # We are the source of truth for our OWN slice -- never let the server
-            # overwrite it (that is what removes input lag). Others' slices we take.
+            # Never overwrite the locally authored owner slice.
             if pid != self.id:
+                value = _readonly(value, _Entity._REFUSAL)
                 if self._smooth or self._smooth_angles:
                     self._stage_pose(pid, value, frame_at, frame_number)
                 self._owner[pid] = value
         elif key.startswith(SERVER_PREFIX):
-            self._server[int(key[len(SERVER_PREFIX):])] = value
+            self._server[int(key[len(SERVER_PREFIX):])] = \
+                _readonly(value, _Entity._REFUSAL)
         else:
             self.state._assign(key, value)          # neutral world
 
@@ -650,14 +616,7 @@ class Network:
 
 
 class _State(dict):
-    """
-    The neutral world, as the client sees it: readable like a dict, not writable.
-
-    Every way in has to be closed, not just `state[key] = value`: CPython does not
-    route dict.update() and friends through a subclass's __setitem__, and a write
-    that quietly took effect locally while every other player saw nothing is worse
-    than no protection at all. The internals go through _assign and _remove.
-    """
+    """The client's read-only view of neutral world state."""
 
     _REFUSAL = ("net.state is read-only -- the server owns the world. "
                 "Ask it to change something with net.call('some_action', ...).")
@@ -687,41 +646,51 @@ class _State(dict):
         raise PydrawError(self._REFUSAL)
 
     def _assign(self, key, value):
-        dict.__setitem__(self, key, value)
+        # Freeze nested values too.
+        dict.__setitem__(self, key, _readonly(value, self._REFUSAL))
 
     def _remove(self, key):
         dict.pop(self, key, None)
 
 
 class _Entity:
-    """
-    A read-only view of one player: their owned slice merged with their
-    server-managed fields (the server's values win on any overlap).
-    """
+    """A read-only merged view of one player's state."""
+
+    _REFUSAL = "this player's state is read-only -- only its owner can move it."
 
     def __init__(self, net: Network, pid: int):
         self._net = net
         self._pid = pid
 
-    def _merged(self) -> dict:
-        server = self._net._server.get(self._pid, {})
-        merged = {**self._net._owner.get(self._pid, {}), **server}
+    def _sources(self):
+        """Return player sources in precedence order."""
+        return (self._net._server.get(self._pid) or {},
+                self._net._blend.get(self._pid) or {},
+                self._net._owner.get(self._pid) or {})
 
-        # Smoothed fields stand in for the owner's raw values, never for a
-        # server-managed one: a value on its way from 100 to 80 was never true.
-        for field, value in self._net._blend.get(self._pid, {}).items():
+    def _merged(self) -> dict:
+        """Every field at once, for the reads that want the whole player."""
+        server, blend, owner = self._sources()
+        merged = {**owner, **server}
+        for field, value in blend.items():
             if field not in server:
                 merged[field] = value
         return merged
 
     def __getitem__(self, key):
-        return self._merged()[key]
+        for source in self._sources():
+            if key in source:
+                return source[key]
+        raise KeyError(key)
 
     def get(self, key, default=None):
-        return self._merged().get(key, default)
+        for source in self._sources():
+            if key in source:
+                return source[key]
+        return default
 
     def __contains__(self, key):
-        return key in self._merged()
+        return any(key in source for source in self._sources())
 
     def __iter__(self):
         return iter(self._merged())
@@ -739,9 +708,10 @@ class _Entity:
         return len(self._merged())
 
     def __setitem__(self, key, value):
-        raise PydrawError(
-            "this player's state is read-only -- only its owner can move it."
-        )
+        raise PydrawError(self._REFUSAL)
+
+    def __delitem__(self, key):
+        raise PydrawError(self._REFUSAL)
 
     def __repr__(self):
         return f'<entity {self._pid} {self._merged()}>'
@@ -750,45 +720,101 @@ class _Entity:
 class _Mine(_Entity):
     """Your own entity: owned fields are writable, server-managed fields are not."""
 
-    def __setitem__(self, key, value):
+    def _owned(self):
+        return self._net._owner.setdefault(self._pid, {})
+
+    def _server_managed(self, key):
         if key in self._net._server.get(self._pid, {}):
             raise PydrawError(
                 f"net.mine[{key!r}] is managed by the server -- you can't change it."
             )
+
+    def __setitem__(self, key, value):
+        self._server_managed(key)
         # Applied locally at once (no lag); _pump sends the slice this frame.
-        self._net._owner.setdefault(self._pid, {})[key] = value
-        self._net._mine_dirty = True
+        owned = self._owned()
+        owned[key] = value
+        # Fallback for test doubles without tracked state.
+        if not isinstance(owned, _TrackedDict):
+            self._net._mine_dirty = True
+
+    def __delitem__(self, key):
+        self._server_managed(key)
+        owned = self._owned()
+        del owned[key]
+        if not isinstance(owned, _TrackedDict):
+            self._net._mine_dirty = True
+
+    def update(self, *args, **kwargs):
+        incoming = dict(*args, **kwargs)
+        for key in incoming:
+            self._server_managed(key)       # refuse before making a partial update
+        for key, value in incoming.items():
+            self[key] = value
+
+    def setdefault(self, key, default=None):
+        if key in self:
+            return self[key]
+        self[key] = default
+        return self[key]
+
+    def pop(self, key, *default):
+        if len(default) > 1:
+            raise TypeError(f'pop expected at most 2 arguments, got {len(default) + 1}')
+        self._server_managed(key)
+        owned = self._owned()
+        if key not in owned:
+            if default:
+                return default[0]
+            raise KeyError(key)
+        value = owned[key]
+        del self[key]
+        return value
+
+    def popitem(self):
+        owned = self._owned()
+        if not owned:
+            if self._net._server.get(self._pid):
+                raise PydrawError(
+                    "net.mine only has server-managed fields, which you can't remove."
+                )
+            raise KeyError('popitem(): dictionary is empty')
+        key = next(reversed(tuple(owned)))
+        return key, self.pop(key)
+
+    def clear(self):
+        owned = self._owned()
+        if isinstance(owned, _TrackedDict):
+            owned.clear()
+        else:
+            owned.clear()
+            self._net._mine_dirty = True
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
 
 
 # --------------------------------------------------------------------------- #
 #  Server side -- Room and Player
 # --------------------------------------------------------------------------- #
 
+def action(method):
+    """Expose a Room method through ``net.call``."""
+    if not callable(method):
+        raise InvalidArgumentError(
+            f'Room: @action must decorate a method; received {method!r}.'
+        )
+    method._pydraw_action = True
+    return method
+
+
 def event(name: str):
     """
-    Mark a Room method as the reviewer for one kind of `net.send`.
+    Register a Room method to review one ``net.send`` event.
 
-        class Arena(Room):
-            @event('shot')
-            def review_shot(self, player, data):
-                data['shooter'] = player.id     # add what only the server knows
-                return data
-
-    Without a reviewer, `net.send('shot')` is simply passed on to the other players
-    -- which is what makes a game with no server code possible at all. Add one and
-    the same call becomes something the room gets to inspect first. Authority is a
-    dial, not a different way of writing your game.
-
-    What you return decides what the others see:
-
-      - nothing          the event is passed on unchanged
-      - a dict           that is passed on instead of the original
-      - False            it is dropped, and nobody hears it
-
-    Nothing being the harmless case is deliberate: a reviewer written just to
-    *look* at something, whose author forgot to return, still leaves a working game.
-
-    This only means anything inside a Room.
+    Return ``None`` to relay it, a dict to replace its data, or ``False`` to drop
+    it.
     """
     verify(name, str)
 
@@ -801,23 +827,23 @@ def event(name: str):
 
 class Room:
     """
-    The authority for one game. Subclass it to:
+    Server authority for a game.
 
-      - set up the neutral world in start() (self.state)
-      - give joining players their server-managed fields (player.state)
-      - run a server-side loop in tick(dt)
-      - respond to actions (any method matching a net.call name)
-      - optionally vet players' own writes in accept()
-
-    self.state (the world) and player.state (a player's server fields) are writable
-    here and only here. Clients read the results; they cannot change them.
+    Override lifecycle hooks and actions here. ``self.state`` and
+    ``player.state`` are server-owned and read-only on clients.
     """
 
-    #: Optional server-to-client replication cadence. When set to a positive
-    #: number, messages produced between two deadlines share one compressed
-    #: frame. Repeated state writes are coalesced, while events remain ordered.
-    #: None preserves the original immediate-delivery transport.
-    replication_rate = None
+    #: Calls to tick() per second.
+    tick_rate = TICK_RATE
+
+    #: Replication frames per second.
+    replication_rate = REPLICATION_RATE
+
+    #: Incoming messages allowed per player per second.
+    message_limit = MESSAGE_LIMIT
+
+    #: Incoming compressed bytes allowed per player per second.
+    byte_limit = BYTE_LIMIT
 
     def __init__(self):
         self._changes = _Changes()
@@ -827,16 +853,12 @@ class Room:
 
     @property
     def state(self) -> dict:
-        """
-        The neutral world -- asteroids, score, the clock. Write it like any dict;
-        the players read the results as net.state.
-        """
+        """Writable neutral world state, exposed to clients as ``net.state``."""
         return self._state
 
     @state.setter
     def state(self, value: dict) -> None:
-        # Replacing the whole thing has to keep the tracking and remember the keys
-        # that just went, so they are deleted on the clients rather than lingering.
+        # Preserve tracking and publish removed keys.
         verify(value, dict)
         gone = set(self._state)
         self._state = _TrackedDict(self._changes, None)
@@ -844,11 +866,22 @@ class Room:
         self._changes.keys |= gone
 
     def __init_subclass__(cls, **kwargs):
-        """
-        Collect the @event reviewers a subclass declares, so that a duplicate is
-        caught when the class is written and not on the first shot fired.
-        """
+        """Collect decorated actions and event reviewers."""
         super().__init_subclass__(**kwargs)
+
+        actions = dict(getattr(cls, '_actions', {}))
+        for name, attribute in vars(cls).items():
+            # Overrides must opt in again.
+            actions.pop(name, None)
+            if not getattr(attribute, '_pydraw_action', False):
+                continue
+            if name in RESERVED or name.startswith('_'):
+                raise InvalidArgumentError(
+                    f'Room: {name!r} is reserved by pydraw.network and cannot be '
+                    f'an @action.'
+                )
+            actions[name] = attribute
+        cls._actions = actions
 
         reviewers = dict(getattr(cls, '_reviewers', {}))
         for attribute in vars(cls).values():
@@ -867,10 +900,15 @@ class Room:
 
     #: event name -> the method reviewing it, filled in by __init_subclass__
     _reviewers = {}
+    #: action name -> exposed method, filled in by __init_subclass__
+    _actions = {}
 
     # override these
     def start(self) -> None:
         """Called once when the room opens. Seed self.state."""
+
+    def stop(self) -> None:
+        """Called after every Player leaves when the room closes."""
 
     def join(self, player) -> None:
         """Called when a player connects. Give them player.state fields."""
@@ -879,17 +917,10 @@ class Room:
         """Called when a player disconnects. Prune any world data you keyed by id."""
 
     def tick(self, dt: float) -> None:
-        """
-        Called ~30 times a second. dt is how long really passed since the last
-        tick, so multiply by it rather than counting ticks -- a busy moment makes
-        one longer step instead of a burst of catch-up ones.
-        """
+        """Advance the room by elapsed time ``dt`` at ``tick_rate``."""
 
     def accept(self, player, proposed: dict, current: dict) -> dict:
-        """
-        Review a client's write to its own slice; return what actually sticks.
-        Default: trust it. Override to clamp or reject (this is your anti-cheat).
-        """
+        """Return the accepted version of a player's proposed owner slice."""
         return proposed
 
     # call these
@@ -898,18 +929,12 @@ class Room:
         return self._server._players.get(player_id)
 
     def broadcast(self, name: str, **data) -> None:
-        """Send a transient event to every player (from the server, player 0)."""
+        """Send a transient event to every connected player."""
         verify(name, str)
         self._server._broadcast({'t': 'event', 'name': name, 'data': data})
 
     def clear_kept_events(self) -> int:
-        """
-        Forget the kept events -- the ones sent with net.send(..., keep=True), which
-        every late joiner is replayed on arrival. Returns how many were dropped.
-
-        Nothing caps that log for you, since only your game knows what its limit
-        should be. Clear it when a round ends, or when it has grown past enough.
-        """
+        """Discard kept events and return how many were removed."""
         replay = self._server._replay
         dropped = len(replay)
         replay.clear()
@@ -931,10 +956,7 @@ class Player:
 
     @property
     def state(self) -> dict:
-        """
-        This player's server-managed fields (hp, ammo). Write here; the client sees
-        them merged into that player's entity, read-only.
-        """
+        """This player's writable, server-managed fields."""
         return self._state
 
     @state.setter
@@ -947,223 +969,27 @@ class Player:
 
     @property
     def slice(self) -> dict:
-        """
-        What this player owns and writes (its position slice), as the server last
-        accepted it. Read-only for the Room -- use it to adjudicate (hit tests,
-        collisions). Writing it here would not replicate; the owner drives it.
-        """
+        """The player's last accepted, read-only owner slice."""
         return self._server._owner.get(self.id, {})
 
     def send(self, name: str, **data) -> None:
-        """Send a transient event to just this player (from the server)."""
+        """Send a transient event to this player if still connected."""
         verify(name, str)
-        self._server._send_to(self._conn,
-                              {'t': 'event', 'name': name, 'data': data})
+        if self._conn is not None and self._conn.alive:
+            self._server._send_to(self._conn,
+                                  {'t': 'event', 'name': name, 'data': data})
 
     def resync(self) -> None:
-        """
-        Send this player the whole world again.
-
-        Players ask for this themselves the moment they notice they have missed
-        something, so a game never has to call it. It is here for when the server
-        knows better -- it has just rebuilt the world, say.
-        """
-        self._server._resync(self._conn, forced=True)
+        """Send this player a full snapshot."""
+        if self._conn is not None and self._conn.alive:
+            self._server._resync(self._conn, forced=True)
 
     def __repr__(self):
         return f'Player({self.id})'
 
 
-# --------------------------------------------------------------------------- #
-#  Change tracking (plumbing -- a Room writes ordinary dicts and lists)
-# --------------------------------------------------------------------------- #
-#
-# The server has to know which parts of the world changed since it last told the
-# players. Rather than deep-copy everything and diff it every tick -- which costs
-# the same whether one asteroid moved or nothing did -- self.state and
-# player.state note their own changes. They are real dict and list subclasses, so
-# json.dumps, len() and isinstance behave as they always did, that record which
-# *top level* key was touched however deep the change was:
-#
-#     self.state['rocks'][3]['x'] += 1     ->  'rocks' changed
-#     self.state['strokes'].append(s)      ->  'strokes' changed
-#
-# Top level is the right grain because that is what goes on the wire: a key and
-# its whole new value.
-#
-# One thing worth knowing: putting a list or dict into state stores a tracked
-# version of it, so `self.state['rocks']` is not the object you handed over. Keep
-# your own copy and the two drift apart -- write through self.state and this never
-# comes up. _Server._sync re-checks everything once a second regardless, so a
-# change made some way this cannot see still gets out, just a moment later.
-
-
-class _Changes:
-    """The set of top-level keys written since the server last collected them."""
-
-    __slots__ = ('keys',)
-
-    def __init__(self):
-        self.keys = set()
-
-    def take(self) -> set:
-        """Hand over what has changed and start counting again."""
-        keys, self.keys = self.keys, set()
-        return keys
-
-
-def _track(value, changes: _Changes, key):
-    """A copy of `value` whose containers report changes against `key`."""
-    if isinstance(value, dict):
-        tracked = _TrackedDict(changes, key)
-        for inner_key, inner in value.items():
-            dict.__setitem__(tracked, inner_key, _track(inner, changes, key))
-        return tracked
-    if isinstance(value, list):
-        tracked = _TrackedList(changes, key)
-        list.extend(tracked, (_track(inner, changes, key) for inner in value))
-        return tracked
-    return value                      # a number or a string cannot change in place
-
-
-class _TrackedDict(dict):
-    """
-    A dict that says when it was written to.
-
-    With `key` None it is the root -- self.state itself -- and reports the key
-    being written. Nested inside a value it reports the top-level key it lives
-    under, so a change any distance down still names the thing to send.
-    """
-
-    __slots__ = ('_changes', '_key')
-
-    def __init__(self, changes: _Changes, key):
-        dict.__init__(self)
-        self._changes = changes
-        self._key = key
-
-    def _owner(self, key):
-        return key if self._key is None else self._key
-
-    def _mark(self, key) -> None:
-        self._changes.keys.add(self._owner(key))
-
-    def __setitem__(self, key, value):
-        dict.__setitem__(self, key, _track(value, self._changes, self._owner(key)))
-        self._mark(key)
-
-    def __delitem__(self, key):
-        dict.__delitem__(self, key)
-        self._mark(key)
-
-    def pop(self, key, *default):
-        had = key in self
-        value = dict.pop(self, key, *default)
-        if had:
-            self._mark(key)
-        return value
-
-    def popitem(self):
-        key, value = dict.popitem(self)
-        self._mark(key)
-        return key, value
-
-    def setdefault(self, key, default=None):
-        if key not in self:
-            self[key] = default                    # wraps and marks
-        return dict.__getitem__(self, key)
-
-    def update(self, *args, **kwargs):
-        for key, value in dict(*args, **kwargs).items():
-            self[key] = value
-
-    def clear(self):
-        keys = list(self)
-        dict.clear(self)
-        for key in keys:
-            self._mark(key)
-
-    def __ior__(self, other):
-        self.update(other)
-        return self
-
-
-class _TrackedList(list):
-    """A list that says when it was changed. Always lives under a top-level key."""
-
-    __slots__ = ('_changes', '_key')
-
-    def __init__(self, changes: _Changes, key):
-        list.__init__(self)
-        self._changes = changes
-        self._key = key
-
-    def _mark(self) -> None:
-        self._changes.keys.add(self._key)
-
-    def _wrap(self, value):
-        return _track(value, self._changes, self._key)
-
-    def __setitem__(self, index, value):
-        if isinstance(index, slice):
-            value = [self._wrap(item) for item in value]
-        else:
-            value = self._wrap(value)
-        list.__setitem__(self, index, value)
-        self._mark()
-
-    def __delitem__(self, index):
-        list.__delitem__(self, index)
-        self._mark()
-
-    def append(self, value):
-        list.append(self, self._wrap(value))
-        self._mark()
-
-    def insert(self, index, value):
-        list.insert(self, index, self._wrap(value))
-        self._mark()
-
-    def extend(self, values):
-        list.extend(self, (self._wrap(value) for value in values))
-        self._mark()
-
-    def remove(self, value):
-        list.remove(self, value)
-        self._mark()
-
-    def pop(self, index=-1):
-        value = list.pop(self, index)
-        self._mark()
-        return value
-
-    def clear(self):
-        list.clear(self)
-        self._mark()
-
-    def sort(self, **kwargs):
-        list.sort(self, **kwargs)
-        self._mark()
-
-    def reverse(self):
-        list.reverse(self)
-        self._mark()
-
-    def __iadd__(self, other):
-        self.extend(other)
-        return self
-
-    def __imul__(self, count):
-        list.__imul__(self, count)
-        self._mark()
-        return self
-
-
 def serve(room, port: int = DEFAULT_PORT) -> None:
-    """
-    Run a Room as a standalone server (blocks until Ctrl+C). Use this to host on a
-    dedicated machine instead of inside a player's program.
-    """
+    """Run a Room until interrupted."""
     server = _Server(_as_room(room), port)
     try:
         server.serve_forever()
@@ -1188,39 +1014,36 @@ class _Server:
         self._next_id = 1
 
         self._owner = {}          # id -> latest accepted owner slice
-        # What we last told the clients, kept as the JSON text we sent rather than
-        # a deep copy: two values that serialize the same are the same as far as
-        # anyone out there can tell, and a string is cheap to keep and compare.
+        # Canonical JSON shadows avoid deep copies and false ordering changes.
         self._world_shadow = {}   # world key -> JSON of the value last sent
         self._server_shadow = {}  # id -> JSON of the server slice last sent
         self._replay = []         # kept events, resent to late joiners
         self._reported = set()    # Room failures already printed, so we say each once
         self._running = False
+        self._stop_requested = threading.Event()
+        self._room_started = False
+        self._room_stopped = False
+        self._finished = False
+        self._startup_error = None
         self._last_tick = 0.0
         self._next_tick = 0.0
         self._next_verify = 0.0
-        replication_rate = getattr(room, 'replication_rate', None)
-        if (replication_rate is not None
-                and (not isinstance(replication_rate, (int, float))
-                     or isinstance(replication_rate, bool)
-                     or replication_rate <= 0)):
-            raise InvalidArgumentError(
-                'Room.replication_rate must be a positive number or None; '
-                f'received {replication_rate!r}.'
-            )
-        self._replication_interval = (
-            None if replication_rate is None else 1 / replication_rate
-        )
+        tick_rate = _rate('tick_rate', getattr(room, 'tick_rate', TICK_RATE))
+        replication_rate = _rate(
+            'replication_rate', getattr(room, 'replication_rate', REPLICATION_RATE))
+        self._message_limit = _rate(
+            'message_limit', getattr(room, 'message_limit', MESSAGE_LIMIT))
+        self._byte_limit = _byte_limit(
+            'byte_limit', getattr(room, 'byte_limit', BYTE_LIMIT))
+        self._tick_interval = 1 / tick_rate
+        self._replication_interval = 1 / replication_rate
         self._replication_rate = replication_rate
         self._next_replication = 0.0
 
     # -- lifecycle ----------------------------------------------------------
 
     def listen(self) -> None:
-        """
-        Claim the port. Raises OSError(EADDRINUSE) if somebody already holds it --
-        which is how Network tells "I am the host" from "someone else already is".
-        """
+        """Claim the port, raising ``EADDRINUSE`` if it is taken."""
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -1232,97 +1055,109 @@ class _Server:
         self._listener = listener
 
     def start_background(self) -> None:
-        # Bind here rather than on the thread: the caller has to be able to catch
-        # "that port is taken", and once bind() returns, connections queue up even
-        # before the thread reaches accept() -- so a racing joiner never misses us.
+        # Bind synchronously so the caller can handle a port race.
         self.listen()
 
         ready = threading.Event()
-        self._thread = threading.Thread(
-            target=lambda: self.serve_forever(ready), daemon=True)
+        self._startup_error = None
+
+        def run():
+            try:
+                self.serve_forever(ready)
+            except BaseException as error:                       # noqa: BLE001
+                self._startup_error = error
+                ready.set()
+
+        self._thread = threading.Thread(target=run, daemon=True)
         self._thread.start()
         if not ready.wait(timeout=5):
-            self._listener.close()
+            self.stop(wait=0)
             raise PydrawError('Network: the hosted server failed to start.')
+        if self._startup_error is not None:
+            self._thread.join(timeout=1)
+            raise PydrawError(
+                f'Network: the hosted Room failed to start '
+                f'({self._startup_error}).'
+            ) from self._startup_error
 
     def stop(self, wait: float = 1.0) -> None:
-        """
-        Ask the room to close, and wait for it to let go of the port.
-
-        The flag is all we set: the sockets belong to the serve thread, sitting in
-        select() on them right now, so it closes its own on the way out (within one
-        TICK). We wait for that because a game often opens another room on the same
-        port straight after closing one, and would find it still held.
-        """
+        """Ask the serve thread to stop and release its sockets."""
+        self._stop_requested.set()
         self._running = False
         thread = getattr(self, '_thread', None)
         if wait and thread is not None and thread is not threading.current_thread():
             thread.join(timeout=wait)
 
     def serve_forever(self, ready: 'threading.Event' = None) -> None:
-        if self._listener is None:
-            self.listen()
+        try:
+            if self._listener is None:
+                self.listen()
 
-        self._room._bind(self)
-        self._room.start()
-        # Whatever start() seeded is already in hand for anyone who joins, so it
-        # counts as told: record it and let _sync report only what happens next.
-        self._world_shadow = {key: _canonical(value)
-                              for key, value in self._room.state.items()}
-        self._room._changes.take()
+            self._room._bind(self)
+            self._room_started = True
+            self._room.start()
+            # Treat start() state as the initial published state.
+            self._world_shadow = {key: _canonical(value)
+                                  for key, value in self._room.state.items()}
+            self._room._changes.take()
 
-        self._running = True
-        started = time.perf_counter()
-        self._last_tick = started
-        self._next_tick = started + TICK
-        self._next_verify = started + VERIFY
-        if self._replication_interval is not None:
+            self._running = not self._stop_requested.is_set()
+            started = time.perf_counter()
+            self._last_tick = started
+            self._next_tick = started + self._tick_interval
+            self._next_verify = started + VERIFY
             self._next_replication = started + self._replication_interval
-        if ready is not None:
-            ready.set()
+            if ready is not None:
+                ready.set()
 
-        while self._running:
-            now = time.perf_counter()
-            deadline = self._next_tick
-            if self._replication_interval is not None:
-                deadline = min(deadline, self._next_replication)
-            timeout = max(0.0, deadline - now)
-            readable, _, _ = select.select(
-                [self._listener] + list(self._conns), [], [], timeout)
+            while self._running and not self._stop_requested.is_set():
+                now = time.perf_counter()
+                timeout = max(0.0, min(self._next_tick,
+                                       self._next_replication) - now)
+                readable, _, _ = select.select(
+                    [self._listener] + list(self._conns), [], [], timeout)
 
-            for sock in readable:
-                if sock is self._listener:
-                    self._accept()
-                else:
-                    self._receive(sock)
+                for sock in readable:
+                    if sock is self._listener:
+                        self._accept()
+                    elif sock in self._conns:
+                        self._receive(sock)
 
-            now = time.perf_counter()
-            if now >= self._next_tick:
-                # dt is what really passed, and the next deadline is set from now,
-                # so an overrun is one long step rather than a debt. Adding TICK to
-                # a deadline already past would leave it past, and a second of
-                # stall would come back as thirty ticks each told it was 1/30.
-                #
-                # Capped, because past a point a longer step stops being a truer
-                # one -- a ball told it moved for a whole second lands on the far
-                # side of a paddle it should have hit. The world falls behind the
-                # clock instead, which is the smaller lie.
-                self._guarded('tick()', self._room.tick,
-                              min(now - self._last_tick, MAX_CATCHUP))
-                self._last_tick = now
-                self._next_tick = now + TICK
+                now = time.perf_counter()
+                if now >= self._next_tick:
+                    # Skip catch-up bursts after an overrun.
+                    self._guarded('tick()', self._room.tick,
+                                  min(now - self._last_tick, MAX_CATCHUP))
+                    self._last_tick = now
+                    self._next_tick = now + self._tick_interval
 
-            # One place syncs the world and server slices. Owner slices are
-            # accepted immediately; rooms without replication batching also
-            # publish them immediately from _handle_own.
-            self._sync()
-            self._flush_all()
+                self._sync()
+                self._maintain_connections(now)
+                self._flush_all()
+        finally:
+            self._finish()
 
-        # Ours to close, on the thread that has been using them.
+    def _finish(self) -> None:
+        """Run the server's final lifecycle exactly once, on its serve thread."""
+        if self._finished:
+            return
+        self._finished = True
+        self._running = False
+
+        # Pending handshakes have no Player lifecycle.
         for sock in list(self._conns):
-            self._conns.pop(sock, None)
-            sock.close()
-        self._listener.close()
+            self._drop(sock, announce=False)
+
+        if self._room_started and not self._room_stopped:
+            self._room_stopped = True
+            self._guarded('stop()', self._room.stop)
+
+        listener, self._listener = self._listener, None
+        if listener is not None:
+            try:
+                listener.close()
+            except OSError:
+                pass
 
     # -- connections --------------------------------------------------------
 
@@ -1330,39 +1165,67 @@ class _Server:
         sock, _ = self._listener.accept()
         conn = _Connection(sock)
         conn.nonblocking()      # a slow client must never stall the serve loop
+        conn.established = False
+        conn.handshake_deadline = time.perf_counter() + HANDSHAKE_TIMEOUT
         player_id = self._next_id
         self._next_id += 1
 
         self._conns[sock] = conn
         self._ids[sock] = player_id
-        player = Player(player_id, conn, self)
-        self._players[player_id] = player
-        self._owner[player_id] = {}
-        self._room.players.append(player)
 
-        # Who they are, then the room's setup for them, then the whole world -- in
-        # that order, so a late joiner is correct the moment it starts drawing.
+        # Reserve the id; `ready` creates the Player.
+        players = list(self._players)
+        players.append(player_id)
         self._send_to(conn, {'t': 'hello', 'id': player_id,
-                             'players': list(self._ids.values()),
+                             'players': players,
                              'room': type(self._room).__name__,
                              'replication_rate': self._replication_rate})
+        conn.send_queued(sent_at=time.perf_counter())
+
+    def _establish(self, sock) -> None:
+        """Commit a completed hello and begin exactly one Player lifecycle."""
+        conn = self._conns.get(sock)
+        if conn is None or conn.established:
+            return
+
+        conn.established = True
+        conn.handshake_deadline = None
+        conn.next_ping_at = time.perf_counter() + HEARTBEAT_INTERVAL
+        player_id = self._ids[sock]
+        player = Player(player_id, conn, self)
+        self._players[player_id] = player
+        self._owner[player_id] = _readonly(
+            {}, 'player.slice is read-only -- the connected player owns it.'
+        )
+        self._room.players.append(player)
+
+        # join() completes before snapshots and announcements.
         self._guarded('join()', self._room.join, player)
         self._resync(conn, forced=True)
         for event in self._replay:
             self._send_to(conn, event)
+        self._send_to(conn, {'t': 'connected'})
+
+        # The client blocks until this handshake batch arrives.
+        conn.send_queued(sent_at=time.perf_counter())
 
         self._broadcast({'t': 'join', 'id': player_id}, skip=sock)
 
     def _receive(self, sock) -> None:
         conn = self._conns[sock]
+        now = time.perf_counter()
+        if now - conn.counted_at >= 1.0:
+            conn.counted_at = now
+            conn.messages = 0
+            conn.bytes_received = 0
+        remaining = max(0, self._byte_limit - conn.bytes_received)
         try:
-            messages = conn.poll()
+            messages = conn.poll(max_bytes=remaining)
+            conn.bytes_received += conn.last_received
         except OSError:
             messages = None
         except (zlib.error, ValueError) as error:
-            # A compressed stream has no resync point, so a connection that stops
-            # making sense cannot be recovered -- drop that one player. Neither of
-            # these is an OSError, so left alone it would end the game for everyone.
+            # Compressed streams cannot recover from corruption.
             self._complain(f'player {self._ids.get(sock)} sent something we could '
                            f'not read ({error}); dropping them')
             messages = None
@@ -1371,36 +1234,108 @@ class _Server:
             self._drop(sock)
             return
 
+        if conn.byte_limit_exceeded:
+            self._complain(
+                f'player {self._ids.get(sock)} sent more than '
+                f'{self._byte_limit} compressed bytes in a second, so they were '
+                f'dropped -- a game that really needs that much incoming traffic '
+                f'can raise Room.byte_limit')
+            self._drop(sock)
+            return
+
+        if self._flooding(conn, len(messages)):
+            self._complain(
+                f'player {self._ids.get(sock)} sent more than '
+                f'{self._message_limit} messages in a second, so they were '
+                f'dropped -- a game that really needs that many can raise '
+                f'Room.message_limit')
+            self._drop(sock)
+            return
+
         for message in messages:
-            # A message can arrive whole and still not be what it claims to be --
-            # an event with no name, a key that is not a number. Reading it is the
-            # one place the serve loop touches a value a player chose, so a failure
-            # here must cost that player its turn and nothing more; left alone it
-            # would end the game for everybody.
+            # Isolate malformed messages to their sender.
+            if sock not in self._conns:
+                break
             self._guarded(f"a {message.get('t')!r} message from player "
                           f'{self._ids.get(sock)}', self._handle, sock, message)
 
-    def _drop(self, sock) -> None:
+    def _flooding(self, conn, arrived: int) -> bool:
+        """Return whether this player exceeded its message rate."""
+        conn.messages += arrived
+        return conn.messages > self._message_limit
+
+    def _maintain_connections(self, now: float) -> None:
+        """Expire unfinished hellos and peers that no longer read the stream."""
+        for sock, conn in list(self._conns.items()):
+            if not conn.established:
+                if now >= conn.handshake_deadline:
+                    self._complain(
+                        f'connection {self._ids.get(sock)} did not finish its '
+                        f'hello in {HANDSHAKE_TIMEOUT:g} seconds; dropping it')
+                    self._drop(sock)
+                continue
+
+            if (conn.awaiting_pong_at is not None
+                    and now - conn.awaiting_pong_at >= CONNECTION_TIMEOUT):
+                self._complain(
+                    f'player {self._ids.get(sock)} stopped reading network data; '
+                    f'dropping them')
+                self._drop(sock)
+                continue
+
+            if conn.awaiting_pong_at is None and now >= conn.next_ping_at:
+                self._send_to(conn, {'t': 'ping'})
+                conn.awaiting_pong_at = now
+
+    def _drop(self, sock, announce: bool = True) -> None:
+        """Remove one pending socket or active Player. Repeated calls do nothing."""
         player_id = self._ids.pop(sock, None)
-        self._conns.pop(sock, None)
+        conn = self._conns.pop(sock, None)
         player = self._players.pop(player_id, None)
         self._owner.pop(player_id, None)
         self._server_shadow.pop(player_id, None)
         if player is not None and player in self._room.players:
             self._room.players.remove(player)
-        sock.close()
+        if player is not None:
+            player._conn = None
+        if conn is not None:
+            conn.close()
+        else:
+            try:
+                sock.close()
+            except OSError:
+                pass
 
-        if player_id is not None:
+        if player is not None:
             self._guarded('leave()', self._room.leave, player)
-            # Drop the departed player's two keys everywhere -> sprites despawn.
-            self._broadcast({'t': 'del', 'key': f'{OWNER_PREFIX}{player_id}'})
-            self._broadcast({'t': 'del', 'key': f'{SERVER_PREFIX}{player_id}'})
-            self._broadcast({'t': 'leave', 'id': player_id})
+            if announce:
+                # leave() finishes before other clients hear playerquit.
+                self._broadcast({'t': 'del', 'key': f'{OWNER_PREFIX}{player_id}'})
+                self._broadcast({'t': 'del', 'key': f'{SERVER_PREFIX}{player_id}'})
+                self._broadcast({'t': 'leave', 'id': player_id})
 
     # -- message handling ---------------------------------------------------
 
     def _handle(self, sock, message: dict) -> None:
         kind = message.get('t')
+        conn = self._conns.get(sock)
+        if conn is None:
+            return
+        if not conn.established:
+            if kind == 'ready':
+                self._establish(sock)
+            else:
+                self._complain(
+                    f'connection {self._ids.get(sock)} sent {kind!r} before it '
+                    f'finished its hello; dropping it')
+                self._drop(sock)
+            return
+
+        if kind == 'pong':
+            conn.awaiting_pong_at = None
+            conn.next_ping_at = time.perf_counter() + HEARTBEAT_INTERVAL
+            return
+
         player = self._players.get(self._ids.get(sock))
         if player is None:
             return
@@ -1413,29 +1348,19 @@ class _Server:
         elif kind == 'event':
             self._relay_event(sock, player, message)
         elif kind == 'resync':
-            self._resync(self._conns[sock])
+            self._resync(conn)
 
     def _resync(self, conn, forced: bool = False) -> None:
-        """
-        Hand one player the whole world -- what a joiner is sent, sent again.
-
-        Rate-limited: a client that has decided it is behind and keeps saying so
-        must not have us compose the world for it over and over.
-        """
+        """Send one player a rate-limited full snapshot."""
         now = time.perf_counter()
         if not forced and now < conn.resync_at:
             return
         conn.resync_at = now + RESYNC_COOLDOWN
         self._send_to(conn, {'t': 'snapshot', 'state': self._compose(),
-                             'players': list(self._ids.values())})
+                             'players': list(self._players)})
 
     def _relay_event(self, sock, player: Player, message: dict) -> None:
-        """
-        Pass a client's event on to the others -- through the room, if it cares.
-
-        With no @event reviewer this is a plain relay, which is what lets a game
-        have no server code at all. With one, the room sees it first and decides.
-        """
+        """Review and relay a client's event."""
         name, data = message['name'], message['data']
         reviewer = self._room._reviewers.get(name)
 
@@ -1456,20 +1381,14 @@ class _Server:
     def _handle_own(self, sock, player: Player, proposed: dict) -> None:
         current = self._owner.get(player.id, {})
 
-        # The one value on this path a player chose rather than the Room, so it
-        # is checked before the Room sees it. Something that is not a dict would
-        # sit where every other client expects one and break each of them on its
-        # next read. Not a Room's mistake, so it skips the fallback below.
+        # Validate client-owned data before the Room sees it.
         if not isinstance(proposed, dict):
             self._complain(
                 f'player {player.id} sent {type(proposed).__name__} where its own '
                 f'slice should be, so that write was ignored')
             return
 
-        # A broken accept() falls back to the write it was reviewing -- it sits on
-        # the path of every movement any player makes, so whatever it does wrong
-        # must not freeze somebody where they stand. Taking the proposal is what a
-        # Room with no accept() does anyway: the anti-cheat stops, the game does not.
+        # A broken accept() falls back to the default policy.
         try:
             accepted = self._room.accept(player, proposed, current)
         except Exception:                                    # noqa: BLE001
@@ -1477,31 +1396,24 @@ class _Server:
             accepted = proposed
 
         if not isinstance(accepted, dict):
-            # Almost always a missing `return`, and storing it would replace the
-            # player's whole slice with nothing -- they would vanish for everybody.
+            # Do not replace a player's slice with a bad return value.
             self._complain(
                 f'accept() returned {type(accepted).__name__} rather than a slice, '
                 f'so the write was let through -- return `proposed` to trust it or '
                 f'`current` to turn it down')
             accepted = proposed
 
+        accepted = _readonly(
+            accepted,
+            'player.slice is read-only -- the connected player owns it.',
+        )
         self._owner[player.id] = accepted
-        # Tell everyone but the owner -- the owner already applied it locally, and
-        # is the source of truth for its own slice (that is what removes the lag).
+        # The owner already applied this slice locally.
         self._broadcast({'t': 'set', 'key': f'{OWNER_PREFIX}{player.id}',
                          'value': accepted}, skip=sock)
 
     def _guarded(self, what: str, function, *args, **kwargs):
-        """
-        Run one step on behalf of a single player without letting it take the room
-        down with it.
-
-        Everything a game writes -- tick(), join(), an action -- is called straight
-        from the serve loop, so an unhandled KeyError in one student's fire() would
-        propagate out of serve_forever and disconnect *everybody*. One person's bug
-        should cost that person a turn, not end the game for the room. Reading a
-        player's message is wrapped for the same reason.
-        """
+        """Run one callback without taking down the serve loop."""
         try:
             return function(*args, **kwargs)
         except Exception:                                    # noqa: BLE001
@@ -1509,11 +1421,7 @@ class _Server:
             return None
 
     def _report(self, what: str) -> None:
-        """
-        Print a failure in a game's Room code -- once. tick() runs 30 times a
-        second, so a bug in it would otherwise bury the terminal in one traceback
-        and hide everything else.
-        """
+        """Print each Room failure once."""
         report = traceback.format_exc()
         signature = (what, report)
         if signature in self._reported:
@@ -1525,13 +1433,7 @@ class _Server:
               flush=True)
 
     def _complain(self, message: str, about=None) -> None:
-        """
-        Say something is wrong with the room's state -- once, not every tick.
-
-        `about` names the thing being complained about, for a message carrying a
-        changing number: without it, a warning about a growing key would read as a
-        new complaint at every size it passes through.
-        """
+        """Print a warning once, optionally deduplicated by ``about``."""
         signature = message if about is None else about
         if signature in self._reported:
             return
@@ -1543,11 +1445,23 @@ class _Server:
             print(f'net: ignoring reserved/invalid action {action!r}', flush=True)
             return
 
-        method = getattr(self._room, action, None)
-        if not callable(method):
+        exposed = self._room._actions.get(action)
+        if exposed is None:
+            # Avoid executing descriptors while diagnosing a hidden method.
+            hidden = next(
+                (base.__dict__[action] for base in type(self._room).__mro__
+                 if action in base.__dict__),
+                None,
+            )
+            if callable(hidden):
+                print(f'net: {action!r} is a Room method but not an action; add '
+                      f'@action above {action}() to expose it to net.call',
+                      flush=True)
+                return
             print(f'net: no such action {action!r} on {type(self._room).__name__}',
                   flush=True)
             return
+        method = getattr(self._room, action)
 
         try:
             announcement = method(player, **data)
@@ -1562,10 +1476,7 @@ class _Server:
             self._report(f'action {action!r}')
             return
 
-        # What the method returns is what the room tells everyone else happened --
-        # the outcome, not the request, so a client cannot fake it by sending the
-        # announcement itself. Returning nothing keeps it private. The caller is
-        # skipped: they asked for it, and drew it locally the instant they did.
+        # Broadcast the Room's outcome, not the client's request.
         if isinstance(announcement, dict):
             self._broadcast({'t': 'event', 'player': player.id,
                              'name': action, 'data': announcement}, skip=sock)
@@ -1578,13 +1489,7 @@ class _Server:
 
     def _sync(self) -> None:
         """
-        Send changes to the neutral world and to players' server slices.
-
-        self.state and player.state keep their own list of what was written (see
-        _Changes), so the usual pass looks only at those keys and leaves the rest
-        of the world alone however large it is. Once a second every key is checked
-        instead -- a backstop for a change made to an object the Room kept its own
-        reference to, which tracking cannot see.
+        Publish tracked changes, periodically checking all replicated state.
         """
         now = time.perf_counter()
         sweep = now >= self._next_verify
@@ -1614,9 +1519,7 @@ class _Server:
         """Broadcast a value if it really is not what the clients already have."""
         text = _canonical(value)
         if text is None:
-            # Not something that can be sent -- a sprite, a set. Say so once and
-            # carry on; sending it would take the whole room down. Name the thing
-            # itself, since the key's type would only ever say 'dict'.
+            # Name the first unsendable nested value in the warning.
             culprit = _unsendable(value)
             blame = (f'a {type(culprit).__name__} ({culprit!r})'
                      if culprit is not None else 'something that cannot be sent')
@@ -1646,22 +1549,15 @@ class _Server:
         body = self._body(message)
         if body is None:
             return
-        sent_at = time.perf_counter()
+        coalesce_key = self._coalesce_key(message)
         for sock, conn in list(self._conns.items()):
-            if sock is skip:
-                continue
-            if self._replication_interval is None:
-                self._push(conn, body, sent_at=sent_at)
-            else:
-                self._push(conn, body, self._coalesce_key(message))
+            if sock is not skip and conn.established:
+                conn.queue_body(body, coalesce_key)
 
     def _send_to(self, conn, message: dict) -> None:
         body = self._body(message)
         if body is not None:
-            if self._replication_interval is None:
-                self._push(conn, body, sent_at=time.perf_counter())
-            else:
-                self._push(conn, body, self._coalesce_key(message))
+            conn.queue_body(body, self._coalesce_key(message))
 
     @staticmethod
     def _coalesce_key(message: dict):
@@ -1680,18 +1576,13 @@ class _Server:
         try:
             raw = _encode(message)
         except (TypeError, ValueError):
-            # Something in here is not JSON. Dropping one message is survivable;
-            # letting it out of the serve loop would end the game for everyone.
+            # Drop one bad message without ending the room.
             self._complain(f"a {message.get('t')!r} message could not be sent -- "
                            f"it holds something that is not a number, string, "
                            f"list or dict")
             return None
 
-        # Each connection compresses against what it has already sent, which is
-        # what makes a barely-changed world nearly free -- but zlib can only look
-        # back WINDOW bytes. A value larger than that cannot be matched against its
-        # previous copy at all, and the cost jumps sharply rather than creeping up.
-        # Remembered by key, not by the size it is growing through.
+        # Warn when a value is too large for zlib's history window.
         if len(raw) > WINDOW and message.get('t') == 'set':
             self._complain(
                 f"net.state[{message.get('key')!r}] is {len(raw) // 1024} KB, past "
@@ -1701,26 +1592,10 @@ class _Server:
                 about=('oversized', message.get('key')))
         return raw
 
-    def _push(self, conn, body: bytes, coalesce_key=None, sent_at=None) -> None:
-        # Each player counts separately: plenty of what we send goes to everyone
-        # *but* one person (your own ship coming back to you, an event you are the
-        # author of), and a shared count would leave gaps that look like loss.
-        #
-        # Nothing to catch here -- flush() owns the socket, so a peer that has gone
-        # is marked dead there and _flush_all sweeps it on this pass.
-        if self._replication_interval is None:
-            conn.send_body(body, sent_at=sent_at)
-        else:
-            conn.queue_body(body, coalesce_key)
-
     def _flush_all(self, force_batch: bool = False) -> None:
         """Push out buffered bytes, and drop anyone who has gone or fallen behind."""
         now = time.perf_counter()
-        batch_due = (
-            self._replication_interval is not None
-            and (force_batch or now >= self._next_replication)
-        )
-        if batch_due:
+        if force_batch or now >= self._next_replication:
             for conn in self._conns.values():
                 conn.send_queued(sent_at=now)
             self._next_replication = now + self._replication_interval
@@ -1732,244 +1607,11 @@ class _Server:
 
 
 # --------------------------------------------------------------------------- #
-#  Framing (the one genuinely networking-shaped piece)
-# --------------------------------------------------------------------------- #
-
-def _encode(message: dict) -> bytes:
-    """
-    A message as JSON bytes, ready for any number of peers.
-
-    Compression deliberately does *not* happen here: each connection compresses
-    into its own running stream, so what it sends can refer back to what it has
-    already sent. What a broadcast shares is this step, the expensive one.
-    """
-    return json.dumps(message, separators=COMPACT,
-                      default=_encode_values).encode()
-
-
-class _FramedMessage(dict):
-    """A normal message carrying private metadata from its transport frame."""
-
-    def __init__(self, message, frame_number, frame_time):
-        super().__init__(message)
-        self._frame_number = frame_number
-        self._frame_time = frame_time
-
-
-class _Connection:
-    """
-    Wraps a socket and turns its byte stream into whole JSON messages.
-
-    TCP delivers bytes, not messages: one recv() can hand back half a message or
-    several at once. So every message says how long it is, and we only decode the
-    parts of the buffer we have all of. See the framing constants for why the
-    length is stated rather than marked with a separator.
-    """
-
-    def __init__(self, sock):
-        self._sock = sock
-        self._buffer = b''
-        self._outgoing = b''
-        self._pending = []
-        self._queued_bodies = []
-        self._queued_keys = {}
-        self.alive = True
-        self.seq = 0            # server side: how many messages this peer has been
-        self.resync_at = 0.0    # sent, and when it may next ask for the world back
-
-        # One running stream each way. The compressor remembers what it has sent,
-        # so a world that barely changed costs almost nothing to send again -- zlib
-        # does the differencing, in C, against the real bytes. It also puts the two
-        # ends in lockstep: every message must pass through, in order.
-        self._deflate = zlib.compressobj(COMPRESSION)
-        self._inflate = zlib.decompressobj()
-
-    @classmethod
-    def connect(cls, host: str, port: int) -> '_Connection':
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.connect((host, port))
-        except OSError:
-            sock.close()      # don't leak the socket on every failed attempt
-            raise
-        return cls(sock)
-
-    def nonblocking(self) -> None:
-        self._sock.setblocking(False)
-
-    def send(self, message: dict) -> None:
-        """
-        Queue a message and push out as much as the kernel will take.
-
-        Never blocks and never fails on a full buffer: the server sends from inside
-        its one serve loop, where waiting on a wedged client would freeze everybody
-        else's game, and the client sends from inside the frame loop, where a stall
-        is a visible hitch.
-        """
-        self.send_body(_encode(message))
-
-    def send_body(self, raw: bytes, sent_at=None) -> None:
-        """
-        Queue JSON that `_encode` already prepared, compressed into this peer's
-        own stream and numbered for them.
-
-        Split out from send() so a broadcast serializes once rather than once per
-        player -- the number is the only part of the frame that differs.
-        """
-        if sent_at is not None:
-            # One clock sample wraps the complete frame. The payload is already
-            # encoded JSON, so this preserves serialize-once broadcasts and adds
-            # no timestamp to each individual player state.
-            raw = (
-                b'{' + json.dumps(FRAME_TIME_KEY).encode() + b':'
-                + json.dumps(float(sent_at), separators=COMPACT).encode() + b','
-                + json.dumps(FRAME_MESSAGES_KEY).encode() + b':' + raw + b'}'
-            )
-
-        self.seq += 1
-        body = self._deflate.compress(raw) + self._deflate.flush(zlib.Z_SYNC_FLUSH)
-        self._outgoing += (self.seq.to_bytes(4, 'big')
-                           + len(body).to_bytes(4, 'big') + body)
-        self.flush()
-
-    def queue_body(self, raw: bytes, coalesce_key=None) -> None:
-        """Queue one encoded message for the next server replication frame."""
-        if coalesce_key is None:
-            self._queued_bodies.append(raw)
-            # An event or lifecycle message is an ordering barrier. A later state
-            # cannot replace a state that clients must observe before this event.
-            self._queued_keys.clear()
-            return
-
-        index = self._queued_keys.get(coalesce_key)
-        if index is None:
-            self._queued_keys[coalesce_key] = len(self._queued_bodies)
-            self._queued_bodies.append(raw)
-        else:
-            self._queued_bodies[index] = raw
-
-    def send_queued(self, sent_at=None) -> None:
-        """Compress all queued messages into one length-prefixed frame."""
-        if not self._queued_bodies:
-            return
-        bodies, self._queued_bodies = self._queued_bodies, []
-        self._queued_keys.clear()
-        raw = bodies[0] if len(bodies) == 1 else b'[' + b','.join(bodies) + b']'
-        self.send_body(raw, sent_at=sent_at)
-
-    def flush(self) -> None:
-        """Drain what we can of the outgoing buffer. Safe to call at any time."""
-        while self._outgoing:
-            try:
-                sent = self._sock.send(self._outgoing)
-            except (BlockingIOError, InterruptedError):
-                break                     # kernel buffer full; try again next pass
-            except OSError:
-                self.alive = False        # gone; the loop sweeps it up
-                return
-            if not sent:
-                break
-            self._outgoing = self._outgoing[sent:]
-
-        # A peer this far behind is not coming back, and the backlog is now ours to
-        # carry. Better to drop them than to grow forever on their behalf.
-        if len(self._outgoing) > MAX_BACKLOG:
-            self.alive = False
-
-    def poll(self) -> list:
-        """Return every complete message available right now; never blocks."""
-        self.flush()                      # keep anything the buffer refused moving
-
-        while True:
-            readable, _, _ = select.select([self._sock], [], [], 0)
-            if not readable:
-                break
-            data = self._sock.recv(4096)
-            if not data:
-                self.alive = False
-                break
-            self._buffer += data
-            self._collect()
-
-        messages, self._pending = self._pending, []
-        return messages
-
-    def read_until(self, matches) -> dict:
-        """Block until a message satisfying `matches` arrives, and return it."""
-        while True:
-            for i, message in enumerate(self._pending):
-                if matches(message):
-                    return self._pending.pop(i)
-            data = self._sock.recv(4096)
-            if not data:
-                raise ConnectionError('the server closed the connection')
-            self._buffer += data
-            self._collect()
-
-    def close(self) -> None:
-        self.alive = False
-        self._sock.close()
-
-    def _collect(self) -> None:
-        """Take every whole frame out of the buffer, leaving any partial one."""
-        while len(self._buffer) >= HEADER:
-            size = int.from_bytes(self._buffer[4:8], 'big')
-
-            if size > MAX_FRAME:
-                # Nothing we send is this big, so the stream is not frames any
-                # more. Say so instead of blocking for ever on bytes that are
-                # never going to arrive.
-                self.alive = False
-                self._buffer = b''
-                raise ConnectionError(
-                    f'the connection sent a {size} byte message, which cannot be '
-                    f'right -- the stream is out of step')
-
-            if len(self._buffer) < HEADER + size:
-                return                    # the rest of it has not arrived yet
-
-            body = self._buffer[HEADER:HEADER + size]
-            number = int.from_bytes(self._buffer[0:4], 'big')
-            self._buffer = self._buffer[HEADER + size:]
-
-            decoded = json.loads(self._inflate.decompress(body).decode(),
-                                 object_hook=_decode_values)
-            frame_at = None
-            if (isinstance(decoded, dict)
-                    and set(decoded) == {FRAME_TIME_KEY, FRAME_MESSAGES_KEY}
-                    and isinstance(decoded[FRAME_TIME_KEY], (int, float))):
-                frame_at = decoded[FRAME_TIME_KEY]
-                decoded = decoded[FRAME_MESSAGES_KEY]
-
-            raw_messages = decoded if isinstance(decoded, list) else [decoded]
-            if not all(isinstance(message, dict) for message in raw_messages):
-                raise ValueError('a network frame must contain messages')
-            messages = [
-                _FramedMessage(message, number, frame_at)
-                for message in raw_messages
-            ]
-            if number and messages:
-                # Both ends number what they send, but only the client reads it
-                # back: a hole in the server's count means it missed a change and
-                # must ask for the world again. The server ignores the numbers
-                # coming the other way, since it is the one being told.
-                messages[0]['n'] = number
-            self._pending.extend(messages)
-
-
-# --------------------------------------------------------------------------- #
 #  Helpers / standalone entry point
 # --------------------------------------------------------------------------- #
 
 def _canonical(value) -> str:
-    """
-    A value as the one piece of text that stands for it, or None if it cannot be
-    sent at all. Keys are sorted so that a dict rebuilt in a different order does
-    not read as a change and go out again for nothing.
-
-    Encodes pydraw's own values the same way the wire does -- it has to, since this
-    decides whether a key *can* be sent at all.
-    """
+    """Return canonical wire JSON, or ``None`` for an unsendable value."""
     try:
         return json.dumps(value, sort_keys=True, default=_encode_values)
     except (TypeError, ValueError):
@@ -1977,11 +1619,7 @@ def _canonical(value) -> str:
 
 
 def _unsendable(value, depth: int = 0):
-    """
-    The first thing inside `value` that JSON cannot carry, or None if the trouble
-    is something else (a loop in the data, say). Only ever runs to explain a
-    failure, so walking the whole structure is fine.
-    """
+    """Return the first value JSON cannot carry, if identifiable."""
     if value is None or isinstance(value, (str, int, float, bool)):
         return None
     if is_serializable(value):                # a Color, a Location: these travel
@@ -2005,6 +1643,27 @@ def _unsendable(value, depth: int = 0):
     return value
 
 
+def _rate(name: str, value):
+    """Validate a positive Room rate."""
+    if (not isinstance(value, (int, float)) or isinstance(value, bool)
+            or value <= 0):
+        raise InvalidArgumentError(
+            f'Room.{name} must be a positive number of times a second; '
+            f'received {value!r}.'
+        )
+    return value
+
+
+def _byte_limit(name: str, value):
+    """Validate a positive whole-byte limit."""
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise InvalidArgumentError(
+            f'Room.{name} must be a positive whole number of bytes a second; '
+            f'received {value!r}.'
+        )
+    return value
+
+
 def _as_room(room) -> Room:
     """Accept either a Room subclass or an already-made instance."""
     if isinstance(room, Room):
@@ -2016,276 +1675,8 @@ def _as_room(room) -> Room:
     )
 
 
-def _client_boundary(tree: 'ast.Module'):
-    """
-    Where the client half of a game script begins -- the index of the first
-    top-level line that builds something only a player needs.
-
-    Returns None for a file that has no client half at all (a module holding just
-    a Room), which is the signal that it can be imported the ordinary way.
-    """
-    import ast
-
-    for position, node in enumerate(tree.body):
-        if isinstance(node, (ast.While, ast.For)):
-            return position                 # the game loop, if we somehow got here
-        for inner in ast.walk(node):
-            if isinstance(inner, ast.Name) and inner.id in CLIENT_ONLY:
-                return position
-    return None
-
-
-def _describe(node: 'ast.stmt', source_lines: list) -> str:
-    """The source text of a statement's first line, for pointing at it."""
-    return source_lines[node.lineno - 1].strip()
-
-
-def _globals_read(code, seen=None):
-    """
-    Every module-level name a chunk of compiled code looks up, following the code
-    nested inside it. Read off the bytecode rather than the source because that is
-    what is *actually* referenced -- `math.hypot` reads `math`, not `hypot`.
-    """
-    import dis
-
-    seen = seen if seen is not None else set()
-    names = set()
-    if code in seen:
-        return names
-    seen.add(code)
-
-    for instruction in dis.get_instructions(code):
-        if instruction.opname in ('LOAD_GLOBAL', 'STORE_GLOBAL', 'DELETE_GLOBAL'):
-            names.add(instruction.argval)
-    for constant in code.co_consts:
-        if isinstance(constant, types.CodeType):
-            names |= _globals_read(constant, seen)
-    return names
-
-
-def _top_level_lines(tree: 'ast.Module') -> dict:
-    """{name: line number} for every name bound by a top-level statement."""
-    import ast
-
-    lines = {}
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            lines.setdefault(node.name, node.lineno)
-            continue
-        for inner in ast.walk(node):
-            if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Store):
-                lines.setdefault(inner.id, inner.lineno)
-            elif isinstance(inner, ast.alias):
-                bound = inner.asname or inner.name.split('.')[0]
-                lines.setdefault(bound, node.lineno)
-    return lines
-
-
-class _ClientHalfReached(Exception):
-    """Raised by the stand-in Screen if a line we didn't spot tries to open one."""
-
-
-def _window_opened(class_name: str, origin: str) -> PydrawError:
-    return PydrawError(
-        f'net: loading {class_name} from {origin} tried to open a game window. '
-        f'Some line the loader could not see builds a Screen -- move the Room above '
-        f'it, or give the Room a file of its own (arena.py) and serve that instead.'
-    )
-
-
-def _no_screen(*args, **kwargs):
-    """Stands in for Screen while a Room is being loaded. A server has no window."""
-    raise _ClientHalfReached()
-
-
-@contextlib.contextmanager
-def _server_side(origin: str):
-    """
-    Run a game file the way a server has to see it.
-
-    Two things need standing in for. sys.argv, because a game reads it to find the
-    host to join and would otherwise be handed *our* command line. And Screen, as a
-    backstop: reading a file cannot catch every way to build a window (an aliased
-    import, a `pydraw.Screen(...)`), and if one slips through this turns "a window
-    opened on your headless server" into an error we can explain.
-    """
-    # Imported here, not at module scope: pydraw's __init__ imports this file, so
-    # reaching back up to the package at import time would be circular.
-    import pydraw as pydraw_package
-    from pydraw import screen as screen_module
-
-    real_argv, real_screen = sys.argv, screen_module.Screen
-    sys.argv = [origin]
-    screen_module.Screen = _no_screen
-    if getattr(pydraw_package, 'Screen', None) is real_screen:
-        pydraw_package.Screen = _no_screen
-    try:
-        yield
-    finally:
-        sys.argv = real_argv
-        screen_module.Screen = real_screen
-        if getattr(pydraw_package, 'Screen', None) is _no_screen:
-            pydraw_package.Screen = real_screen
-
-
-def _load_room(module_name: str, class_name: str):
-    """
-    Fetch a Room class out of a file *without running the rest of that file*.
-
-    A pydraw game is one script: constants and the Room, then the client half --
-    a Screen, sprites, a game loop that never returns. Importing it to reach the
-    Room would run all of that, so `python -m pydraw.network game:Arena` would open
-    a window and play the game instead of serving it.
-
-    So we don't import. We parse the file and run it from the top in the ordinary
-    way, stopping at the first line that builds a Screen or a Network. Everything
-    above that line runs exactly as it would in a real game; everything from it
-    down never runs at all.
-
-    One rule falls out of that, and it is the whole rule: the Room has to be
-    written above the line that makes your Screen.
-    """
-    import ast
-
-    try:
-        spec = importlib.util.find_spec(module_name)
-    except (ImportError, ValueError):
-        spec = None
-    if spec is None:
-        raise PydrawError(f'net: no module named {module_name!r} -- '
-                          f'is it in the directory you are running from?')
-
-    origin = spec.origin
-    if origin is None or not origin.endswith('.py'):
-        # Not source we can read (a package, a compiled module), so unlikely to be
-        # a game script: an ordinary import is the right move.
-        return getattr(importlib.import_module(module_name), class_name)
-
-    with open(origin, 'r') as source_file:
-        source = source_file.read()
-    tree = ast.parse(source, origin)
-    source_lines = source.splitlines()
-
-    boundary = _client_boundary(tree)
-    if boundary is None:
-        # A module that holds a Room and nothing else, so import it properly and
-        # get real import semantics. Still guarded, because "no client half" is a
-        # reading of the file.
-        with _server_side(origin):
-            try:
-                return getattr(importlib.import_module(module_name), class_name)
-            except _ClientHalfReached:
-                raise _window_opened(class_name, origin) from None
-
-    index = None
-    for position, node in enumerate(tree.body):
-        if isinstance(node, ast.ClassDef) and node.name == class_name:
-            index = position
-            break
-
-    if index is None:
-        raise PydrawError(
-            f'net: {class_name!r} is not a class defined at the top level of '
-            f'{origin}. A served Room has to be written as a plain `class '
-            f'{class_name}(Room):` in that file -- not inside a function, not '
-            f'inside an `if`, and not under `if __name__ == \'__main__\':`.'
-        )
-
-    client = tree.body[boundary]
-    if index >= boundary:
-        raise PydrawError(
-            f'net: {class_name} is defined on line {tree.body[index].lineno}, but '
-            f'the client half of {origin} starts on line {client.lineno}:\n\n'
-            f'    {_describe(client, source_lines)}\n\n'
-            f'A Room runs on a server -- no window, no sprites, no game loop -- so '
-            f'the loader stops there and never reaches your class. Either move '
-            f'`class {class_name}(Room):` above that line, or give the Room a file '
-            f'of its own (arena.py) and serve that instead.'
-        )
-
-    namespace = {'__name__': module_name, '__file__': origin}
-    prelude = compile(ast.Module(body=tree.body[:boundary], type_ignores=[]),
-                      origin, 'exec')
-
-    with _server_side(origin):
-        try:
-            exec(prelude, namespace)                       # noqa: S102
-        except _ClientHalfReached:
-            raise _window_opened(class_name, origin) from None
-
-    room_class = namespace[class_name]
-    _check_reachable(room_class, class_name, namespace, tree, origin, client)
-
-    print(f'net: loaded {class_name} from {origin} -- ran the {boundary} lines above '
-          f'your Screen on line {client.lineno}. Nothing below it ran, so no window '
-          f'opened.', flush=True)
-    return room_class
-
-
-def _check_reachable(room_class, class_name, namespace, tree, origin, client) -> None:
-    """
-    Complain now, by name and line, about anything the Room needs that lives in
-    the client half -- rather than letting it fail as a NameError mid-game.
-    """
-    lines = _top_level_lines(tree)
-    wanted = set()
-    for value in vars(room_class).values():
-        method = getattr(value, '__func__', value)          # classmethod/staticmethod
-        method = getattr(method, 'fget', method)             # property
-        if hasattr(method, '__code__'):
-            wanted |= _globals_read(method.__code__)
-
-    missing = []
-    for name in sorted(wanted):
-        if name in namespace or hasattr(builtins, name):
-            continue
-        if name in lines:
-            missing.append(f'`{name}`, defined on line {lines[name]} -- that is below '
-                           f'your Screen on line {client.lineno}, so the server never '
-                           f'ran it. Move it above that line.')
-        else:
-            missing.append(f'`{name}`, which nothing in {origin} defines.')
-
-    if missing:
-        problems = '\n  - '.join(missing)
-        raise PydrawError(
-            f'net: {class_name} uses things the server cannot reach:\n  - {problems}\n'
-            f'Move them above your Screen line, or give the Room a file of its own '
-            f'(arena.py) and serve that instead.'
-        )
-
-
-def _main(argv) -> None:
-    """`python -m pydraw.network module:RoomClass [port]` -- run a standalone server."""
-    if not argv:
-        print('usage: python -m pydraw.network module:RoomClass [port]')
-        return
-
-    target = argv[0]
-    port = int(argv[1]) if len(argv) > 1 else DEFAULT_PORT
-
-    if ':' not in target:
-        print("expected module:RoomClass, e.g. pong:Pong")
-        return
-
-    module_name, class_name = target.split(':', 1)
-    try:
-        room_class = _load_room(module_name, class_name)
-    except (PydrawError, AttributeError, ModuleNotFoundError,
-            OSError, SyntaxError) as error:
-        print(f'{error}')
-        return
-
-    print(f'serving {class_name} on port {port} -- press Ctrl+C to stop', flush=True)
-    serve(room_class, port)
-
-
 if __name__ == '__main__':
-    # `python -m pydraw.network` runs this file as __main__, and the game we are
-    # about to serve imports it *again* under its real name -- two module objects,
-    # two separate Room classes, and the game's Arena subclasses the other one. So
-    # hand off to the canonical module, where _as_room checks against the Room the
-    # game actually imported.
+    # Use the canonical module so loaded games share its Room class.
     import pydraw.network
 
     pydraw.network._main(sys.argv[1:])
