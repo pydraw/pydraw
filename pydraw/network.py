@@ -105,6 +105,9 @@ class Network:
         self._owner = {}        # id -> the slice that player owns and writes
         self._server = {}       # id -> that player's server-managed fields
         self._mine_dirty = False
+        self._mine_published = False
+        self._generation = 0
+        self._pending_sends = []
 
         # How often your own position goes out, whatever the frame rate. See _pump.
         self._rate = rate
@@ -130,7 +133,7 @@ class Network:
         self._resyncing = False
         self._asked_at = None
 
-        #: Every player's id, including your own.
+        #: Your id, plus every other player whose owner slice is published.
         self.players = []
 
         #: Your own player number, assigned by the server.
@@ -166,8 +169,7 @@ class Network:
         self._owner[self.id] = _track(
             self._owner.get(self.id, {}), self._mine_changes, None
         )
-        #: Your entity: your own slice merged with your server-managed fields.
-        #: Writing an owned field replicates instantly; writing a server field raises.
+        #: Your writable slice merged with read-only server-managed fields.
         self.mine = _Mine(self, self.id)
 
         # Pumped once per frame from inside screen.update(); see Screen.on_frame.
@@ -176,9 +178,9 @@ class Network:
     # -- what a game calls --------------------------------------------------
 
     def others(self):
-        """Iterate over drawable ``(id, entity)`` pairs for other players."""
+        """Iterate over published ``(id, entity)`` pairs for other players."""
         for pid in self.players:
-            if pid != self.id and (self._owner.get(pid) or self._server.get(pid)):
+            if pid != self.id and pid in self._owner:
                 yield pid, _Entity(self, pid)
 
     def call(self, action: str, **data) -> None:
@@ -187,7 +189,7 @@ class Network:
         use ``net.mine`` for player-owned movement.
         """
         verify(action, str)
-        self._send({'t': 'call', 'action': action, 'data': data})
+        self._send({'t': 'call', 'action': action, 'data': data}, after_publish=True)
 
     def send(self, name: str, keep: bool = False, **data) -> None:
         """
@@ -195,7 +197,8 @@ class Network:
         joiners until the Room clears its kept events.
         """
         verify(name, str, keep, bool)
-        self._send({'t': 'event', 'name': name, 'data': data, 'keep': keep})
+        self._send({'t': 'event', 'name': name, 'data': data, 'keep': keep},
+                   after_publish=True)
 
     def smooth(self, *fields: str) -> None:
         """
@@ -306,7 +309,18 @@ class Network:
 
             # Commit the handshake and trigger join().
             conn.send({'t': 'ready'})
-            conn.read_until(lambda m: m.get('t') == 'connected')
+            connected = conn.read_until(lambda m: m.get('t') == 'connected')
+            seeded = connected.get('slice')
+            if seeded is not None:
+                if not isinstance(seeded, dict):
+                    raise ValueError('the initial owner slice is not a dict')
+                generation = connected.get('generation', 0)
+                if (not isinstance(generation, int) or isinstance(generation, bool)
+                        or generation < 0):
+                    raise ValueError('the owner generation is invalid')
+                self._owner[self.id] = seeded
+                self._generation = generation
+                self._mine_published = True
             conn.nonblocking()
         except PydrawError:
             conn.close()
@@ -320,9 +334,12 @@ class Network:
 
         self._conn = conn
 
-    def _send(self, message: dict) -> None:
+    def _send(self, message: dict, after_publish: bool = False) -> None:
         if self._conn is None or not self._conn.alive:
             raise PydrawError('Network: not connected.')
+        if after_publish and not self._mine_published:
+            self._pending_sends.append(message)
+            return
         self._conn.send(message)
 
     def _pump(self) -> None:
@@ -332,16 +349,22 @@ class Network:
 
         # Send the latest complete owned slice at the configured rate.
         now = time.perf_counter()
-        if self._mine_dirty and (self._rate is None or now >= self._next_own):
+        if ((not self._mine_published or self._mine_dirty)
+                and (self._rate is None or now >= self._next_own)):
             slice_ = dict(self._owner[self.id])
             for key, places in self._precision.items():
                 value = slice_.get(key)
                 if isinstance(value, float):
                     slice_[key] = round(value, places)
-            self._conn.send({'t': 'own', 'slice': slice_})
+            self._conn.send({'t': 'own', 'slice': slice_,
+                             'generation': self._generation})
             self._mine_dirty = False
+            self._mine_published = True
             if self._rate is not None:
                 self._next_own = now + 1 / self._rate
+            for message in self._pending_sends:
+                self._conn.send(message)
+            self._pending_sends.clear()
 
         try:
             arrived = self._conn.poll()
@@ -406,11 +429,14 @@ class Network:
         if kind == 'ping':
             self._send({'t': 'pong'})
         elif kind == 'set':
-            self._apply(message['key'], message['value'], frame_at, frame_number)
+            self._apply(message['key'], message['value'], frame_at, frame_number,
+                        reset=bool(message.get('reset')))
         elif kind == 'del':
             self._remove(message['key'])
         elif kind == 'snapshot':
             self._snapshot(message, frame_at, frame_number)
+        elif kind == 'reset':
+            self._reset_mine(message)
         elif kind == 'event':
             # Room events have no player id.
             self._handler('networkevent', message['name'], message['data'],
@@ -483,9 +509,7 @@ class Network:
         history.append((sample_at, slice_))
 
     def _blend_others(self) -> None:
-        """
-        Interpolate remote players on one delayed timeline for this frame.
-        """
+        """Interpolate remote players on one delayed timeline."""
         render_at = self._render_at()
         self._blend = {}
 
@@ -560,11 +584,7 @@ class Network:
         self._send({'t': 'resync'})
 
     def _snapshot(self, message: dict, frame_at=None, frame_number=None) -> None:
-        """
-        Replace local replicated state with a full server snapshot.
-
-        Keep the locally authored owner slice.
-        """
+        """Replace replicated state, preserving the local owner slice."""
         state = message['state']
         if 'players' in message:
             self.players = list(message['players'])
@@ -585,11 +605,14 @@ class Network:
 
         self._resyncing = False
 
-    def _apply(self, key: str, value, frame_at=None, frame_number=None) -> None:
+    def _apply(self, key: str, value, frame_at=None, frame_number=None,
+               reset: bool = False) -> None:
         if key.startswith(OWNER_PREFIX):
             pid = int(key[len(OWNER_PREFIX):])
             # Never overwrite the locally authored owner slice.
             if pid != self.id:
+                if reset:
+                    self.clear_smoothing(pid)
                 value = _readonly(value, _Entity._REFUSAL)
                 if self._smooth or self._smooth_angles:
                     self._stage_pose(pid, value, frame_at, frame_number)
@@ -599,6 +622,20 @@ class Network:
                 _readonly(value, _Entity._REFUSAL)
         else:
             self.state._assign(key, value)          # neutral world
+
+    def _reset_mine(self, message: dict) -> None:
+        """Apply an authoritative owner-slice correction."""
+        generation = message.get('generation')
+        slice_ = message.get('slice')
+        if (not isinstance(generation, int) or isinstance(generation, bool)
+                or generation <= self._generation or not isinstance(slice_, dict)):
+            return
+        self._generation = generation
+        self._owner[self.id] = _track(
+            slice_, self._mine_changes, None
+        )
+        self._mine_dirty = False
+        self._mine_published = True
 
     def _remove(self, key: str) -> None:
         if key.startswith(OWNER_PREFIX):
@@ -911,7 +948,7 @@ class Room:
         """Called after every Player leaves when the room closes."""
 
     def join(self, player) -> None:
-        """Called when a player connects. Give them player.state fields."""
+        """Called on connect. Set player.state and optionally player.seed()."""
 
     def leave(self, player) -> None:
         """Called when a player disconnects. Prune any world data you keyed by id."""
@@ -920,7 +957,9 @@ class Room:
         """Advance the room by elapsed time ``dt`` at ``tick_rate``."""
 
     def accept(self, player, proposed: dict, current: dict) -> dict:
-        """Return the accepted version of a player's proposed owner slice."""
+        """
+        Return proposed to accept, current to reject, or a new dict to correct.
+        """
         return proposed
 
     # call these
@@ -953,6 +992,7 @@ class Player:
         self._state = _TrackedDict(self._changes, None)
         self._conn = conn
         self._server = server
+        self._joining = False
 
     @property
     def state(self) -> dict:
@@ -971,6 +1011,14 @@ class Player:
     def slice(self) -> dict:
         """The player's last accepted, read-only owner slice."""
         return self._server._owner.get(self.id, {})
+
+    def seed(self, **fields) -> None:
+        """Publish the player's initial owner slice."""
+        self._server._seed(self, fields)
+
+    def reset(self, **fields) -> None:
+        """Authoritatively reset fields in the player's owner slice."""
+        self._server._reset_player(self, fields)
 
     def send(self, name: str, **data) -> None:
         """Send a transient event to this player if still connected."""
@@ -1014,6 +1062,7 @@ class _Server:
         self._next_id = 1
 
         self._owner = {}          # id -> latest accepted owner slice
+        self._generations = {}    # id -> current authoritative owner generation
         # Canonical JSON shadows avoid deep copies and false ordering changes.
         self._world_shadow = {}   # world key -> JSON of the value last sent
         self._server_shadow = {}  # id -> JSON of the server slice last sent
@@ -1172,9 +1221,10 @@ class _Server:
 
         self._conns[sock] = conn
         self._ids[sock] = player_id
+        conn.player_id = player_id
 
         # Reserve the id; `ready` creates the Player.
-        players = list(self._players)
+        players = list(self._owner)
         players.append(player_id)
         self._send_to(conn, {'t': 'hello', 'id': player_id,
                              'players': players,
@@ -1194,22 +1244,28 @@ class _Server:
         player_id = self._ids[sock]
         player = Player(player_id, conn, self)
         self._players[player_id] = player
-        self._owner[player_id] = _readonly(
-            {}, 'player.slice is read-only -- the connected player owns it.'
-        )
+        self._generations[player_id] = 0
         self._room.players.append(player)
 
         # join() completes before snapshots and announcements.
-        self._guarded('join()', self._room.join, player)
+        player._joining = True
+        try:
+            self._guarded('join()', self._room.join, player)
+        finally:
+            player._joining = False
+        if player_id in self._owner:
+            self._publish_player(player)
         self._resync(conn, forced=True)
         for event in self._replay:
             self._send_to(conn, event)
-        self._send_to(conn, {'t': 'connected'})
+        connected = {'t': 'connected'}
+        if player_id in self._owner:
+            connected.update(slice=dict(self._owner[player_id]),
+                             generation=self._generations[player_id])
+        self._send_to(conn, connected)
 
         # The client blocks until this handshake batch arrives.
         conn.send_queued(sent_at=time.perf_counter())
-
-        self._broadcast({'t': 'join', 'id': player_id}, skip=sock)
 
     def _receive(self, sock) -> None:
         conn = self._conns[sock]
@@ -1292,7 +1348,9 @@ class _Server:
         player_id = self._ids.pop(sock, None)
         conn = self._conns.pop(sock, None)
         player = self._players.pop(player_id, None)
+        was_published = player_id in self._owner
         self._owner.pop(player_id, None)
+        self._generations.pop(player_id, None)
         self._server_shadow.pop(player_id, None)
         if player is not None and player in self._room.players:
             self._room.players.remove(player)
@@ -1308,7 +1366,7 @@ class _Server:
 
         if player is not None:
             self._guarded('leave()', self._room.leave, player)
-            if announce:
+            if announce and was_published:
                 # leave() finishes before other clients hear playerquit.
                 self._broadcast({'t': 'del', 'key': f'{OWNER_PREFIX}{player_id}'})
                 self._broadcast({'t': 'del', 'key': f'{SERVER_PREFIX}{player_id}'})
@@ -1341,7 +1399,10 @@ class _Server:
             return
 
         if kind == 'own':
-            self._handle_own(sock, player, message.get('slice'))
+            self._handle_own(sock, player, message.get('slice'),
+                             message.get('generation', 0))
+        elif player.id not in self._owner:
+            return
         elif kind == 'call':
             self._run_action(sock, player, message.get('action'),
                              message.get('data', {}))
@@ -1356,8 +1417,19 @@ class _Server:
         if not forced and now < conn.resync_at:
             return
         conn.resync_at = now + RESYNC_COOLDOWN
-        self._send_to(conn, {'t': 'snapshot', 'state': self._compose(),
-                             'players': list(self._players)})
+        player_id = getattr(conn, 'player_id', None)
+        players = list(self._owner)
+        if player_id is not None and player_id not in players:
+            players.append(player_id)
+        self._send_to(conn, {'t': 'snapshot',
+                             'state': self._compose(include=player_id),
+                             'players': players})
+        if player_id in self._owner:
+            self._send_to(conn, {
+                't': 'reset',
+                'slice': self._owner[player_id],
+                'generation': self._generations[player_id],
+            })
 
     def _relay_event(self, sock, player: Player, message: dict) -> None:
         """Review and relay a client's event."""
@@ -1378,7 +1450,8 @@ class _Server:
             self._replay.append(out)
         self._broadcast(out, skip=sock)
 
-    def _handle_own(self, sock, player: Player, proposed: dict) -> None:
+    def _handle_own(self, sock, player: Player, proposed: dict,
+                    generation: int = 0) -> None:
         current = self._owner.get(player.id, {})
 
         # Validate client-owned data before the Room sees it.
@@ -1386,6 +1459,9 @@ class _Server:
             self._complain(
                 f'player {player.id} sent {type(proposed).__name__} where its own '
                 f'slice should be, so that write was ignored')
+            return
+        if (not isinstance(generation, int) or isinstance(generation, bool)
+                or generation != self._generations.get(player.id)):
             return
 
         # A broken accept() falls back to the default policy.
@@ -1403,14 +1479,91 @@ class _Server:
                 f'`current` to turn it down')
             accepted = proposed
 
-        accepted = _readonly(
-            accepted,
+        correction = accepted is not proposed
+        if player.id not in self._owner:
+            if correction:
+                self._validate_owner_replacement(player, accepted, 'reset')
+            self._owner[player.id] = self._readonly_owner(accepted)
+            if correction:
+                self._generations[player.id] += 1
+                self._send_owner_reset(player)
+            self._publish_player(player)
+        elif correction:
+            self._reset_owner(player, accepted)
+        else:
+            self._owner[player.id] = self._readonly_owner(accepted)
+            # The owner already applied this slice locally.
+            self._broadcast({'t': 'set',
+                             'key': f'{OWNER_PREFIX}{player.id}',
+                             'value': self._owner[player.id]}, skip=sock)
+
+    def _readonly_owner(self, value: dict):
+        return _readonly(
+            value,
             'player.slice is read-only -- the connected player owns it.',
         )
-        self._owner[player.id] = accepted
-        # The owner already applied this slice locally.
+
+    def _seed(self, player: Player, fields: dict) -> None:
+        if player.id not in self._players or player._conn is None:
+            raise PydrawError('Player.seed(): this player is no longer connected.')
+        if player.id in self._owner:
+            raise PydrawError(
+                'Player.seed() must be called before the owner slice is published.'
+            )
+        self._validate_owner_replacement(player, fields, 'seed')
+        self._owner[player.id] = self._readonly_owner(fields)
+        if not player._joining:
+            self._publish_player(player)
+
+    def _reset_player(self, player: Player, fields: dict) -> None:
+        if player.id not in self._owner or player._conn is None:
+            raise PydrawError('Player.reset() needs a published, connected player.')
+        if not fields:
+            return
+        updated = dict(self._owner[player.id])
+        updated.update(fields)
+        self._reset_owner(player, updated)
+
+    def _reset_owner(self, player: Player, slice_: dict) -> None:
+        self._validate_owner_replacement(player, slice_, 'reset')
+        self._generations[player.id] += 1
+        self._owner[player.id] = self._readonly_owner(slice_)
+        self._send_owner_reset(player)
         self._broadcast({'t': 'set', 'key': f'{OWNER_PREFIX}{player.id}',
-                         'value': accepted}, skip=sock)
+                         'value': self._owner[player.id], 'reset': True},
+                        skip=player._conn._sock)
+
+    def _send_owner_reset(self, player: Player) -> None:
+        self._send_to(player._conn, {
+            't': 'reset',
+            'slice': self._owner[player.id],
+            'generation': self._generations[player.id],
+        })
+
+    @staticmethod
+    def _validate_owner_replacement(player: Player, value: dict,
+                                    method: str) -> None:
+        overlap = set(value) & set(player.state)
+        if overlap:
+            names = ', '.join(sorted(map(str, overlap)))
+            raise InvalidArgumentError(
+                f'Player.{method}(): {names} already belong to player.state.'
+            )
+        if _canonical(value) is None:
+            raise InvalidArgumentError(
+                f'Player.{method}(): owner fields must be network values.'
+            )
+
+    def _publish_player(self, player: Player) -> None:
+        """Publish one player's initial state before announcing their arrival."""
+        sock = player._conn._sock
+        self._publish(player.id, dict(player.state), self._server_shadow,
+                      f'player {player.id} state',
+                      key=f'{SERVER_PREFIX}{player.id}', skip=sock)
+        player._changes.take()
+        self._broadcast({'t': 'set', 'key': f'{OWNER_PREFIX}{player.id}',
+                         'value': self._owner[player.id]}, skip=sock)
+        self._broadcast({'t': 'join', 'id': player.id}, skip=sock)
 
     def _guarded(self, what: str, function, *args, **kwargs):
         """Run one callback without taking down the serve loop."""
@@ -1488,9 +1641,7 @@ class _Server:
     # -- state sync ---------------------------------------------------------
 
     def _sync(self) -> None:
-        """
-        Publish tracked changes, periodically checking all replicated state.
-        """
+        """Publish changes and periodically verify all replicated state."""
         now = time.perf_counter()
         sweep = now >= self._next_verify
         if sweep:
@@ -1509,13 +1660,15 @@ class _Server:
                 self._broadcast({'t': 'del', 'key': key})
 
         for pid, player in self._players.items():
+            if pid not in self._owner:
+                continue
             if player._changes.take() or sweep:
                 self._publish(pid, dict(player.state), self._server_shadow,
                               f'player {pid} state',
                               key=f'{SERVER_PREFIX}{pid}')
 
     def _publish(self, shadow_key, value, shadow: dict, what: str,
-                 key: str = None) -> None:
+                 key: str = None, skip=None) -> None:
         """Broadcast a value if it really is not what the clients already have."""
         text = _canonical(value)
         if text is None:
@@ -1531,21 +1684,24 @@ class _Server:
             return
         shadow[shadow_key] = text
         self._broadcast({'t': 'set', 'key': key if key is not None else shadow_key,
-                         'value': value})
+                         'value': value}, skip=skip)
 
-    def _compose(self) -> dict:
+    def _compose(self, include: int = None) -> dict:
         """The whole replicated world, prefixed by owner, for a join snapshot."""
         snap = dict(self._room.state)
         for pid, slice in self._owner.items():
             snap[f'{OWNER_PREFIX}{pid}'] = slice
-        for pid, player in self._players.items():
-            snap[f'{SERVER_PREFIX}{pid}'] = dict(player.state)
+        published = set(self._owner)
+        if include in self._players:
+            published.add(include)
+        for pid in published:
+            snap[f'{SERVER_PREFIX}{pid}'] = dict(self._players[pid].state)
         return snap
 
     # -- sending ------------------------------------------------------------
 
     def _broadcast(self, message: dict, skip=None) -> None:
-        # Encode once for the whole room: only change the number before the body
+        # Encode once for the room; each connection adds its sequence number.
         body = self._body(message)
         if body is None:
             return
@@ -1562,7 +1718,7 @@ class _Server:
     @staticmethod
     def _coalesce_key(message: dict):
         """Identify state writes that can replace one another inside a batch."""
-        if message.get('t') not in ('set', 'del'):
+        if message.get('t') not in ('set', 'del') or message.get('reset'):
             return None
         key = message.get('key')
         try:

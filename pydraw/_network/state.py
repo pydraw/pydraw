@@ -25,9 +25,7 @@ class _Changes:
 
 
 def _track(value, changes: _Changes, key, refusal: str = None):
-    """
-    Recursively wrap values for change tracking or read-only access.
-    """
+    """Wrap nested values for change tracking or read-only access."""
     if isinstance(value, dict):
         tracked = _TrackedDict(changes, key, refusal)
         for inner_key, inner in value.items():
@@ -56,9 +54,7 @@ def _readonly(value, refusal: str):
 
 
 class _TrackedDict(dict):
-    """
-    A dict that reports writes by top-level key or refuses them.
-    """
+    """A dict that reports top-level changes or refuses writes."""
 
     __slots__ = ('_changes', '_key', '_refusal')
 

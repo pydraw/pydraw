@@ -48,10 +48,10 @@ class _Connection:
         self._queued_bodies = []
         self._queued_keys = {}
         self.alive = True
-        self.seq = 0            # server side: how many messages this peer has been
-        self.resync_at = 0.0    # sent, and when it may next ask for the world back
-        self.messages = 0       # and how many it has sent us this second
-        self.bytes_received = 0  # compressed wire bytes it sent this second
+        self.seq = 0
+        self.resync_at = 0.0
+        self.messages = 0
+        self.bytes_received = 0
         self.counted_at = 0.0
         self.last_received = 0
         self.byte_limit_exceeded = False

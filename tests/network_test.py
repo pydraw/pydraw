@@ -316,26 +316,33 @@ class LoaderEnvironmentTest(LoaderFixture):
 
 
 class FlagshipDemoTest(unittest.TestCase):
-    """Load the real net_ships.py Arena and run its actual adjudication."""
+    """Load the authoritative ships Arena and run its adjudication."""
 
     @classmethod
     def setUpClass(cls):
         sys.path.insert(0, EXAMPLES_DIR)
-        cls.room_class = _load_room('net_ships', 'Arena')
+        cls.room_class = _load_room('net_ships_v2', 'Arena')
 
     @classmethod
     def tearDownClass(cls):
         sys.path.remove(EXAMPLES_DIR)
-        sys.modules.pop('net_ships', None)
+        sys.modules.pop('net_ships_v2', None)
 
     def setUp(self):
         self.room = self.room_class()
+        self.room.start()
 
     class Player:
         def __init__(self, player_id, x, y, angle=0, hp=100):
             self.id = player_id
             self.slice = {'x': x, 'y': y, 'a': angle}
-            self.state = {'hp': hp, 'kills': 0}      # what Arena.join() gives them
+            self.state = {'hp': hp, 'kills': 0}
+
+        def seed(self, **fields):
+            self.slice = dict(fields)
+
+        def reset(self, **fields):
+            self.slice.update(fields)
 
     def arena(self, *players):
         self.room.players = list(players)
@@ -343,7 +350,7 @@ class FlagshipDemoTest(unittest.TestCase):
 
     def test_no_window_was_opened(self):
         """The loaded module never built a Screen -- there is no screen name."""
-        self.assertNotIn('net_ships', sys.modules)
+        self.assertNotIn('net_ships_v2', sys.modules)
         self.assertTrue(issubclass(self.room_class, Room))
 
     def test_hits_a_ship_in_front(self):
@@ -369,34 +376,24 @@ class FlagshipDemoTest(unittest.TestCase):
         shooter, target = self.arena(self.Player(1, 100, 100),
                                      self.Player(2, 100, 40, hp=20))
         self.room.fire(shooter)
-        self.assertEqual(target.state['hp'], 0)      # still dead: it hasn't moved
-        self.assertIn('spawn', target.state)         # the server chose where
+        self.assertEqual(target.state['hp'], 100)
+        self.assertEqual(target.slice, {'x': 700, 'y': 500, 'a': 315})
         self.assertEqual(shooter.state['kills'], 1)
 
-    def test_the_first_move_after_dying_comes_back_at_the_spawn(self):
-        """accept() is where a dead player returns -- on its next write, not before."""
+    def test_a_respawn_resets_the_owned_pose_immediately(self):
         shooter, target = self.arena(self.Player(1, 100, 100),
                                      self.Player(2, 100, 40, hp=20))
         self.room.fire(shooter)
 
-        spawn = target.state['spawn']
-        accepted = self.room.accept(target, {'x': 999, 'y': 999, 'a': 1.5},
-                                    target.slice)
         self.assertEqual(target.state['hp'], 100)
-        self.assertEqual([accepted['x'], accepted['y'], accepted['a']], list(spawn))
-
-    def test_ignores_a_player_who_has_not_spawned(self):
-        shooter, target = self.arena(self.Player(1, 100, 100),
-                                     self.Player(2, 100, 40))
-        target.slice = {}
-        self.room.fire(shooter)                      # must not raise
-        self.assertEqual(target.state['hp'], 100)
+        self.assertEqual(target.slice, {'x': 700, 'y': 500, 'a': 315})
 
     def test_join_sets_server_owned_health(self):
         player = self.Player(3, 0, 0)
         player.state = {}
         self.room.join(player)
         self.assertEqual(player.state['hp'], 100)
+        self.assertEqual(player.slice, {'x': 700, 'y': 100, 'a': 225})
 
 
 class FakeScreen:
@@ -484,14 +481,208 @@ class HandlerDispatchTest(unittest.TestCase):
         first_screen, first = self.join(
             playerjoin=lambda pid: events.append(('join', pid)),
             playerquit=lambda pid: events.append(('leave', pid)))
-        _, second = self.join()
-        self.pump([first_screen])
+        second_screen, second = self.join()
+        self.pump([first_screen, second_screen])
         self.assertEqual(events, [('join', second.id)])
 
         second.close()
         self.networks.remove(second)
         self.pump([first_screen])
         self.assertEqual(events[-1], ('leave', second.id))
+
+
+class PublicationTest(unittest.TestCase):
+    """Client lifecycle begins when the first owner slice is published."""
+
+    def setUp(self):
+        self.servers = []
+        self.networks = []
+
+    def tearDown(self):
+        for network in self.networks:
+            network.close()
+        for server in self.servers:
+            server.stop()
+
+    def server(self, room=None):
+        server = _Server(room or Room(), free_port())
+        server.start_background()
+        self.servers.append(server)
+        return server
+
+    def join(self, server, **handlers):
+        screen = FakeScreen(**handlers)
+        network = Network(screen, 'localhost', server._port)
+        self.networks.append(network)
+        return screen, network
+
+    @staticmethod
+    def pump(screens, frames=30):
+        for _ in range(frames):
+            for screen in screens:
+                screen.update()
+            time.sleep(1 / 120)
+
+    def test_first_frame_publishes_even_an_empty_slice(self):
+        server = self.server()
+        events = []
+        first_screen, first = self.join(
+            server, playerjoin=lambda pid: events.append(('join', pid)),
+            networkevent=lambda name, data, sender:
+                events.append((name, sender)))
+        self.pump([first_screen])
+
+        second_screen, second = self.join(server)
+        second.send('hello')                 # waits behind the initial owner slice
+        self.pump([first_screen], frames=5)
+        self.assertNotIn(second.id, first.players)
+        self.assertEqual(events, [])
+
+        self.pump([second_screen, first_screen])
+        self.assertIn(second.id, first.players)
+        self.assertEqual(events, [('join', second.id), ('hello', second.id)])
+        self.assertEqual(dict(first.others())[second.id]._merged(), {})
+
+    def test_an_unpublished_disconnect_has_no_client_lifecycle(self):
+        server = self.server()
+        events = []
+        first_screen, first = self.join(
+            server, playerjoin=lambda pid: events.append(('join', pid)),
+            playerquit=lambda pid: events.append(('quit', pid)))
+        self.pump([first_screen])
+
+        _, second = self.join(server)
+        self.assertNotIn(second.id, first.players)
+        second.close()
+        self.networks.remove(second)
+        self.pump([first_screen])
+
+        self.assertEqual(events, [])
+
+    def test_seed_is_available_before_network_returns(self):
+        class Seeded(Room):
+            def join(self, player):
+                player.state['hp'] = 100
+                player.seed(x=20, y=30)
+
+        server = self.server(Seeded())
+        seen = []
+        first_screen, first = self.join(
+            server,
+            playerjoin=lambda pid: seen.append(dict(first.others())[pid]._merged()),
+        )
+        self.assertEqual(dict(first.mine), {'x': 20, 'y': 30})
+
+        _, second = self.join(server)
+        self.assertEqual(dict(second.mine), {'x': 20, 'y': 30})
+        self.pump([first_screen])
+
+        self.assertEqual(seen, [{'x': 20, 'y': 30, 'hp': 100}])
+
+    def test_empty_seed_publishes_a_server_owned_entity(self):
+        class ServerOwned(Room):
+            def join(self, player):
+                player.state.update(x=10, y=15)
+                player.seed()
+
+        server = self.server(ServerOwned())
+        first_screen, first = self.join(server)
+        _, second = self.join(server)
+        self.pump([first_screen])
+
+        self.assertEqual(dict(first.others())[second.id]._merged(),
+                         {'x': 10, 'y': 15})
+
+
+class OwnerResetTest(unittest.TestCase):
+    """Authoritative replacements correct the owner and reject stale movement."""
+
+    class Correcting(Room):
+        def join(self, player):
+            player.seed(x=0, y=0, a=90)
+
+        def accept(self, player, proposed, current):
+            if proposed.get('x', 0) < 0:
+                return current
+            if proposed.get('x', 0) > 10:
+                corrected = dict(proposed)
+                corrected['x'] = 10
+                return corrected
+            return proposed
+
+        @action
+        def respawn(self, player):
+            player.reset(x=2, y=3)
+
+    def setUp(self):
+        self.room = self.Correcting()
+        self.server = _Server(self.room, free_port())
+        self.server.start_background()
+        self.networks = []
+        self.screens = []
+        for _ in range(2):
+            screen = FakeScreen()
+            net = Network(screen, 'localhost', self.server._port)
+            self.screens.append(screen)
+            self.networks.append(net)
+        self.pump()
+
+    def tearDown(self):
+        for network in self.networks:
+            network.close()
+        self.server.stop()
+
+    def pump(self, frames=40):
+        for _ in range(frames):
+            for screen in self.screens:
+                screen.update()
+            time.sleep(1 / 120)
+
+    def remote(self):
+        owner, watcher = self.networks
+        return dict(watcher.others())[owner.id]
+
+    def test_returning_proposed_does_not_reset_the_owner(self):
+        owner = self.networks[0]
+        owner.mine['x'] = 5
+        self.pump()
+
+        self.assertEqual(owner.mine['x'], 5)
+        self.assertEqual(self.remote()['x'], 5)
+        self.assertEqual(owner._generation, 0)
+
+    def test_rejection_and_correction_reset_the_owner(self):
+        owner = self.networks[0]
+        owner.mine['x'] = 20
+        self.pump()
+        self.assertEqual(owner.mine['x'], 10)
+        self.assertEqual(self.remote()['x'], 10)
+        corrected_generation = owner._generation
+
+        owner.mine['x'] = -5
+        self.pump()
+        self.assertEqual(owner.mine['x'], 10)
+        self.assertEqual(self.remote()['x'], 10)
+        self.assertGreater(owner._generation, corrected_generation)
+
+    def test_player_reset_ignores_old_generation_updates(self):
+        owner, watcher = self.networks
+        watcher.smooth('x')
+        owner.call('respawn')
+        deadline = time.perf_counter() + 2
+        while (time.perf_counter() < deadline
+               and self.server._generations[owner.id] == 0):
+            self.pump(frames=1)
+
+        owner._conn.send({'t': 'own', 'slice': {'x': 999, 'y': 999},
+                          'generation': 0})
+        self.pump()
+
+        self.assertEqual(dict(owner.mine), {'x': 2, 'y': 3, 'a': 90})
+        self.assertEqual(dict(self.server._owner[owner.id]),
+                         {'x': 2, 'y': 3, 'a': 90})
+        self.assertEqual(self.remote()['x'], 2)
+        self.assertEqual(len(watcher._history[owner.id]), 1)
 
 
 class InterceptionTest(unittest.TestCase):
@@ -2049,6 +2240,7 @@ class FramingTest(unittest.TestCase):
             conn = _Connection.connect('localhost', server._port)
             finish_handshake(conn)
             conn.read_until(lambda m: m.get('t') == 'snapshot')
+            conn.send({'t': 'own', 'slice': {}, 'generation': 0})
             for i in range(20):
                 conn.send({'t': 'event', 'name': f'e{i}', 'data': {}})
 
@@ -2142,8 +2334,7 @@ class BroadcastEncodingTest(unittest.TestCase):
 
 class OthersTest(unittest.TestCase):
     """
-    net.others() is what a game draws from, so it yields players there is something
-    to draw -- net.players is the list of who is connected.
+    net.others() and net.players expose only players whose owner slice is published.
     """
 
     def setUp(self):
@@ -2153,22 +2344,21 @@ class OthersTest(unittest.TestCase):
     def ids(self):
         return [pid for pid, _ in self.net.others()]
 
-    def test_a_player_with_nothing_to_draw_yet_is_skipped(self):
-        """They are connected and playerjoin has run; their position has not come."""
+    def test_an_empty_published_slice_is_included(self):
         self.net._owner[2] = {}
 
-        self.assertEqual(self.ids(), [])
-        self.assertEqual(self.net.players, [1, 2, 3])    # still connected
+        self.assertEqual(self.ids(), [2])
 
     def test_a_player_appears_as_soon_as_they_send_anything(self):
         self.net._owner[2] = {'x': 10, 'y': 20}
 
         self.assertEqual(self.ids(), [2])
 
-    def test_room_managed_fields_are_enough_on_their_own(self):
-        """A game whose players are placed by the Room owns nothing itself."""
+    def test_room_fields_need_an_explicit_empty_owner_slice(self):
         self.net._server[3] = {'hp': 100}
 
+        self.assertEqual(self.ids(), [])
+        self.net._owner[3] = {}
         self.assertEqual(self.ids(), [3])
 
     def test_you_are_never_one_of_the_others(self):
@@ -3424,9 +3614,9 @@ class ServedArenaTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         sys.path.insert(0, EXAMPLES_DIR)
-        cls.room_class = _load_room('net_ships', 'Arena')
+        cls.room_class = _load_room('net_ships_v2', 'Arena')
         sys.path.remove(EXAMPLES_DIR)
-        sys.modules.pop('net_ships', None)
+        sys.modules.pop('net_ships_v2', None)
 
     def setUp(self):
         self.server = _Server(self.room_class(), free_port())
@@ -3507,7 +3697,7 @@ class CommandLineTest(unittest.TestCase):
             process.stdout.close()
 
     def test_serves_the_ships_demo(self):
-        self.assert_serves('net_ships:Arena', EXAMPLES_DIR)
+        self.assert_serves('net_ships_v2:Arena', EXAMPLES_DIR)
 
     def test_serves_the_pong_demo(self):
         self.assert_serves('net_pong:Pong', EXAMPLES_DIR)

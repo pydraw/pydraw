@@ -1,9 +1,6 @@
-"""
-Shared paint -- the Tier 1 showcase for pydraw.network.
+"""Shared paint with no custom Room.
 
-There is no Room and no server code here at all. Players just tell each other what
-they drew (net.send) and listen for what everyone else drew (networkevent). This is
-the whole of Tier 1: two ideas on top of an ordinary pydraw program.
+Players send drawing events and display the events they receive.
 
 Run it:
 
@@ -26,16 +23,13 @@ PALETTE = [Color('black'), Color('red'), Color('orange'),
 WIDTHS = [2, 4, 8, 16]
 color_index, width_index = 0, 1
 
-# One pen per stroke, kept per player so everyone can draw at once and undo only
-# their own work -- exactly like the single-player example.
-active = {}     # player id -> the pen they're drawing with now
-strokes = {}    # player id -> their finished pens
+active = {}     # player id -> current pen
+strokes = {}    # player id -> finished pens
 
 screen = Screen(800, 600, 'Shared Paint')
 screen.color(Color('white'))
 
-# Tier 1 needs no Room; a bare Network still gives us a host and a player id.
-net = Network(screen, HOST, room=Room)   # the empty base Room = "just relay"
+net = Network(screen, HOST, room=Room)
 
 screen.title(f'Shared Paint -- player {net.id}')
 Text(screen, f'You are player {net.id}', 10, 10, Color('black'), size=18)
@@ -82,7 +76,7 @@ def apply(pid, name, data):
 
 
 def do(name, **data):
-    """Draw it here now, and tell everyone else (keep=True so late joiners see it)."""
+    """Draw locally and tell everyone else."""
     apply(net.id, name, data)
     net.send(name, keep=True, **data)
 
@@ -95,8 +89,6 @@ def networkevent(name, data, sender):
 
 def mousedown(location, button):
     if button == 1:
-        # The Color goes as itself -- no taking it apart and putting it back
-        # together at the other end. See pydraw/serial.py.
         do('begin', x=location.x(), y=location.y(),
            c=current_color(), w=current_width())
 
@@ -137,7 +129,7 @@ screen.listen()
 fps = 30
 running = True
 while running:
-    screen.update()     # pumps the network too; loop is otherwise unchanged
+    screen.update()     # also pumps the network
     screen.sleep(1 / fps)
 
 net.close()

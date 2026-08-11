@@ -1,10 +1,6 @@
-"""
-Server-authoritative Pong -- the Tier 2 showcase for pydraw.network.
+"""Server-authoritative Pong.
 
-The server (the Room) owns the ball, the score, and the paddles. Clients only
-send "I want my paddle here"; the server decides whether to believe them and
-moves the ball itself. No client can fake the score, because no client can write
-to net.state at all.
+The Room owns the ball, score, and paddles. Clients request paddle movement.
 
 Run it:
 
@@ -33,15 +29,14 @@ HOST = sys.argv[1] if len(sys.argv) > 1 else 'localhost'
 class Pong(Room):
     def start(self):
         self.state['score'] = [0, 0]
-        self.state['paddle1'] = HEIGHT / 2      # left player's paddle center
-        self.state['paddle2'] = HEIGHT / 2      # right player's paddle center
+        self.state['paddle1'] = HEIGHT / 2
+        self.state['paddle2'] = HEIGHT / 2
         self.state['ball'] = [WIDTH / 2, HEIGHT / 2]
-        self._vel = [260, 170]                  # server-only: the ball's velocity
+        self._vel = [260, 170]
 
     @action
     def paddle_move(self, player, y):
-        # A client asks to move its paddle. We keep it on-screen and only let the
-        # first two players control a paddle -- everyone else is a spectator.
+        # Extra players are spectators.
         if player.id in (1, 2):
             self.state[f'paddle{player.id}'] = max(PADDLE_H / 2,
                                                    min(HEIGHT - PADDLE_H / 2, y))
@@ -82,9 +77,6 @@ class Pong(Room):
 screen = Screen(WIDTH, HEIGHT, 'Pong')
 screen.color(Color('black'))
 
-# Player 1 hosts the game inside its own program; everyone else connects to it.
-# Either way, from here on the code is identical.
-# Names the game (so a wrong address is caught) and hosts it if we are first.
 net = Network(screen, HOST, room=Pong)
 
 screen.title(f'Pong -- player {net.id}')
@@ -111,7 +103,6 @@ def draw_from_state():
 
 
 def mousemove(location):
-    # Ask the server to move our paddle. It might say no; that's its call.
     net.call('paddle_move', y=location.y())
 
 
@@ -121,7 +112,7 @@ fps = 60
 running = True
 while running:
     draw_from_state()
-    screen.update()     # <- also pumps the network; loop is otherwise normal
+    screen.update()     # also pumps the network
     screen.sleep(1 / fps)
 
 net.close()

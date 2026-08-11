@@ -10,6 +10,9 @@ These examples are here to show you how to maximize pyDraw's potential in certai
 
 The examples are listed in order of complexity and categorized by subject.
 
+See the [networking guide](../network.md) for a complete multiplayer
+walkthrough and API overview.
+
 ### Bouncy Window
 
 Just a basic window with two boxes that bounce around, and when they overlap they change color!
@@ -39,19 +42,26 @@ server decides whether to believe them, which is why nobody can fake the score.
 
 ### Net Ships
 
-A multiplayer game: you own your ship and write it directly, so it never lags, while
-everyone else's ships replicate in. Health belongs to the server, which also decides
-who your shots actually hit -- because a player cannot be trusted to report their own
-health. Shows all three of pydraw's networking ideas in one file.
+A simple multiplayer game with no custom Room. Each player owns their position,
+health, and score. Players use `net.send()` for `fire` and `score` events.
 
 ```
 python3 net_ships.py            # host and play
 python3 net_ships.py <address>  # join someone else
 ```
 
-Run the first line twice on one machine for two players: whoever starts first hosts.
-To run a server with no window at all, on a machine that everyone can reach:
+### Net Ships v2
+
+The same game with server-owned health, scoring, hit detection, and spawns. It
+shows `Room`, `@action`, `player.state`, `player.seed()`, and `player.reset()`.
 
 ```
-python3 -m pydraw.network net_ships:Arena
+python3 net_ships_v2.py
+python3 net_ships_v2.py <address>
+```
+
+To run v2 as a server with no window:
+
+```
+python3 -m pydraw.network net_ships_v2:Arena
 ```
