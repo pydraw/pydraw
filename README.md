@@ -270,6 +270,15 @@ then you'll find a `pydraw.py` file in the `compiled/` directory!
 
 ---
 
+## License
+
+pyDraw is available under the [MIT License](LICENSE.md).
+
+Third-party components and examples that carry their own license notices remain
+subject to those notices.
+
+---
+
 ### A Big Thanks To:
 - Barry Lindler (An incredible person and a good friend)
   - Follow this man on Twitter: [@barrylindler](https://twitter.com/barrylindler)
