@@ -1,5 +1,6 @@
 from pydraw.errors import *
 from pydraw.util import verify_keywords
+from typing import Tuple, overload as _overload
 import math
 
 
@@ -18,6 +19,15 @@ class Location:
         location._x = x
         location._y = y
         return location
+
+    @_overload
+    def __init__(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def __init__(self, location: 'Location') -> None: ...
+
+    @_overload
+    def __init__(self, xy: Tuple[float, float]) -> None: ...
 
     def __init__(self, *args, **kwargs):
         # Fast path: Location(x, y) with two numbers is by far the most common
@@ -64,7 +74,19 @@ class Location:
         self._x = location[0]
         self._y = location[1]
 
-    def move(self, *args, **kwargs):
+    @_overload
+    def move(self, dx: float, dy: float) -> 'Location': ...
+
+    @_overload
+    def move(self, location: 'Location') -> 'Location': ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> 'Location': ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> 'Location': ...
+
+    def move(self, *args, **kwargs) -> 'Location':
         """
         Moves the location by a specified difference.
 
@@ -135,7 +157,19 @@ class Location:
 
         return self
 
-    def moveto(self, *args, **kwargs):
+    @_overload
+    def moveto(self, x: float, y: float) -> 'Location': ...
+
+    @_overload
+    def moveto(self, location: 'Location') -> 'Location': ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> 'Location': ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> 'Location': ...
+
+    def moveto(self, *args, **kwargs) -> 'Location':
         """
         Moves the location to a new location!
 

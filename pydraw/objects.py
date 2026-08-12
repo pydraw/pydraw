@@ -5,7 +5,7 @@ Objects in the PyDraw library
 """
 
 import math
-from typing import Union, List
+from typing import TYPE_CHECKING, Optional, Tuple, Union, List, overload as _overload
 # import asyncio
 
 # from pydraw.errors import *  # util gives us our errors for us :)
@@ -47,6 +47,18 @@ class Pen:
             return self._coordinates[-1]
 
         return self._location
+
+    @_overload
+    def move(self, dx: float, dy: float) -> Location: ...
+
+    @_overload
+    def move(self, location: Location) -> Location: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> Location: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> Location: ...
 
     def move(self, *args, **kwargs):
         """
@@ -103,6 +115,18 @@ class Pen:
 
         self._update()
         return location
+
+    @_overload
+    def moveto(self, x: float, y: float) -> Location: ...
+
+    @_overload
+    def moveto(self, location: Location) -> Location: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> Location: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> Location: ...
 
     def moveto(self, *args, **kwargs):
         """
@@ -161,7 +185,7 @@ class Pen:
         self._update()
         return new_location
 
-    def coordinates(self, *coords) -> List[Location]:
+    def coordinates(self, *coords: Union[Location, Tuple[float, float]]) -> List[Location]:
 
         if len(coords) > 0:
             self._coordinates = []
@@ -352,6 +376,18 @@ class Object:
     def location(self) -> Location:
         return self._location
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
@@ -362,6 +398,18 @@ class Object:
         self._location.move(*args, **kwargs)
         self.update()
         self._sync_pen()
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -562,6 +610,18 @@ class Renderable(Object):
     def location(self) -> Location:
         return self._location
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
@@ -573,6 +633,18 @@ class Renderable(Object):
         before_y = self._location._y
         self._location.move(*args, **kwargs)
         self._translate(self._location._x - before_x, self._location._y - before_y)
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -635,6 +707,15 @@ class Renderable(Object):
             self._update_coords()
 
         return self._height
+
+    @_overload
+    def center(self, x: float, y: float, *, centroid: bool = ...) -> Location: ...
+
+    @_overload
+    def center(self, location: Location, *, centroid: bool = ...) -> Location: ...
+
+    @_overload
+    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ..., centroid: bool = ...) -> Location: ...
 
     def center(self, *args, **kwargs) -> Location:
         """
@@ -1051,6 +1132,15 @@ class Renderable(Object):
         self._bounds_sig = sig
         self._bounds_cache = result
         return result
+
+    @_overload
+    def contains(self, __x: float, __y: float) -> bool: ...
+
+    @_overload
+    def contains(self, __location: Location) -> bool: ...
+
+    @_overload
+    def contains(self, __xy: Tuple[float, float]) -> bool: ...
 
     def contains(self, *args) -> bool:
         """
@@ -1469,31 +1559,41 @@ class RoundedRectangle(CustomRenderable):
     A rectangle with rounded corners.
     """
 
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float),
-              Color, Color, bool, (int, float), bool, (int, float))
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True,
-                 radius: float = 10):
-        self._radius = self._validate_radius(radius)
-        super().__init__(screen, x, y, width, height, color, border,
-                         fill, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ..., radius: float = ...) -> None: ...
 
-    @overload(Screen, Location, (int, float), (int, float), Color, Color,
-              bool, (int, float), bool, (int, float))
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True,
-                 radius: float = 10):
-        self._radius = self._validate_radius(radius)
-        super().__init__(screen, location.x(), location.y(), width, height,
-                         color, border, fill, rotation, visible)
+        @_overload
+        def __init__(self, screen: Screen, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ..., radius: float = ...) -> None: ...
+
+        def __init__(self, *args, **kwargs) -> None: ...
+
+    else:
+        @overload(Screen, (int, float), (int, float), (int, float), (int, float),
+                  Color, Color, bool, (int, float), bool, (int, float))
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True,
+                     radius: float = 10):
+            self._radius = self._validate_radius(radius)
+            super().__init__(screen, x, y, width, height, color, border,
+                             fill, rotation, visible)
+
+        @overload(Screen, Location, (int, float), (int, float), Color, Color,
+                  bool, (int, float), bool, (int, float))
+        def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True,
+                     radius: float = 10):
+            self._radius = self._validate_radius(radius)
+            super().__init__(screen, location.x(), location.y(), width, height,
+                             color, border, fill, rotation, visible)
 
     def radius(self, radius: float = None) -> float:
         """
@@ -1656,6 +1756,18 @@ class CustomPolygon(CustomRenderable):
 
         self._pen = None
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs):
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
@@ -1678,6 +1790,18 @@ class CustomPolygon(CustomRenderable):
         self._vertex_offset[1] += dy
         self._invalidate_render()
         self._sync_pen()
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs):
         """
@@ -1897,32 +2021,42 @@ class Rectangle(Renderable):
     # Two constructor forms: (x, y) and (location). The dispatcher honors
     # default arguments, so each full signature also covers every shorter call
     # that omits trailing optional args (color, border, fill, rotation, visible).
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
-                          Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
+        @_overload
+        def __init__(self, screen: Screen, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
-                          Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        def __init__(self, *args, **kwargs) -> None: ...
+
+    else:
+        @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                              Location(x, y + height)]
+            self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+
+        @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            x = location.x()
+            y = location.y()
+
+            self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                              Location(x, y + height)]
+            self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
 
 class Oval(Renderable):
@@ -1936,38 +2070,48 @@ class Oval(Renderable):
 
     # Two constructor forms: (x, y) and (location). The dispatcher honors
     # default arguments, so each full signature also covers every shorter call.
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._width = width
-        self._height = height
-        self._custom_wedges = False
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        @_overload
+        def __init__(self, screen: Screen, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
+        def __init__(self, *args, **kwargs) -> None: ...
 
-        self._width = width
-        self._height = height
-        self._custom_wedges = False
+    else:
+        @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._width = width
+            self._height = height
+            self._custom_wedges = False
 
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+            vertices = self._convert_vertices()
+            self._shape = vertices
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+
+        @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            x = location.x()
+            y = location.y()
+
+            self._width = width
+            self._height = height
+            self._custom_wedges = False
+
+            vertices = self._convert_vertices()
+            self._shape = vertices
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
     def width(self, width: float = None) -> float:
         """
@@ -2080,77 +2224,100 @@ class Triangle(Renderable):
 
     # Two constructor forms: (x, y) and (location). The dispatcher honors
     # default arguments, so each full signature also covers every shorter call.
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
+        @_overload
+        def __init__(self, screen: Screen, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        def __init__(self, *args, **kwargs) -> None: ...
+
+    else:
+        @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._shape = ((10, -10), (0, 10), (-10, -10))
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+
+        @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            x = location.x()
+            y = location.y()
+
+            self._shape = ((10, -10), (0, 10), (-10, -10))
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
 
 class Polygon(Renderable):
 
+    _num_sides: int
+    _shape: tuple
+
     # Two constructor forms: (num_sides, x, y) and (num_sides, location). The
     # dispatcher honors default arguments, so each full signature also covers
     # every shorter call.
-    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        if num_sides < 3:
-            raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
+        @_overload
+        def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        def __init__(self, *args, **kwargs) -> None: ...
 
-    @overload(Screen, int, Location, (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        if num_sides < 3:
-            raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
+    else:
+        @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            if num_sides < 3:
+                raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
 
-        x = location.x()
-        y = location.y()
+            self._num_sides = num_sides
+            radius = PIXEL_RATIO / 2
+            shape_points = []
+            for i in range(num_sides):
+                shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                     radius * math.cos(2 * math.pi / num_sides * i)))
+            self._shape = shape_points
 
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        @overload(Screen, int, Location, (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            if num_sides < 3:
+                raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
+
+            x = location.x()
+            y = location.y()
+
+            self._num_sides = num_sides
+            radius = PIXEL_RATIO / 2
+            shape_points = []
+            for i in range(num_sides):
+                shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                     radius * math.cos(2 * math.pi / num_sides * i)))
+            self._shape = shape_points
+
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
     def _setup(self):
         if not hasattr(self, '_shape'):
@@ -2249,26 +2416,36 @@ class Image(Renderable):
     # Two constructor forms: (x, y) and (location). The dispatcher honors default
     # arguments, so each full signature also covers every shorter call. Only the
     # screen and image path are required; x, y, width and height all default.
-    @overload(Screen, str, (int, float), (int, float), (int, float), (int, float), Color, Color, int, bool)
-    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._init_image(screen, image, x, y, width, height, color, border, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, image: str, x: float = ..., y: float = ..., width: Optional[float] = ..., height: Optional[float] = ..., color: Optional[Color] = ..., border: Color = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, str, Location, (int, float), (int, float), Color, Color, int, bool)
-    def __init__(self, screen: Screen, image: str, location: Location,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._init_image(screen, image, location.x(), location.y(),
-                         width, height, color, border, rotation, visible)
+        @_overload
+        def __init__(self, screen: Screen, image: str, location: Location, width: Optional[float] = ..., height: Optional[float] = ..., color: Optional[Color] = ..., border: Color = ..., rotation: float = ..., visible: bool = ...) -> None: ...
+
+        def __init__(self, *args, **kwargs) -> None: ...
+
+    else:
+        @overload(Screen, str, (int, float), (int, float), (int, float), (int, float), Color, Color, int, bool)
+        def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
+                     width: float = None,
+                     height: float = None,
+                     color: Color = None,
+                     border: Color = Color.NONE,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._init_image(screen, image, x, y, width, height, color, border, rotation, visible)
+
+        @overload(Screen, str, Location, (int, float), (int, float), Color, Color, int, bool)
+        def __init__(self, screen: Screen, image: str, location: Location,
+                     width: float = None,
+                     height: float = None,
+                     color: Color = None,
+                     border: Color = Color.NONE,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._init_image(screen, image, location.x(), location.y(),
+                             width, height, color, border, rotation, visible)
 
     def _init_image(self, screen, image, x, y, width, height, color, border, rotation, visible):
         self._image_name = image
@@ -2484,6 +2661,15 @@ class Image(Renderable):
         return self._width, self._height, self._angle % 360
 
 
+
+    @_overload
+    def center(self, x: float, y: float, *, centroid: bool = ...) -> Location: ...
+
+    @_overload
+    def center(self, location: Location, *, centroid: bool = ...) -> Location: ...
+
+    @_overload
+    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ..., centroid: bool = ...) -> Location: ...
 
     def center(self, *args, **kwargs) -> Location:
         """
@@ -2724,33 +2910,43 @@ class Text(CustomRenderable):
 
     # Four constructor forms ((x, y)/(location), each with optional Color) defer to _init_text.
     # noinspection PyProtectedMember
-    @overload(Screen, str, (int, float), (int, float))
-    def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
-                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
-                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._init_text(screen, text, x, y, color, font, size, align,
-                        bold, italic, underline, strikethrough, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = ..., font: str = ..., size: int = ..., align: str = ..., bold: bool = ..., italic: bool = ..., underline: bool = ..., strikethrough: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, str, (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
-                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
-                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._init_text(screen, text, x, y, color, font, size, align,
-                        bold, italic, underline, strikethrough, rotation, visible)
+        @_overload
+        def __init__(self, screen: Screen, text: str, location: Location, color: Color = ..., font: str = ..., size: int = ..., align: str = ..., bold: bool = ..., italic: bool = ..., underline: bool = ..., strikethrough: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, str, Location)
-    def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
-                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
-                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
-                        bold, italic, underline, strikethrough, rotation, visible)
+        def __init__(self, *args, **kwargs) -> None: ...
 
-    @overload(Screen, str, Location, Color)
-    def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
-                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
-                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
-                        bold, italic, underline, strikethrough, rotation, visible)
+    else:
+        @overload(Screen, str, (int, float), (int, float))
+        def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
+                     font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                     underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+            self._init_text(screen, text, x, y, color, font, size, align,
+                            bold, italic, underline, strikethrough, rotation, visible)
+
+        @overload(Screen, str, (int, float), (int, float), Color)
+        def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
+                     font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                     underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+            self._init_text(screen, text, x, y, color, font, size, align,
+                            bold, italic, underline, strikethrough, rotation, visible)
+
+        @overload(Screen, str, Location)
+        def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
+                     font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                     underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+            self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
+                            bold, italic, underline, strikethrough, rotation, visible)
+
+        @overload(Screen, str, Location, Color)
+        def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
+                     font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                     underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+            self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
+                            bold, italic, underline, strikethrough, rotation, visible)
 
     # noinspection PyProtectedMember
     def _init_text(self, screen, text, x, y, color, font, size, align,
@@ -2823,6 +3019,18 @@ class Text(CustomRenderable):
 
         return self._text
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
@@ -2834,6 +3042,18 @@ class Text(CustomRenderable):
         before_y = self._location._y
         self._location.move(*args, **kwargs)
         self._translate(self._location._x - before_x, self._location._y - before_y)
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -3053,6 +3273,15 @@ class Text(CustomRenderable):
         theta = math.degrees(theta) + 90
 
         self.rotate(theta)
+
+    @_overload
+    def center(self, x: float, y: float, *, centroid: bool = ...) -> Location: ...
+
+    @_overload
+    def center(self, location: Location, *, centroid: bool = ...) -> Location: ...
+
+    @_overload
+    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ..., centroid: bool = ...) -> Location: ...
 
     def center(self, *args, **kwargs) -> Location:
         """
@@ -3297,6 +3526,15 @@ class Line(Object):
     def _restore_render(self):
         self._screen._register_render_source(self._render_node, self._render_id)
 
+    @_overload
+    def pos1(self) -> Location: ...
+
+    @_overload
+    def pos1(self, __location: Union[Location, Tuple[float, float]]) -> Location: ...
+
+    @_overload
+    def pos1(self, __x: float, __y: float) -> Location: ...
+
     def pos1(self, *args) -> Location:
         """
         Get or set the position of the first endpoint.
@@ -3317,6 +3555,15 @@ class Line(Object):
             self._invalidate_render()
         return self._pos1
 
+    @_overload
+    def pos2(self) -> Location: ...
+
+    @_overload
+    def pos2(self, __location: Union[Location, Tuple[float, float]]) -> Location: ...
+
+    @_overload
+    def pos2(self, __x: float, __y: float) -> Location: ...
+
     def pos2(self, *args) -> Location:
         """
         Get or set the position of the second endpoint.
@@ -3336,6 +3583,18 @@ class Line(Object):
             self._update_angle()
             self._invalidate_render()
         return self._pos2
+
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
 
     def move(self, *args, **kwargs) -> None:
         """
@@ -3394,6 +3653,18 @@ class Line(Object):
             self._update_angle()
 
         self._invalidate_render()
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -3459,6 +3730,12 @@ class Line(Object):
 
     # noinspection PyUnusedLocal
     # TODO: Allow for point specification (center)
+    @_overload
+    def lookat(self, location: Union[Location, Tuple[float, float]], point: int = ...) -> None: ...
+
+    @_overload
+    def lookat(self, x: float, y: float, point: int = ...) -> None: ...
+
     def lookat(self, *args, **kwargs) -> None:
         """
         Make the line look at the given point by moving the second point.

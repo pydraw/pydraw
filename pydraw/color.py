@@ -1,4 +1,5 @@
 from pydraw.errors import *
+from typing import Tuple, Union, cast, overload as _overload
 
 
 class Color:
@@ -7,6 +8,15 @@ class Color:
     """
 
     NONE = None
+
+    @_overload
+    def __init__(self, __name: str) -> None: ...
+
+    @_overload
+    def __init__(self, __rgb: Tuple[int, int, int]) -> None: ...
+
+    @_overload
+    def __init__(self, __r: int, __g: int, __b: int) -> None: ...
 
     def __init__(self, *args):
         if len(args) == 0 or len(args) == 2 or len(args) > 3:
@@ -67,7 +77,7 @@ class Color:
                         self._g = int(rgb[1] / 256)
                         self._b = int(rgb[2] / 256)
 
-    def __value__(self):
+    def __value__(self) -> Union[Tuple[int, int, int], str]:
         """
         Retrieve the original color representation.
 
@@ -76,9 +86,9 @@ class Color:
         if self._mode == 0:
             return self.red(), self.green(), self.blue()
         elif self._mode == 1:
-            return self._name
+            return cast(str, self._name)
         else:
-            return self._hex_value
+            return cast(str, self._hex_value)
 
     def red(self):
         """

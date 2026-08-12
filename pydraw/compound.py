@@ -1,4 +1,4 @@
-from typing import Union, Tuple
+from typing import Union, Tuple, overload as _overload
 
 from pydraw import Object, Renderable, verify
 from pydraw import Location, Color
@@ -14,7 +14,7 @@ class CompoundObject(Object):
 
     _PEN_SUPPORTED = False
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Object, **kwargs: Object):
         """
         Pass in the shapes/objects to be used to create the CompoundObject
 
@@ -74,6 +74,18 @@ class CompoundObject(Object):
 
         return self._location.y()
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
         Move the compound shape by a certain distance (dx, dy)
@@ -88,6 +100,18 @@ class CompoundObject(Object):
         # multiply the delta by the number of objects).
         self._location.move(*args, **kwargs)
         self._end.move(*args, **kwargs)
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -215,6 +239,15 @@ class CompoundObject(Object):
         center_y = sum(center.y() for center in centers) / len(centers)
 
         return Location(center_x, center_y)
+
+    @_overload
+    def contains(self, __x: float, __y: float) -> bool: ...
+
+    @_overload
+    def contains(self, __location: Location) -> bool: ...
+
+    @_overload
+    def contains(self, __xy: Tuple[float, float]) -> bool: ...
 
     def contains(self, *args) -> bool:
         """
