@@ -140,6 +140,10 @@ class ImageMethodTest(unittest.TestCase):
     def setUp(self) -> None:
         self.screen.clear()
         self.img = Image(self.screen, PNG, 100, 100, 50, 50)
+        self.screen.update()
+
+    def _item_for(self, image):
+        return self.screen._backend.item_for(image._render_id)
 
     def test_location_and_xy_getters(self):
         self.assertEqual(self.img.location(), Location(100, 100))
@@ -157,20 +161,26 @@ class ImageMethodTest(unittest.TestCase):
     def test_move_is_exact(self):
         # A relative move must shift the location by exactly the delta (no
         # doubling) and shift the canvas item by the same amount.
-        before = self.screen._canvas.coords(self.img._ref)
+        before = self.screen._canvas.coords(self._item_for(self.img))
+        image_ref = self.screen._backend.image_refs[self.img._render_id]
         self.img.move(30, -20)
-        after = self.screen._canvas.coords(self.img._ref)
+        self.screen.update()
+        after = self.screen._canvas.coords(self._item_for(self.img))
         self.assertEqual(self.img.location(), Location(130, 80))
         self.assertEqual([round(b - a, 4) for a, b in zip(before, after)], [30, -20])
+        self.assertIs(
+            self.screen._backend.image_refs[self.img._render_id],
+            image_ref,
+        )
 
     def test_moveto_is_exact(self):
         self.img.moveto(300, 250)
         self.assertEqual(self.img.location(), Location(300, 250))
 
     def test_move_zero_is_noop(self):
-        before = self.screen._canvas.coords(self.img._ref)
+        before = self.screen._canvas.coords(self._item_for(self.img))
         self.img.move(0, 0)
-        self.assertEqual(self.screen._canvas.coords(self.img._ref), before)
+        self.assertEqual(self.screen._canvas.coords(self._item_for(self.img)), before)
 
     def test_vertices(self):
         verts = self.img.vertices()
@@ -301,6 +311,24 @@ class ImagePILMethodTest(unittest.TestCase):
 
         self.assertTrue(clone._flip_x)
         self.assertTrue(clone._flip_y)
+
+    def test_combined_transform_presents_through_backend(self):
+        self.img.transform((80, 40, 25))
+        self.img.color(Color('purple'), 100)
+        self.img.border(Color('blue'))
+        self.img.flip('y')
+        self.img.smooth(False)
+        self.screen.update()
+
+        node = self.img._render_node()
+        self.assertEqual(node.tint, Color('purple').rgb())
+        self.assertEqual(node.tint_alpha, 100)
+        self.assertEqual(node.border, Color('blue').rgb())
+        self.assertTrue(node.flip_y)
+        self.assertFalse(node.smooth)
+        self.assertIsNotNone(
+            self.screen._backend.item_for(self.img._render_id)
+        )
 
 
 if __name__ == '__main__':

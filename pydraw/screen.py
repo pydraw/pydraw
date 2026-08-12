@@ -7,6 +7,9 @@ from typing import Optional
 
 from pydraw import Color
 from pydraw import Location
+from pydraw.events import InputEvent
+from pydraw.render import RenderQueue
+from pydraw.runtime import BackendTerminated, ScreenConfig, _create_screen_backend
 from pydraw.util import *
 
 INPUT_TYPES = [
@@ -19,105 +22,10 @@ INPUT_TYPES = [
     'keypress'
 ]
 
-ALPHABET = [
-    'a',
-    'b',
-    'c',
-    'd',
-    'e',
-    'f',
-    'g',
-    'h',
-    'i',
-    'j',
-    'k',
-    'l',
-    'm',
-    'n',
-    'o',
-    'p',
-    'q',
-    'r',
-    's',
-    't',
-    'u',
-    'v',
-    'w',
-    'x',
-    'y',
-    'z',
-]
+def _default_runtime():
+    from pydraw.backends.tk import TkRuntime
 
-UPPER_ALPHABET = []
-for letter in ALPHABET:
-    UPPER_ALPHABET.append(letter.upper())
-
-KEYS = [
-           '1',
-           '2',
-           '3',
-           '4',
-           '5',
-           '6',
-           '7',
-           '8',
-           '9',
-           '0',
-
-           '!',
-           '@',
-           '#',
-           '$',
-           '%',
-           '^',
-           '&',
-           '*',
-           '(',
-           ')',
-
-           '-',
-           '_',
-
-           '`',
-           '~',
-
-           '_',
-           '=',
-           '+',
-           '\\',
-           '|',
-           '<',
-           '>',
-           '/',
-           '?',
-
-           '.',
-           ',',
-           '',
-           '\'',
-           'Return',
-           'Caps_Lock',
-
-           'Up',
-           'Down',
-           'Left',
-           'Right',
-
-           'space',
-           'Shift_L',
-           'Shift_R',
-           'Control_L',
-           'Control_R',
-           'BackSpace'
-       ] + ALPHABET + UPPER_ALPHABET
-
-BUTTONS = [
-    1,
-    2,
-    3
-]
-
-BORDER_CONSTANT = 10
+    return TkRuntime()
 
 
 class Screen:
@@ -131,10 +39,14 @@ class Screen:
     def __init__(self, width: int = 800, height: int = 600, title: str = "pydraw"):
         verify(width, int, height, int, title, str)
 
-        self._screen = turtle.Screen()
-        self._turtle = turtle
-        self._canvas = self._screen.cv
-        self._root = self._canvas.winfo_toplevel()
+        self._backend = _create_screen_backend(
+            ScreenConfig(width, height, title),
+            _default_runtime,
+        )
+        self._screen = getattr(self._backend, 'screen', None)
+        self._turtle = getattr(self._backend, 'turtle', None)
+        self._canvas = getattr(self._backend, 'canvas', None)
+        self._root = getattr(self._backend, 'root', None)
 
         self._width = width
         self._height = height
@@ -144,26 +56,15 @@ class Screen:
         self._last_frame_time = None
         self._next_frame_time = None
 
-        # The only thing on the canvas is itself, so we prevent anything stupid from happening.
-        # self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-        self._turtle.mode('logo')
-        self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT)
-        self._screen.screensize(width, height)
-        # self._screen.setup(width + BORDER_CONSTANT, height + BORDER_CONSTANT)
-        # self._canvas.configure(width=self._root.winfo_width(), height=self._root.winfo_height())
-        # self.update()
-        # This was not necessary as the canvas will align with the window's dimensions as set in the above line.
-
-        self._root.resizable(False, False)  # No resizing!
-
-        self._screen.title(title)
         self._title = title
         self._color = Color('white')
+        self._backend.set_background(self._color.rgb())
 
         self._objects = []  # Store objects on the screen :)
+        self._render_queue = RenderQueue()
         self._fullscreen = False
-
-        self._screen.colormode(255)
+        self._updating = False
+        self._looping = False
 
         # store the mouse position
         self._mouse = Location(0, 0)
@@ -173,34 +74,9 @@ class Screen:
         self._helpers = []
         self._helperstate = 0
 
-        # By default we want to make sure that all objects are drawn instantly.
-        self._screen.tracer(0)
-        self._screen.update()
-
         self._scene = None  # We store our current Scene.
 
-        # import atexit
-        # self._root.protocol('WM_DELETE_WINDOW', self._exit_handler)
-        # atexit.register(self._exit_handler)
-
-        # --- #
-
-        def onclose():
-            Screen._TERMINATING = True
-            self._root.destroy()
-
-        self._root.protocol("WM_DELETE_WINDOW", onclose)
-
         self.registry = {}  # The input function registry (stores input callbacks)
-
-        # Memoized canvas size. width()/height() are called extremely often (e.g.
-        # per-vertex in Renderable._update_coords), and each was a live winfo/Tcl
-        # round-trip. The size only changes on a resize, so we cache it and clear
-        # the cache whenever the canvas is actually reconfigured.
-        self._cached_size = None
-        self._canvas.bind('<Configure>',
-                          lambda event: setattr(self, '_cached_size', None),
-                          add='+')
 
     def title(self, title: str = None) -> str:
         """
@@ -213,7 +89,7 @@ class Screen:
         if title is not None:
             verify(title, str)
             self._title = title
-            self._screen.title(title)
+            self._backend.set_title(title)
 
         return self._title
 
@@ -228,7 +104,7 @@ class Screen:
         if color is not None:
             verify(color, Color)
             self._color = color
-            self._screen.bgcolor(color.__value__())
+            self._backend.set_background(color.rgb())
         return self._color
 
     def picture(self, pic: str) -> None:
@@ -240,7 +116,7 @@ class Screen:
         """
 
         verify(pic, str)
-        self._screen.bgpic(pic)
+        self._backend.set_background_image(pic)
 
     def resize(self, width: int, height: int) -> None:
         """
@@ -254,15 +130,7 @@ class Screen:
         """
 
         verify(width, int, height, int)
-        # noinspection PyBroadException
-        self._screen.screensize(width, height)
-        # self._root.wm_geometry("%dx%d" % (width, height))
-
-        self._screen.update()
-        # try:
-        #
-        # except:
-        #     pass
+        self._backend.resize(width, height)
 
     def size(self) -> (int, int):
         """
@@ -272,11 +140,7 @@ class Screen:
         :return: a tuple containing the width and height of the WINDOW
         """
 
-        # noinspection PyBroadException
-        try:
-            return self._screen.window_width(), self._screen.window_height()
-        except:
-            return -1, -1  # Again, trying to avoid showing errors due to tkinter shutting down.
+        return self._backend.window_size()
 
     def _dims(self) -> tuple:
         """
@@ -286,20 +150,7 @@ class Screen:
         :return: a (width, height) tuple, or (-1, -1) while tkinter is shutting down
         """
 
-        if self._cached_size is not None:
-            return self._cached_size
-
-        # noinspection PyBroadException
-        try:
-            canvas = self._screen.getcanvas()
-            width = canvas.winfo_width() - BORDER_CONSTANT
-            height = canvas.winfo_height() - BORDER_CONSTANT
-        except:
-            return -1, -1  # tkinter is shutting down
-
-        if width > 1 and height > 1:  # only cache once the window is realized
-            self._cached_size = (width, height)
-        return width, height
+        return self._backend.canvas_size()
 
     def width(self) -> int:
         """
@@ -383,17 +234,8 @@ class Screen:
         :param cancel_text: The text displayed on the cancel button, defaults to 'Cancel'
         :return: True if accept was pressed, False if cancel was pressed
         """
-        from tkinter.simpledialog import SimpleDialog
-
         verify(text, str, title, str, accept_text, str, cancel_text, str)
-
-        alert = SimpleDialog(self._root,
-                             text=text,
-                             buttons=[accept_text, cancel_text],
-                             default=0,
-                             cancel=1,
-                             title=title)
-        return alert.go()
+        return self._backend.alert(text, title, accept_text, cancel_text)
 
     def prompt(self, text: str, title: str = 'Prompt') -> str:
         """
@@ -406,10 +248,9 @@ class Screen:
 
         verify(text, str, title, str)
 
-        text = self._screen.textinput(title, text)
-
-        self._screen.listen()  # keep us nice and listening :)
-        return text
+        response = self._backend.prompt(text, title)
+        self._backend.listen()
+        return response
 
     def grid(self, rows: int = None, cols: int = None, cellsize: tuple = (50, 50), helpers: bool = True):
         from pydraw import Line, Text
@@ -521,22 +362,7 @@ class Screen:
         if not filename.endswith('.png'):
             filename += '.png'
 
-        # noinspection PyBroadException
-        try:
-            from PIL import ImageGrab
-
-            # We need to get the exact canvas coordinates. (bruh)
-            x1 = self._root.winfo_rootx() + self._canvas.winfo_x() + BORDER_CONSTANT
-            y1 = self._root.winfo_rooty() + self._canvas.winfo_y() + BORDER_CONSTANT
-            x2 = x1 + self.width() - BORDER_CONSTANT
-            y2 = y1 + self.height() - BORDER_CONSTANT
-
-            ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename)
-            return filename
-        except:
-            raise UnsupportedError(
-                "Screen#grab(): Pillow is required. Install it with 'pip install pillow'."
-            )
+        return self._backend.grab(filename)
 
     def fullscreen(self, fullscreen: bool = None) -> bool:
         """
@@ -552,7 +378,7 @@ class Screen:
         if fullscreen is not None:
             verify(fullscreen, bool)
             self._fullscreen = fullscreen
-            self._root.attributes("-fullscreen", fullscreen)
+            self._backend.set_fullscreen(fullscreen)
             self.update()
 
         return self._fullscreen
@@ -565,7 +391,11 @@ class Screen:
                 f'Screen#front(): expected an Object; received {type(obj)} ({obj!r}).'
             )
 
-        self._canvas.tag_raise(obj._ref)
+        render_id = getattr(obj, '_render_id', None)
+        if render_id is None:
+            self._canvas.tag_raise(obj._ref)
+        else:
+            self._render_queue.front(render_id)
 
     def _back(self, obj) -> None:
         from pydraw import Object
@@ -575,7 +405,23 @@ class Screen:
                 f'Screen#back(): expected an Object; received {type(obj)} ({obj!r}).'
             )
 
-        self._canvas.tag_lower(obj._ref)
+        render_id = getattr(obj, '_render_id', None)
+        if render_id is None:
+            self._canvas.tag_lower(obj._ref)
+        else:
+            self._render_queue.back(render_id)
+
+    def _register_render_source(self, source, render_id=None):
+        return self._render_queue.register(source, render_id)
+
+    def _allocate_render_id(self):
+        return self._render_queue.allocate()
+
+    def _invalidate_render(self, render_id):
+        self._render_queue.invalidate(render_id)
+
+    def _remove_render(self, render_id):
+        self._render_queue.remove(render_id)
 
     def _add(self, obj) -> None:
         """
@@ -601,12 +447,19 @@ class Screen:
             )
 
         self._add(obj)
+        restore_render = getattr(obj, '_restore_render', None)
+        if restore_render is not None:
+            restore_render()
 
     # noinspection PyProtectedMember
     def remove(self, obj):
         # self._screen.cv.delete(obj._ref)
         try:
-            self._canvas.delete(obj._ref)
+            render_id = getattr(obj, '_render_id', None)
+            if render_id is None:
+                self._canvas.delete(obj._ref)
+            else:
+                self._remove_render(render_id)
             if obj in self._objects:
                 self._objects.remove(obj)
             else:
@@ -685,6 +538,7 @@ class Screen:
             self.registry[name.lower()] = function
 
         self._scene = scene
+        self._listen()
         scene.activate(self)
 
     def reset(self) -> None:
@@ -794,18 +648,23 @@ class Screen:
 
         :return: None
         """
+        if self._updating:
+            raise PydrawError('Screen#update(): update is not reentrant.')
+
+        self._updating = True
         try:
             if Screen._TERMINATING:
                 print('Terminated.')
                 exit(0)
 
-            # self._screen._screenupdate()
-            self._canvas.update()
-        except (turtle.Terminator, tk.TclError, AttributeError):
-            # If we experience the termination exception, we will print the termination of the program
-            # and exit the python program.
+            for event in self._backend.poll_events():
+                self._dispatch_input_event(event)
+            self._backend.present(self._render_queue.take())
+        except BackendTerminated:
             print('Terminated.')
             exit(0)
+        finally:
+            self._updating = False
 
     def stop(self) -> None:
         """
@@ -814,8 +673,7 @@ class Screen:
         :return: None
         """
 
-        self.update()
-        self._turtle.done()
+        self.loop()
 
     def loop(self) -> None:
         """
@@ -825,8 +683,14 @@ class Screen:
         :returns: None
         """
 
-        self.update()
-        self._turtle.done()
+        if self._looping:
+            raise PydrawError('Screen#loop(): loop is not reentrant.')
+
+        self._looping = True
+        try:
+            self._backend.run(self.update)
+        finally:
+            self._looping = False
 
     def exit(self) -> None:
         """
@@ -839,8 +703,7 @@ class Screen:
         # Prevent queued Tk events from reaching callbacks while the canvas and
         # its objects are being destroyed.
         self.registry.clear()
-        self._screen.clear()
-        self._root.destroy()
+        self._backend.close()
         exit(0)
 
     def _colorstr(self, color: Color) -> str:
@@ -890,28 +753,7 @@ class Screen:
         self._listen()
 
     def _listen(self):
-        self._screen.listen()
-
-        # Keyboard
-        # for key in KEYS:
-        #     self._screen.onkeypress(self._create_lambda('keydown', key), key)
-        #     self._screen.onkeyrelease(self._create_lambda('keyup', key), key)
-        #
-        #     # custom implemented keypress
-        #     self._onkeytype(self._create_lambda('keypress', key), key)
-        self._screen.cv.bind('<Key>', (lambda e: self._keyhandler(e)))
-        self._screen.cv.bind('<KeyRelease>', (lambda e: self._keyuphandler(e)))
-
-        # Mouse
-        for btn in BUTTONS:
-            self._screen.onclick(self._create_lambda('mousedown', btn), btn)  # mousedown
-            self._onrelease(self._create_lambda('mouseup', btn), btn)
-            self._ondrag(self._create_lambda('mousedrag', btn), btn)
-
-            # custom implemented mouseclick
-            self._onmouseclick(self._create_lambda('mouseclick', btn), btn)
-
-        self._screen.cv.bind("<Motion>", (self._create_lambda('mousemove', None)))
+        self._backend.listen()
 
     class Key:
         def __init__(self, key: str):
@@ -951,59 +793,26 @@ class Screen:
             else:
                 return False
 
-    def _create_lambda(self, method: str, key):
-        """
-        A super-cool method to create lambdas for key-event registration.
+    def _dispatch_input_event(self, event) -> None:
+        if not isinstance(event, InputEvent):
+            raise TypeError('backend returned an invalid input event')
 
-        :param key: the key to create the lambda for
-        :return: A lambda (😻) [ignore the cat]
-        """
-
-        if method == 'keydown':
-            return lambda: (self._keydown(key))
-        elif method == 'keyup':
-            return lambda: (self._keyup(key))
-        elif method == 'mousedown':
-            return lambda x, y: (self._mousedown(key, self.create_location(x, y)))
-        elif method == 'mouseup':
-            return lambda x, y: (self._mouseup(key, self.create_location(x, y)))
-        elif method == 'mousedrag':
-            return lambda x, y: (self._mousedrag(key, self.create_location(x, y)))
-        elif method == 'mousemove':
-            # return lambda event: (self._mousemove(Location(event.x, event.y)))
-
-            # Mirror the click-family transform (see _onrelease/_ondrag and
-            # turtle's onclick): convert raw widget pixels -> turtle world
-            # coords (canvasx/canvasy remove scroll offset, /xscale,/yscale
-            # remove scaling), then create_location recenters + flips into
-            # pydraw space. Without this, mousemove -> screen.mouse() lived in
-            # raw-pixel space while mousedown lived in pydraw space, so the two
-            # only agreed when xscale==yscale==1 and the canvas was unscrolled.
-            return lambda event: (self._mousemove(self.create_location(
-                self._screen.cv.canvasx(event.x) / self._screen.xscale,
-                -self._screen.cv.canvasy(event.y) / self._screen.yscale)))
+        if event.kind == 'keydown':
+            self._keydown(event.key)
+        elif event.kind == 'keyup':
+            self._keyup(event.key)
+        elif event.kind == 'keypress':
+            self._keypress(event.key)
+        elif event.kind == 'mousedown':
+            self._mousedown(event.button, Location(*event.position))
+        elif event.kind == 'mouseup':
+            self._mouseup(event.button, Location(*event.position))
+        elif event.kind == 'mousedrag':
+            self._mousedrag(event.button, Location(*event.position))
+        elif event.kind == 'mousemove':
+            self._mousemove(Location(*event.position))
         else:
-            return None
-
-    def _keyhandler(self, event) -> None:
-        if 'keydown' not in self.registry:
-            return
-
-        key = str(event.char)
-        if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
-            key = event.keysym
-
-        self.registry['keydown'](self.Key(key.lower()))
-
-    def _keyuphandler(self, event) -> None:
-        if 'keyup' not in self.registry:
-            return
-
-        key = str(event.char)
-        if "\\" in str(event.char.encode('ascii')) or key.strip() == "":
-            key = event.keysym
-
-        self.registry['keyup'](self.Key(key.lower()))
+            raise ValueError('backend returned an unknown input event')
 
     def _keydown(self, key) -> None:
         if 'keydown' not in self.registry:
@@ -1030,13 +839,13 @@ class Screen:
         signature = inspect.signature(self.registry['mousedown'])
         keys = list(signature.parameters.keys())
 
+        if len(keys) == 1:
+            self.registry['mousedown'](location)
+            return
         if keys[0] == "button" and keys[1] == "location":
             self.registry['mousedown'](button, location)
             print("[WARNING] in `mousedown` | Argument Pattern: (button, location) has been deprecated, "
                   "please use (location, button) instead.")
-            return
-        elif len(keys) == 1:
-            self.registry['mousedown'](location)
             return
 
         self.registry['mousedown'](location, button)
@@ -1048,13 +857,13 @@ class Screen:
         signature = inspect.signature(self.registry['mouseup'])
         keys = list(signature.parameters.keys())
 
+        if len(keys) == 1:
+            self.registry['mouseup'](location)
+            return
         if keys[0] == "button" and keys[1] == "location":
             self.registry['mouseup'](button, location)
             print("[WARNING] in `mouseup` | Argument Pattern: (button, location) has been deprecated, "
                   "please use (location, button) instead.")
-            return
-        elif len(keys) == 1:
-            self.registry['mouseup'](location)
             return
 
         self.registry['mouseup'](location, button)
@@ -1072,13 +881,13 @@ class Screen:
         signature = inspect.signature(self.registry['mousedrag'])
         keys = list(signature.parameters.keys())
 
+        if len(keys) == 1:
+            self.registry['mousedrag'](location)
+            return
         if keys[0] == "button" and keys[1] == "location":
             self.registry['mousedrag'](button, location)
             print("[WARNING] in `mousedrag` | Argument Pattern: (button, location) has been deprecated, "
                   "please use (location, button) instead.")
-            return
-        elif len(keys) == 1:
-            self.registry['mousedrag'](location)
             return
 
         self.registry['mousedrag'](location, button)
@@ -1111,45 +920,3 @@ class Screen:
 
     def canvas_location(self, x, y) -> Location:
         return Location(x - self.width() / 2, y - self.height() / 2)
-
-    # -- Internals -- #
-    def _onrelease(self, fun, btn, add=None):
-        """
-        An internal method hooking into the TKinter canvas.
-
-        :param fun: the function to call upon mouse release
-        :param btn: the mouse button to bind to
-        :param add: i have no clue what this does
-        :return: None
-        """
-
-        def eventfun(event):
-            x, y = (self._screen.cv.canvasx(event.x) / self._screen.xscale,
-                    -self._screen.cv.canvasy(event.y) / self._screen.yscale)
-            fun(x, y)
-
-        self._screen.cv.bind("<Button%s-ButtonRelease>" % btn, eventfun, add)
-
-    def _ondrag(self, fun, btn, add=None):
-        """
-        An internal method hooking into the TKinter canvas.
-
-        :param fun: the function to call upon drag
-        :param btn: the mouse button to bind to
-        :param add: i have no clue
-        :return: None
-        """
-
-        # noinspection PyBroadException
-        def eventfun(event):
-            x, y = (self._screen.cv.canvasx(event.x) / self._screen.xscale,
-                    -self._screen.cv.canvasy(event.y) / self._screen.yscale)
-            fun(x, y)
-
-        self._screen.cv.bind("<Button%s-Motion>" % btn, eventfun, add)
-
-    def _onmouseclick(self, fun, btn, add=None):
-        pass
-
-    def _onkeytype(self, fun, btn, add=None):
-        pass

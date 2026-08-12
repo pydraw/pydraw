@@ -16,6 +16,7 @@ from pydraw.util import *
 from pydraw import Screen
 from pydraw import Location
 from pydraw import Color
+from pydraw.render import EllipseNode, ImageNode, PolygonNode, PolylineNode, TextNode
 
 from pydraw.overload import overload
 
@@ -40,6 +41,8 @@ class Pen:
 
         self._history = []  # stores old line _refs for clearing
         self._ref = None  # currentLine
+        self._strokes = {}
+        self._stroke_visibility = {}
 
     def location(self) -> Location:
         if self._drawing and len(self._coordinates) > 0:
@@ -224,26 +227,20 @@ class Pen:
         if len(self._coordinates) > 0:
             self._location = Location(self._coordinates[-1])
 
-        # Delete finished strokes from the canvas entirely; leaving them around
-        # (even hidden) would leak a canvas item on every clear().
         for line in self._history:
-            self._screen._canvas.delete(line)
+            self._remove_stroke(line)
         self._history.clear()
 
         if self._drawing:
-            # Still drawing: keep _ref alive since _update() reuses it, but hide
-            # it and reset to the current point. A zero-length ROUND line would
-            # otherwise render as a dot; _update() re-shows it on the next move.
             self._coordinates = [Location(self._location)]
             if self._ref is not None:
-                self._screen._canvas.itemconfigure(self._ref, state=tk.HIDDEN)
+                self._strokes[self._ref] = self._coordinates
+                self._stroke_visibility[self._ref] = False
+                self._screen._invalidate_render(self._ref)
         else:
-            # Not drawing: nothing reuses _ref, so delete it outright. (When
-            # stopped it aliases the last history item, already deleted above;
-            # a repeat delete is a harmless no-op.)
             self._coordinates = []
             if self._ref is not None:
-                self._screen._canvas.delete(self._ref)
+                self._remove_stroke(self._ref)
                 self._ref = None
 
     def color(self, color: Color = None) -> Color:
@@ -255,7 +252,7 @@ class Pen:
 
             self._color = color
             if self._ref is not None:
-                self._update()
+                self._update_all()
 
         return self._color
 
@@ -264,7 +261,7 @@ class Pen:
             verify(width, int)
             self._width = width
             if self._ref is not None:
-                self._update()
+                self._update_all()
 
         return self._width
 
@@ -273,60 +270,50 @@ class Pen:
             verify(top, bool)
             self._top = top
             if self._ref is not None:
-                self._update()
+                self._update_all()
 
         return self._top
 
     def _setup(self):
-        # noinspection PyProtectedMember
-        x = self._location.x() - self._screen.width() / 2
-        y = self._location.y() - self._screen.height() / 2
-        self._ref = self._screen._canvas.create_line(
-            x, y, x, y,
-            fill=self._screen._colorstr(self._color),
-            width=self._width,
-            capstyle=tk.ROUND
+        render_id = self._screen._allocate_render_id()
+        self._ref = render_id
+        self._strokes[render_id] = self._coordinates
+        self._stroke_visibility[render_id] = True
+        self._screen._register_render_source(
+            lambda render_id=render_id: self._render_stroke(render_id),
+            render_id,
         )
-        if self._top:
-            self._screen._canvas.tag_raise(self._ref)
+
+    def _render_stroke(self, render_id):
+        return PolylineNode(
+            render_id,
+            tuple((point.x(), point.y()) for point in self._strokes[render_id]),
+            self._color.rgb(),
+            self._width,
+            None,
+            self._stroke_visibility[render_id],
+            'round',
+            self._top,
+        )
+
+    def _remove_stroke(self, render_id):
+        self._screen._remove_render(render_id)
+        self._strokes.pop(render_id, None)
+        self._stroke_visibility.pop(render_id, None)
 
     # noinspection PyProtectedMember
     def _update(self):
         if self._ref is None:
             raise PydrawError('Pen#update(): Pen has not been started.')
 
-        if self._coordinates is not None:
-            cl = []
-            for loc in self._coordinates:
-                x = loc[0]
-                y = loc[1]
+        self._strokes[self._ref] = self._coordinates
+        self._stroke_visibility[self._ref] = True
+        self._screen._invalidate_render(self._ref)
 
-                cl.append(x - (self._screen.width() / 2))
-                cl.append(y - (self._screen.height() / 2))
-
-            self._screen._canvas.coords(self._ref, *cl)
-            # Re-show the current line in case it was hidden by clear().
-            self._screen._canvas.itemconfigure(self._ref, state=tk.NORMAL)
-
-        if self._color is not None:
-            self._screen._canvas.itemconfigure(self._ref,
-                                               fill=self._screen._colorstr(self._color if self._color is not None else Color.NONE))
-            if len(self._history) > 0:
-                for line in self._history:
-                    self._screen._canvas.itemconfigure(line,
-                                                       fill=self._screen._colorstr(self._color if self._color is not None else Color.NONE))
-        if self._width is not None:
-            self._screen._canvas.itemconfigure(self._ref, width=self._width)
-
-            if len(self._history) > 0:
-                for line in self._history:
-                    self._screen._canvas.itemconfigure(line, width=self._width)
-        if self._top:
-            self._screen._canvas.tag_raise(self._ref)
-
-            if len(self._history) > 0:
-                for line in self._history:
-                    self._screen._canvas.tag_raise(line)
+    def _update_all(self):
+        self._update()
+        for render_id in self._strokes:
+            self._screen._invalidate_render(render_id)
 
 
 class Object:
@@ -524,6 +511,31 @@ class Renderable(Object):
     # instance shadows these with per-instance values.
     _bounds_sig = None
     _bounds_cache = None
+    _RETAINED_RENDER = False
+
+    def _render_color(self, color):
+        return None if color == Color.NONE else color.rgb()
+
+    def _render_node(self):
+        return PolygonNode(
+            self._render_id,
+            tuple((vertex.x(), vertex.y()) for vertex in self.vertices()),
+            self._render_color(self._color) if self._fill else None,
+            self._render_color(self._border),
+            self._border_width,
+            self._visible,
+        )
+
+    def _register_render(self):
+        self._render_id = self._screen._register_render_source(self._render_node)
+        self._ref = self._render_id
+
+    def _restore_render(self):
+        if self._RETAINED_RENDER:
+            self._screen._register_render_source(self._render_node, self._render_id)
+
+    def _invalidate_render(self):
+        self._screen._invalidate_render(self._render_id)
 
     def __init__(self, screen: Screen, x: float = 0, y: float = 0, width: float = 10, height: float = 10,
                  color: Color = Color('black'),
@@ -599,15 +611,18 @@ class Renderable(Object):
         if dx == 0 and dy == 0:
             return
 
-        try: 
-            self._screen._canvas.move(self._ref, dx, dy)
-        except tk.TclError:
-            pass # pass on TclError as this is likely on program shutdown.
+        if not self._RETAINED_RENDER:
+            try:
+                self._screen._canvas.move(self._ref, dx, dy)
+            except tk.TclError:
+                pass
 
         for vertex in self._vertices:
             vertex._x += dx
             vertex._y += dy
 
+        if self._RETAINED_RENDER:
+            self._invalidate_render()
         self._sync_pen()
 
     def width(self, width: float = None) -> float:
@@ -874,11 +889,13 @@ class Renderable(Object):
                 return self._color
 
             self._color = color
-            # TODO: Can probably improve this speed with a custom _colorstr function on declaration
-            color_state = self._color if self._fill else Color.NONE
-            self._screen._canvas.itemconfigure(self._ref,
-                                               fill=self._screen._colorstr(color_state))
-            # self.update()
+            if self._RETAINED_RENDER:
+                self._invalidate_render()
+            else:
+                color_state = self._color if self._fill else Color.NONE
+                self._screen._canvas.itemconfigure(
+                    self._ref, fill=self._screen._colorstr(color_state)
+                )
 
         return self._color
 
@@ -908,11 +925,16 @@ class Renderable(Object):
             update = True
 
         if update:
-            color_state = self._color if self._fill else Color.NONE
-            self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(color_state),
-                                               outline=self._screen._screen._colorstr(self._border.__value__()),
-                                               width=self._border_width)
-            # self.update()
+            if self._RETAINED_RENDER:
+                self._invalidate_render()
+            else:
+                color_state = self._color if self._fill else Color.NONE
+                self._screen._canvas.itemconfigure(
+                    self._ref,
+                    fill=self._screen._colorstr(color_state),
+                    outline=self._screen._screen._colorstr(self._border.__value__()),
+                    width=self._border_width,
+                )
 
         return self._border
 
@@ -927,8 +949,10 @@ class Renderable(Object):
         if width is not None:
             verify(width, (float, int))
             self._border_width = width
-            self._screen._canvas.itemconfigure(self._ref, width=self._border_width)
-            # self.update()
+            if self._RETAINED_RENDER:
+                self._invalidate_render()
+            else:
+                self._screen._canvas.itemconfigure(self._ref, width=self._border_width)
 
         return self._border_width
 
@@ -944,9 +968,11 @@ class Renderable(Object):
             verify(fill, bool)
             self._fill = fill
 
-            color_state = self._color if self._fill else Color.NONE
-            self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(color_state))
-            # self.update()
+            if self._RETAINED_RENDER:
+                self._invalidate_render()
+            else:
+                color_state = self._color if self._fill else Color.NONE
+                self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(color_state))
 
         return self._fill
 
@@ -980,12 +1006,13 @@ class Renderable(Object):
             verify(visible, bool)
             self._visible = visible
 
-            state = tk.NORMAL if self._visible else tk.HIDDEN
             if self._screen._TERMINATING == True:
                 return
-
-            self._screen._canvas.itemconfigure(self._ref, state=state)
-            # self.update()
+            if self._RETAINED_RENDER:
+                self._invalidate_render()
+            else:
+                state = tk.NORMAL if self._visible else tk.HIDDEN
+                self._screen._canvas.itemconfigure(self._ref, state=state)
 
         return self._visible
 
@@ -1060,6 +1087,19 @@ class Renderable(Object):
         sig = (loc._x, loc._y, self._angle, self._width, self._height)
         if sig == self._bounds_sig:
             return self._bounds_cache
+
+        if self._RETAINED_RENDER:
+            vertices = self.vertices()
+            x_values = [vertex.x() for vertex in vertices]
+            y_values = [vertex.y() for vertex in vertices]
+            result = (
+                Location(min(x_values), min(y_values)),
+                max(x_values) - min(x_values),
+                max(y_values) - min(y_values),
+            )
+            self._bounds_sig = sig
+            self._bounds_cache = result
+            return result
 
         x0 = y0 = x1 = y1 = 0
         try:
@@ -1426,6 +1466,10 @@ class Renderable(Object):
 
         self._vertices = self._rotate(self._vertices, self._angle)
 
+        if self._RETAINED_RENDER:
+            self._register_render()
+            return
+
         tk_vertices = []  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
@@ -1492,6 +1536,10 @@ class Renderable(Object):
             vertices = self._rotate(vertices, self._angle)
         self._vertices = vertices
 
+        if self._RETAINED_RENDER:
+            self._invalidate_render()
+            return
+
         # Convert to tk's coordinate system; the canvas size is read once here
         # rather than twice per vertex.
         half_w = self._screen.width() / 2
@@ -1503,6 +1551,11 @@ class Renderable(Object):
 
     def update(self):
         self._check()
+
+        if self._RETAINED_RENDER:
+            self._update_coords()
+            self._last_angle = self._angle
+            return
 
         old_ref = self._ref
         shape = self._shape  # List of normal vertices.
@@ -1560,235 +1613,123 @@ class CustomRenderable(Renderable):
 
 class RoundedRectangle(CustomRenderable):
     """
-    CustomRenderable that creates a rounded rectangle utilizing the border system.
-    As a result borders are unavailable and immutable in this Object.
+    A rectangle with rounded corners.
     """
 
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float))
+    _RETAINED_RENDER = True
+
+    @overload(Screen, (int, float), (int, float), (int, float), (int, float),
+              Color, Color, bool, (int, float), bool, (int, float))
     def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
                  color: Color = Color('black'),
-                 radius: float = 10,
+                 border: Color = None,
                  fill: bool = True,
                  rotation: float = 0,
-                 visible: bool = True):
-        self._screen = screen
-        self._screen.add(self)
+                 visible: bool = True,
+                 radius: float = 10):
+        self._radius = self._validate_radius(radius)
+        super().__init__(screen, x, y, width, height, color, border,
+                         fill, rotation, visible)
 
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
-                          Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-
-        self._location = Location(x, y)
-        self._width = width
-        self._height = height
-        self._color = color
-        self._border = color
-        self._fill = fill
-        self._angle = rotation
-        self._visible = visible
-        self._border_width = radius
-
-        self._setup()
-
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 radius: float = 10,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._screen = screen
-        self._screen.add(self)
-
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
-                          Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-
-        self._location = Location(x, y)
-        self._width = width
-        self._height = height
-        self._color = color
-        self._border = color
-        self._fill = fill
-        self._angle = rotation
-        self._visible = visible
-        self._border_width = radius
-
-        self._setup()
-
-    @overload(Screen, Location, (int, float), (int, float))
+    @overload(Screen, Location, (int, float), (int, float), Color, Color,
+              bool, (int, float), bool, (int, float))
     def __init__(self, screen: Screen, location: Location, width: float, height: float,
                  color: Color = Color('black'),
-                 radius: float = 10,
+                 border: Color = None,
                  fill: bool = True,
                  rotation: float = 0,
-                 visible: bool = True):
-        self._screen = screen
-        self._screen.add(self)
-
-        self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
-                          Location(location.x(), location.y() + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-
-        self._location = location.clone()
-        self._width = width
-        self._height = height
-        self._color = color
-        self._border = color
-        self._fill = fill
-        self._angle = rotation
-        self._visible = visible
-        self._border_width = radius
-
-        self._setup()
-
-    @overload(Screen, Location, (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 radius: float = 10,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._screen = screen
-        self._screen.add(self)
-
-        self._vertices = [Location(location.x(), location.y()), Location(location.x() + width, location.y()), Location(location.x() + width, location.y() + height),
-                          Location(location.x(), location.y() + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-
-        self._location = location.clone()
-        self._width = width
-        self._height = height
-        self._color = color
-        self._border = color
-        self._fill = fill
-        self._angle = rotation
-        self._visible = visible
-        self._border_width = radius
-
-        self._setup()
-
-    # We redefine the border method to do nothing
-    # def border(self, color: Color = None, width: float = 1, fill: bool = None) -> Color:
-    #     raise NotImplemented("This method is not allowed for `Rounded` shapes.")
-    border = property(doc='(!) Disallowed inherited')
+                 visible: bool = True,
+                 radius: float = 10):
+        self._radius = self._validate_radius(radius)
+        super().__init__(screen, location.x(), location.y(), width, height,
+                         color, border, fill, rotation, visible)
 
     def radius(self, radius: float = None) -> float:
         """
-        Set the border radius of the rounded shape.
+        Set the corner radius of the rounded shape in pixels.
 
-        :param radius: the radius to set to (not pixel accurate)
+        :param radius: the radius to set
         :return: the radius
         """
 
         if radius is not None:
-            self._border_width = radius
-            self._screen._canvas.itemconfigure(self._ref, width=self._border_width)
+            self._radius = self._validate_radius(radius)
+            self._update_coords()
 
-        return self._border_width
+        return self._radius
+
+    @staticmethod
+    def _validate_radius(radius):
+        verify(radius, (float, int))
+        if radius < 0:
+            raise InvalidArgumentError(
+                'RoundedRectangle#radius(): radius must be non-negative.'
+            )
+        return radius
 
     def clone(self) -> 'RoundedRectangle':
-        # Override Renderable.clone: border is disabled here, so rebuild via the color overload + setters.
-        clone = RoundedRectangle(self._screen, self.x(), self.y(), self.width(), self.height(), self.color())
-        clone.radius(self.radius())
-        clone.rotation(self.rotation())
-        clone.fill(self.fill())
-        clone.visible(self.visible())
+        clone = RoundedRectangle(
+            self._screen,
+            self.x(),
+            self.y(),
+            self.width(),
+            self.height(),
+            self.color(),
+            self.border(),
+            self.fill(),
+            self.rotation(),
+            self.visible(),
+            self.radius(),
+        )
+        clone.border_width(self.border_width())
         return clone
 
     def _setup(self):
-        if not hasattr(self, '_shape'):
-            raise AttributeError('An error occured while initializing a Renderable: '
-                                 'Is _shape set? (Advanced Users Only)')
+        self._rebuild_vertices()
+        self._register_render()
 
-        shape = self._shape  # List of normal vertices.
-
+    def _rebuild_vertices(self):
+        radius = min(self._radius, abs(self._width) / 2, abs(self._height) / 2)
+        x = self.x()
+        y = self.y()
         width = self._width
         height = self._height
 
-        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO)
+        if radius == 0:
+            vertices = [
+                Location._raw(x, y),
+                Location._raw(x + width, y),
+                Location._raw(x + width, y + height),
+                Location._raw(x, y + height),
+            ]
+        else:
+            segments = max(2, min(8, int(math.ceil(radius / 4))))
+            corners = (
+                (x + width - radius, y + radius, -90),
+                (x + width - radius, y + height - radius, 0),
+                (x + radius, y + height - radius, 90),
+                (x + radius, y + radius, 180),
+            )
+            vertices = []
+            for center_x, center_y, start_angle in corners:
+                for step in range(segments + 1):
+                    angle = math.radians(start_angle + 90 * step / segments)
+                    vertices.append(Location._raw(
+                        center_x + radius * math.cos(angle),
+                        center_y + radius * math.sin(angle),
+                    ))
 
-        cx = 0
-        cy = 0
-
-        vertices = [Location(vertex[0], vertex[1]) for vertex in shape]
-
-        for vertex in vertices:
-            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy)
-
-            vertex.move(self.x() + width / 2, self.y() + height / 2)
-
+        if self._angle % 360 != 0:
+            vertices = self._rotate(vertices, self._angle)
         self._vertices = vertices
 
-        self._vertices = self._rotate(self._vertices, self._angle)
-
-        tk_vertices = []  # we need to convert to tk's coordinate system.
-        for vertex in self._vertices:
-            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
-                                (vertex.y() - (self._screen.height() / 2))))
-
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-        color_state = self._color if self._fill else Color.NONE
-
-        # noinspection PyProtectedMember
-        self._ref = self._screen._canvas.create_polygon(
-            tk_vertices,
-            fill=self._screen._colorstr(color_state),
-            outline=self._screen._colorstr(self._color),  # self._screen._screen._colorstr(self._border.__value__()),
-            width=self._border_width,
-            state=state,
-            joinstyle=tk.ROUND
-        )
-        # self.update() # CustomPolygon(self._screen, vertices)
+    def _update_coords(self):
+        self._rebuild_vertices()
+        self._invalidate_render()
 
     def update(self):
         self._check()
-
-        old_ref = self._ref
-        shape = self._shape  # List of normal vertices.
-
-        width = self._width
-        height = self._height
-
-        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO)
-
-        cx = 0
-        cy = 0
-
-        vertices = [Location(vertex[0], vertex[1]) for vertex in shape]
-        self._vertices = vertices
-
-        for vertex in vertices:
-            vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy)
-
-            vertex.move(self.x() + width / 2, self.y() + height / 2)
-
-        self._vertices = self._rotate(self._vertices, self._angle)
-        self._last_angle = self._angle
-
-        tk_vertices = []  # we need to convert to tk's coordinate system.
-        for vertex in self._vertices:
-            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
-                                (vertex.y() - (self._screen.height() / 2))))
-
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-        color_state = self._color if self._fill else Color.NONE
-
-        try:
-            # noinspection PyProtectedMember
-            self._ref = self._screen._canvas.create_polygon(
-                tk_vertices,
-                fill=self._screen._colorstr(color_state),
-                outline=self._screen._screen._colorstr(self._border.__value__()),
-                width=self._border_width,
-                state=state,
-                joinstyle=tk.ROUND
-            )
-
-            self._screen._canvas.tag_lower(self._ref, old_ref)
-            self._screen._canvas.delete(old_ref)
-        except:
-            pass
+        self._update_coords()
 
 
 # noinspection PyProtectedMember
@@ -1796,6 +1737,8 @@ class CustomPolygon(CustomRenderable):
     """
     An Irregular Polygon that is passed a list of vertices that can be rotated and translated!
     """
+
+    _RETAINED_RENDER = True
 
     # The below "# noqa" removes a small inspection by pycharm as it complains we do not call the constructor.
     def __init__(self, screen: Screen, vertices: list,  # noqa
@@ -1857,21 +1800,7 @@ class CustomPolygon(CustomRenderable):
             sum(vertex.y() for vertex in self._vertices) / len(self._vertices),
         )
 
-        color_state = self._color if self._fill else Color.NONE
-
-        tk_vertices = []  # we need to convert to tk's coordinate system.
-        for vertex in self._current_vertices:
-            tk_vertices.append((vertex.x() - (self._screen.width() / 2),
-                                (vertex.y() - (self._screen.height() / 2))))
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-
-        self._ref = self._screen._screen.cv.create_polygon(
-            tk_vertices,
-            fill=self._screen._colorstr(color_state),
-            outline=self._screen._screen._colorstr(self._border.__value__()),
-            width=self._border_width,
-            state=state
-        )
+        self._register_render()
 
         if self._angle % 360 != 0:
             self._update_coords()
@@ -1896,9 +1825,9 @@ class CustomPolygon(CustomRenderable):
         dy = self._location._y - before_y
         if dx == 0 and dy == 0:
             return
-        self._screen._canvas.move(self._ref, dx, dy)
         self._vertex_offset[0] += dx
         self._vertex_offset[1] += dy
+        self._invalidate_render()
         self._sync_pen()
 
     def moveto(self, *args, **kwargs):
@@ -1917,9 +1846,9 @@ class CustomPolygon(CustomRenderable):
         dy = self._location._y - before_y
         if dx == 0 and dy == 0:
             return
-        self._screen._canvas.move(self._ref, dx, dy)
         self._vertex_offset[0] += dx
         self._vertex_offset[1] += dy
+        self._invalidate_render()
         self._sync_pen()
 
     def width(self, width: float = None) -> float:
@@ -2084,11 +2013,7 @@ class CustomPolygon(CustomRenderable):
         cosine = math.cos(theta)
         sine = math.sin(theta)
 
-        half_screen_width = self._screen.width() / 2
-        half_screen_height = self._screen.height() / 2
-
         rotated = self._angle % 360 != 0
-        tk_vertices = []
 
         for index, vertex in enumerate(self._vertices):
             old_x = self._location.x() + (
@@ -2111,27 +2036,16 @@ class CustomPolygon(CustomRenderable):
             current_vertex._x = new_x
             current_vertex._y = new_y
 
-            tk_vertices.append(new_x - half_screen_width)
-            tk_vertices.append(new_y - half_screen_height)
-
-        self._screen._canvas.coords(self._ref, tk_vertices)
+        self._invalidate_render()
 
     def update(self):
         self._check()
         self._update_coords()
 
-        color_state = self._color if self._fill else Color.NONE
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-        self._screen._canvas.itemconfigure(
-            self._ref,
-            fill=self._screen._colorstr(color_state),
-            outline=self._screen._screen._colorstr(self._border.__value__()),
-            width=self._border_width,
-            state=state,
-        )
-
 
 class Rectangle(Renderable):
+    _RETAINED_RENDER = True
+
     # Two constructor forms: (x, y) and (location). The dispatcher honors
     # default arguments, so each full signature also covers every shorter call
     # that omits trailing optional args (color, border, fill, rotation, visible).
@@ -2164,6 +2078,8 @@ class Rectangle(Renderable):
 
 
 class Oval(Renderable):
+    _RETAINED_RENDER = True
+
     _default = ((10, 0), (9.51, 3.09), (8.09, 5.88),
                 (5.88, 8.09), (3.09, 9.51), (0, 10), (-3.09, 9.51),
                 (-5.88, 8.09), (-8.09, 5.88), (-9.51, 3.09), (-10, 0),
@@ -2182,6 +2098,7 @@ class Oval(Renderable):
                  visible: bool = True):
         self._width = width
         self._height = height
+        self._custom_wedges = False
 
         vertices = self._convert_vertices()
         self._shape = vertices
@@ -2199,6 +2116,7 @@ class Oval(Renderable):
 
         self._width = width
         self._height = height
+        self._custom_wedges = False
 
         vertices = self._convert_vertices()
         self._shape = vertices
@@ -2241,6 +2159,7 @@ class Oval(Renderable):
                 raise InvalidArgumentError('Oval(): wedges must be at least 20.')
             self._shape = self._generate_vertices(PIXEL_RATIO / 2, wedges=wedges)
             self._wedges = wedges
+            self._custom_wedges = True
             self._update_coords()
 
         return self._wedges
@@ -2279,6 +2198,21 @@ class Oval(Renderable):
 
         return shape_vertices
 
+    def _render_node(self):
+        return EllipseNode(
+            self._render_id,
+            (self.x() + self._width / 2, self.y() + self._height / 2),
+            self._width / 2,
+            self._height / 2,
+            self._angle,
+            tuple((vertex.x(), vertex.y()) for vertex in self.vertices()),
+            self._custom_wedges,
+            self._render_color(self._color) if self._fill else None,
+            self._render_color(self._border),
+            self._border_width,
+            self._visible,
+        )
+
     @staticmethod
     def _generate_vertices(radius, angle: float = 18, wedges: int = None):
         relative_vertices = []
@@ -2296,6 +2230,8 @@ class Oval(Renderable):
 
 
 class Triangle(Renderable):
+    _RETAINED_RENDER = True
+
     # Two constructor forms: (x, y) and (location). The dispatcher honors
     # default arguments, so each full signature also covers every shorter call.
     @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
@@ -2323,6 +2259,8 @@ class Triangle(Renderable):
 
 
 class Polygon(Renderable):
+    _RETAINED_RENDER = True
+
     # Two constructor forms: (num_sides, x, y) and (num_sides, location). The
     # dispatcher honors default arguments, so each full signature also covers
     # every shorter call.
@@ -2406,6 +2344,10 @@ class Polygon(Renderable):
 
         self._vertices = self._rotate(self._vertices, self._angle)
 
+        if self._RETAINED_RENDER:
+            self._register_render()
+            return
+
         tk_vertices = []  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
@@ -2467,6 +2409,10 @@ class Polygon(Renderable):
 
         self._vertices = self._rotate(self._vertices, self._angle)
 
+        if self._RETAINED_RENDER:
+            self._invalidate_render()
+            return
+
         tk_vertices = []  # we need to convert to tk's coordinate system.
         for vertex in self._vertices:
             tk_vertices.append((vertex.x() - (self._screen.width() / 2),
@@ -2501,7 +2447,7 @@ class Image(Renderable):
     You can install PIL/Pillow by running: `pip install pillow` in a terminal!
     """
 
-    TKINTER_TYPES = ['.png', '.gif', '.ppm']
+    _RETAINED_RENDER = True
 
     # (x, y) INITIALIZERS
 
@@ -2531,36 +2477,8 @@ class Image(Renderable):
 
     def _init_image(self, screen, image, x, y, width, height, color, border, rotation, visible):
         self._image_name = image
-        self._original = None
 
-        # Filetype Checking
-        import os
-        filetype = os.path.splitext(image)[1].lower()
-        if not filetype:
-            raise PydrawError('Image(): path must include a file extension.')
-
-        if not os.path.isfile(image):
-            raise InvalidArgumentError(
-                f"Image(): path does not reference an existing file: '{image}'."
-            )
-
-        if filetype in self.TKINTER_TYPES:
-            self._image = tk.PhotoImage(name=image, file=image)
-        else:
-            try:
-                from PIL import Image, ImageTk
-                image = Image.open(self._image_name)
-                self._original = image  # We save the originally loaded image for easy modification
-
-                self._image = ImageTk.PhotoImage(image)
-            except:
-                raise UnsupportedError(
-                    "Image(): Pillow is required for formats other than PNG, GIF, and PPM. "
-                    "Install it with 'pip install pillow'."
-                )
-
-        self._width = self._image.width()
-        self._height = self._image.height()
+        self._width, self._height = screen._backend.measure_image(image)
 
         self._frame = -1
         self._frames = -1
@@ -2577,14 +2495,8 @@ class Image(Renderable):
         self._flip_x = False
         self._flip_y = False
 
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-
-        # We have to monkey patch PIL if we modify the image, but we don't want to cause a RecursionError (call once)
-        self._patched = False
-
         super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
                          rotation=rotation, visible=visible)
-        self._setup()
 
         if width is not None and width != self._width:
             self.width(width)
@@ -2599,12 +2511,26 @@ class Image(Renderable):
 
     # noinspection PyProtectedMember
     def _setup(self):
-        # Pre-register the vertices so we don't have issues with .center()
         self._vertices = self.vertices()
+        self._register_render()
 
-        real_location = self._screen.canvas_location(self.x(), self.y())
-        self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
-                                                      real_location.y() + self._height / 2, image=self._image)
+    def _render_node(self):
+        return ImageNode(
+            self._render_id,
+            self._image_name,
+            (self.x(), self.y()),
+            self._width,
+            self._height,
+            self._angle,
+            None if self._color == Color.NONE else self._color.rgb(),
+            self._mask,
+            None if self._border == Color.NONE else self._border.rgb(),
+            self._smooth,
+            self._flip_x,
+            self._flip_y,
+            self._frame,
+            self._visible,
+        )
 
     # def moveto(self, *args, **kwargs) -> None:
     #     """
@@ -2933,15 +2859,9 @@ class Image(Renderable):
         :return: None
         """
 
-        from PIL import Image
-        # from PIL import GifImagePlugin
-
-        image = Image.open(self._image_name)
-        if hasattr(image, 'n_frames'):
-            self._frames = image.n_frames
-            self._frame = 0
-        else:
-            raise PydrawError('Image#load(): image is not an animated GIF.')
+        self._frames = self._screen._backend.image_frames(self._image_name)
+        self._frame = 0
+        self._invalidate_render()
 
     def next(self) -> None:
         """
@@ -2986,137 +2906,29 @@ class Image(Renderable):
         clone._flip_x = self._flip_x
         clone._flip_y = self._flip_y
         if clone._flip_x or clone._flip_y:
-            clone.update(True)
+            clone._invalidate_render()
 
         return clone
-
-    @staticmethod
-    def _monkey_patch_del():
-        """
-        We monkey patch the del function for PIL, so it doesn't do stupid things.
-
-        :return:
-        """
-        from PIL import ImageTk
-
-        # monkey patch TKinter from this dumb bug they don't catch in TK.PhotoImage
-        old_del = ImageTk.PhotoImage.__del__
-
-        def new_del(self):
-            try:
-                old_del(self)
-            except (AttributeError, RecursionError):
-                pass  # Yeah, we don't care.
-            pass
-
-        ImageTk.PhotoImage.__del__ = new_del
-
-    def _check_patch(self):
-        if not self._patched:
-            self._monkey_patch_del()  # If we do have PIL we need to monkey patch this immediately.
-            self._patched = True
 
     def _update_coords(self):
         """
         Usually used to update x/y or vertices, but in this case we just update our width and height
         """
         self._check()
-        self.update()
-
-        # self._width = true_width
-        # self._height = true_height * (self._text.count('\n') + 1)
+        self._vertices = self.vertices()
+        self._invalidate_render()
 
 
     # noinspection PyProtectedMember
     def update(self, updated: bool = False):
         self._check()
-
-        if updated:
-            try:
-                from PIL import Image, ImageTk, ImageOps
-
-                self._check_patch()
-
-                # Optimized (only read file once, caching everything else)
-                # TODO: In the future, caching images by filename could increase efficiency, but have serious pitfalls.
-                # ^ Perhaps if we hash the image we could then compare against future hashes to check if the file
-                # has been modified or not. (Noah)
-                if self._original is None:
-                    self._original = Image.open(self._image_name).copy()
-
-                if self._frame != -1:
-                    # GIF path mutates _original via seek, so copy first to stay detached.
-                    try:
-                        self._original.seek(self._frame)  # we have to seek on original for some reason.
-                    except EOFError:
-                        raise PydrawError(
-                            f"Image#update(): no GIF frame exists at index {self._frame} "
-                            f"for '{self._image_name}'."
-                        )
-                    image = self._original.copy()
-                else:
-                    image = self._original # Removed unnecessary copy of original here.
-                
-                # Don't need to convert RGBA if we already are.
-                if image.mode != 'RGBA':
-                    image = image.convert('RGBA')
-
-                if self._flip_x:
-                    image = ImageOps.flip(image)
-                if self._flip_y:
-                    image = ImageOps.mirror(image)
-
-                if self._color is not None and self._color != Color.NONE:
-                    r, g, b, alpha = image.split()
-                    gray = ImageOps.grayscale(image)
-                    result = ImageOps.colorize(gray, (0, 0, 0, 0),
-                                               (
-                                                   self._color.red(), self._color.green(), self._color.blue(),
-                                                   self._mask))
-                    result.putalpha(alpha)
-                    image = result
-
-                if self._border is not None and self._border is not Color.NONE:
-                    image = ImageOps.expand(image, border=10, fill=self._border.rgb())
-
-                # Do the resizing last, so we can make sure the other manipulations work properly.
-                # Skip the (expensive) LANCZOS resample when the image is already at the target size
-                target_size = (int(self.width()), int(self.height()))
-                if image.size != target_size:
-                    image = image.resize(target_size, Image.LANCZOS if self._smooth else Image.NEAREST)
-
-                if self._angle != 0:
-                    resample = Image.BILINEAR if self._smooth else Image.NEAREST
-                    image = image.rotate(-self._angle, resample=resample, expand=1, fillcolor=None)
-
-                self._image = ImageTk.PhotoImage(image=image)
-            except (RuntimeError, AttributeError):
-                pass  # Swallow Tkinter/PIL errors from image redraws that race program shutdown.
-            except ImportError:
-                raise UnsupportedError(
-                    "Image#update(): Pillow is required to modify images. "
-                    "Install it with 'pip install pillow'."
-                )
-
-        try:
-            old_ref = self._ref
-            real_location = self._screen.canvas_location(self.x(), self.y())
-
-            state = tk.NORMAL if self._visible else tk.HIDDEN
-
-            self._ref = self._screen._canvas.create_image(real_location.x() + self._width / 2,
-                                                          real_location.y() + self._height / 2, image=self._image,
-                                                          state=state)
-
-            self._screen._canvas.tag_lower(self._ref, old_ref)
-            self._screen._canvas.delete(old_ref)
-        except tk.TclError:
-            pass
+        self._vertices = self.vertices()
+        self._invalidate_render()
 
 
 class Text(CustomRenderable):
-    _anchor = 'nw'  # sw technically means southwest, but it means bottom left anchor. (we change to top left in code)
-    _aligns = {'left': tk.LEFT, 'center': tk.CENTER, 'right': tk.RIGHT}
+    _RETAINED_RENDER = True
+    _aligns = ('left', 'center', 'right')
 
     # Four constructor forms ((x, y)/(location), each with optional Color) defer to _init_text.
     # noinspection PyProtectedMember
@@ -3166,42 +2978,15 @@ class Text(CustomRenderable):
         self._strikethrough = strikethrough
         self._angle = rotation
         self._visible = visible
-        self._font_cache = {}  # tkfont.Font objects keyed by font_data (see _calculate_transform)
 
         verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
                align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
                visible, bool)
 
-        font_data = self._build_font_data()
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-
-        true_width, true_height = self._calculate_transform(font_data)
+        true_width, true_height = self._calculate_transform()
         self._width = true_width
         self._height = true_height * (self._text.count('\n') + 1)
-
-        real_x, real_y = self._place()
-        self._ref = self._screen._screen.cv.create_text(real_x,
-                                                        real_y,
-                                                        text=self.text(),
-                                                        anchor=Text._anchor,
-                                                        justify=Text._aligns[self.align()],
-                                                        fill=self._screen._colorstr(self._color),
-                                                        font=font_data,
-                                                        state=state,
-                                                        angle=-self._angle)
-
-    def _build_font_data(self) -> tuple:
-        decorations = ''
-        if self._bold:
-            decorations += 'bold '
-        if self._italic:
-            decorations += 'italic '
-        if self._underline:
-            decorations += 'underline '
-        if self._strikethrough:
-            decorations += 'overstrike '
-        # Negative font size selects pixel font-size instead of point.
-        return self._font, -self._size, decorations
+        self._register_render()
 
     def _place(self) -> tuple:
         # Canvas anchor (x, y); the width offset keeps rotation pivoting about the center.
@@ -3210,9 +2995,24 @@ class Text(CustomRenderable):
         dx = math.cos(radians) * hypotenuse
         dy = math.sin(radians) * hypotenuse
 
-        real_x = (self.x() + (self._width / 2) - ((self._screen.width() / 2) + 1)) - dx
-        real_y = (self.y() - (self._screen.height() / 2)) - dy
-        return real_x, real_y
+        return self.x() + self._width / 2 - 1 - dx, self.y() - dy
+
+    def _render_node(self):
+        return TextNode(
+            self._render_id,
+            self._place(),
+            self._text,
+            self._color.rgb(),
+            self._font,
+            self._size,
+            self._align,
+            self._bold,
+            self._italic,
+            self._underline,
+            self._strikethrough,
+            self._angle,
+            self._visible,
+        )
 
     def text(self, text: str = None) -> str:
         """
@@ -3227,12 +3027,7 @@ class Text(CustomRenderable):
             if self._text == text:
                 return self._text
             self._text = text
-            try:
-                self._screen._canvas.itemconfigure(self._ref, text=self._text)
-            except tk.TclError:
-                pass
-            # self.update()
-            self._update_coords()  # update width and height
+            self._update_coords()
 
         return self._text
 
@@ -3273,11 +3068,7 @@ class Text(CustomRenderable):
         if dx == 0 and dy == 0:
             return
 
-        try:
-            self._screen._canvas.move(self._ref, dx, dy)
-        except tk.TclError:
-            pass  # pass on TclError as this is likely on program shutdown.
-
+        self._invalidate_render()
         self._sync_pen()
 
     # noinspection PyMethodOverriding
@@ -3315,8 +3106,7 @@ class Text(CustomRenderable):
                 return self._color
 
             self._color = color
-            self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(self._color))
-            # self.update()
+            self._invalidate_render()
 
         return self._color
 
@@ -3368,8 +3158,7 @@ class Text(CustomRenderable):
                 )
 
             self._align = align.lower()
-            self._screen._canvas.itemconfigure(self._ref, justify=self._aligns[self._align])
-            # self.update()
+            self._invalidate_render()
 
         return self._align
 
@@ -3448,13 +3237,7 @@ class Text(CustomRenderable):
         if rotation is not None:
             verify(rotation, (float, int))
             self._angle = rotation
-            # Reposition as well as re-angle so runtime rotation pivots like init.
-            try:
-                real_x, real_y = self._place()
-                self._screen._canvas.coords(self._ref, real_x, real_y)
-                self._screen._canvas.itemconfigure(self._ref, angle=-self._angle)
-            except tk.TclError:
-                pass
+            self._invalidate_render()
 
         return self._angle
 
@@ -3593,10 +3376,7 @@ class Text(CustomRenderable):
         if visible is not None:
             verify(visible, bool)
             self._visible = visible
-
-            state = tk.NORMAL if self._visible else tk.HIDDEN
-            self._screen._canvas.itemconfigure(self._ref, state=state)
-            # self.update()
+            self._invalidate_render()
 
         return self._visible
 
@@ -3626,67 +3406,30 @@ class Text(CustomRenderable):
                     rotation=self._angle, visible=self._visible)
 
     def _update_font(self):
-        self._screen._canvas.itemconfigure(self._ref, font=self._build_font_data())
+        self._update_coords()
 
     def _update_coords(self):
         # For Text this just refreshes width/height (position is handled elsewhere).
         self._check()
 
-        try:
-            true_width, true_height = self._calculate_transform(self._build_font_data())
-        except RuntimeError:
-            return
-
+        true_width, true_height = self._calculate_transform()
         self._width = true_width
         self._height = true_height * (self._text.count('\n') + 1)
+        self._invalidate_render()
 
     # noinspection PyProtectedMember
     def update(self) -> None:
         self._check()
-        # Text items can't be altered in place, so we delete and re-create.
-        old_ref = self._ref
+        self._update_coords()
 
-        font_data = self._build_font_data()
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-
-        try:
-            try:
-                true_width, true_height = self._calculate_transform(font_data)
-            except RuntimeError:
-                return
-
-            self._width = true_width
-            self._height = true_height * (self._text.count('\n') + 1)
-
-            real_x, real_y = self._place()
-            self._ref = self._screen._screen.cv.create_text(real_x,
-                                                            real_y,
-                                                            text=self.text(),
-                                                            anchor=Text._anchor,
-                                                            justify=Text._aligns[self.align()],
-                                                            fill=self._screen._colorstr(self._color),
-                                                            font=font_data,
-                                                            state=state,
-                                                            angle=-self._angle)
-            self._screen._screen.cv.tag_lower(self._ref, old_ref)
-            self._screen._screen.cv.delete(old_ref)
-        except (tk.TclError, AttributeError):
-            pass
-
-    def _calculate_transform(self, font_data):
-        # Cache the tkfont.Font per font_data - constructing one is a Tcl round-trip.
-        font = self._font_cache.get(font_data)
-        if font is None:
-            import tkinter.font as tkfont
-            font = tkfont.Font(font=font_data)
-            self._font_cache[font_data] = font
-
-        true_width = 0
-        for line in self._text.split('\n'):
-            true_width = max(font.measure(line), true_width)
-        true_height = font.metrics('linespace')
-
-        return true_width, true_height
+    def _calculate_transform(self):
+        return self._screen._backend.measure_text(
+            self._text,
+            self._font,
+            self._size,
+            self._bold,
+            self._italic,
+        )
 
 # == NON RENDERABLES == #
 
@@ -3736,20 +3479,36 @@ class Line(Object):
 
         verify(color, Color, thickness, int, dashes, (int, tuple), visible, bool)
 
-        state = tk.NORMAL if self._visible else tk.HIDDEN
-
         if dashes is not None and type(dashes) is not tuple:
             self._dashes = (dashes, dashes)
 
-        # noinspection PyProtectedMember
-        self._ref = self._screen._screen.cv.create_line(self._pos1.x() - screen.width() / 2,
-                                                        self._pos1.y() - screen.height() / 2,
-                                                        self._pos2.x() - screen.width() / 2,
-                                                        self._pos2.y() - screen.height() / 2,
-                                                        fill=self._screen._screen._colorstr(self._color.__value__()),
-                                                        width=self._thickness, dash=self._dashes, state=state)
-
         self._update_angle()
+        self._render_id = self._screen._register_render_source(self._render_node)
+        self._ref = self._render_id
+
+    def _render_node(self):
+        dash = self._dashes
+        if dash is not None and type(dash) is not tuple:
+            dash = (dash, dash)
+        return PolylineNode(
+            self._render_id,
+            (
+                (self._pos1.x(), self._pos1.y()),
+                (self._pos2.x(), self._pos2.y()),
+            ),
+            self._color.rgb(),
+            self._thickness,
+            dash,
+            self._visible,
+            'butt',
+            False,
+        )
+
+    def _invalidate_render(self):
+        self._screen._invalidate_render(self._render_id)
+
+    def _restore_render(self):
+        self._screen._register_render_source(self._render_node, self._render_id)
 
     def pos1(self, *args) -> Location:
         """
@@ -3768,10 +3527,7 @@ class Line(Object):
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.')
 
             self._update_angle()
-            self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
-                                                    self._pos1.y() - self._screen.height() / 2,
-                                                    self._pos2.x() - self._screen.width() / 2,
-                                                    self._pos2.y() - self._screen.height() / 2])
+            self._invalidate_render()
         return self._pos1
 
     def pos2(self, *args) -> Location:
@@ -3791,10 +3547,7 @@ class Line(Object):
                 raise TypeError('Incorrect Argumentation: Requires either a location, tuple, or two numbers.')
 
             self._update_angle()
-            self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
-                                                    self._pos1.y() - self._screen.height() / 2,
-                                                    self._pos2.x() - self._screen.width() / 2,
-                                                    self._pos2.y() - self._screen.height() / 2])
+            self._invalidate_render()
         return self._pos2
 
     def move(self, *args, **kwargs) -> None:
@@ -3853,11 +3606,7 @@ class Line(Object):
         if point != 0:
             self._update_angle()
 
-        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
-                                                self._pos1.y() - self._screen.height() / 2,
-                                                self._pos2.x() - self._screen.width() / 2,
-                                                self._pos2.y() - self._screen.height() / 2])
-        # self.update()
+        self._invalidate_render()
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -3919,11 +3668,7 @@ class Line(Object):
                             'x2, y2)')
 
         self._update_angle()
-        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
-                                                self._pos1.y() - self._screen.height() / 2,
-                                                self._pos2.x() - self._screen.width() / 2,
-                                                self._pos2.y() - self._screen.height() / 2])
-        # self.update()
+        self._invalidate_render()
 
     # noinspection PyUnusedLocal
     # TODO: Allow for point specification (center)
@@ -4022,10 +3767,7 @@ class Line(Object):
         new_y = (old_x * sine + old_y * cosine) + origin.y()
 
         point.moveto(new_x, new_y)
-        self._screen._canvas.coords(self._ref, [self._pos1.x() - self._screen.width() / 2,
-                                                self._pos1.y() - self._screen.height() / 2,
-                                                self._pos2.x() - self._screen.width() / 2,
-                                                self._pos2.y() - self._screen.height() / 2])
+        self._invalidate_render()
 
         self._angle += angle_diff
         return self._angle
@@ -4077,9 +3819,7 @@ class Line(Object):
                 return self._color
 
             self._color = color
-
-            self._screen._canvas.itemconfigure(self._ref, fill=self._screen._colorstr(self._color))
-            # self.update()
+            self._invalidate_render()
 
         return self._color
 
@@ -4094,8 +3834,7 @@ class Line(Object):
         if thickness is not None:
             verify(thickness, int)
             self._thickness = thickness
-            self._screen._canvas.itemconfigure(self._ref, width=self._thickness)
-            # self.update()
+            self._invalidate_render()
 
         return self._thickness
 
@@ -4119,8 +3858,7 @@ class Line(Object):
                     verify(dash, int)
 
             self._dashes = dashes
-            self._screen._canvas.itemconfigure(self._ref, dash=self._dashes)
-            # self.update()
+            self._invalidate_render()
 
         return self._dashes
 
@@ -4135,10 +3873,7 @@ class Line(Object):
         if visible is not None:
             verify(visible, bool)
             self._visible = visible
-
-            state = tk.NORMAL if self._visible else tk.HIDDEN
-            self._screen._canvas.itemconfigure(self._ref, state=state)
-            # self.update()
+            self._invalidate_render()
 
         return self._visible
 
@@ -4277,24 +4012,4 @@ class Line(Object):
     # noinspection PyProtectedMember
     def update(self):
         self._check()
-
-        try:
-            old_ref = self._ref
-
-            if self._dashes is not None and type(self._dashes) is not tuple:
-                self._dashes = (self._dashes, self._dashes)
-
-            state = tk.NORMAL if self._visible else tk.HIDDEN
-            self._ref = self._screen._screen.cv.create_line(self._pos1.x() - self._screen.width() / 2,
-                                                            self._pos1.y() - self._screen.height() / 2,
-                                                            self._pos2.x() - self._screen.width() / 2,
-                                                            self._pos2.y() - self._screen.height() / 2,
-                                                            fill=self._screen._colorstr(self.color()),
-                                                            width=self._thickness, dash=self._dashes, state=state)
-
-            self._screen._screen.cv.tag_lower(self._ref, old_ref)
-            self._screen._screen.cv.delete(old_ref)
-
-            # self._screen._screen.cv.update()
-        except tk.TclError:
-            pass  # Just catch TclErrors and throw them out.
+        self._invalidate_render()

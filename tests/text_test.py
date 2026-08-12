@@ -2,8 +2,7 @@
 Text Test: Exercises the full Text surface - every constructor form and every
 public method, with a focus on exact (relative) movement.
 
-Text mutation is done through the tkinter canvas directly (no PIL), so the whole
-class is exercisable without Pillow.
+Text rendering is retained and uses the Tk backend without requiring Pillow.
 """
 
 import unittest
@@ -64,6 +63,10 @@ class TextMethodTest(unittest.TestCase):
     def setUp(self) -> None:
         self.screen.clear()
         self.text = Text(self.screen, 'hello', 200, 200)
+        self.screen.update()
+
+    def _item_for(self, text):
+        return self.screen._backend.item_for(text._render_id)
 
     def test_text_getter_setter(self):
         self.assertEqual(self.text.text(), 'hello')
@@ -83,9 +86,10 @@ class TextMethodTest(unittest.TestCase):
     def test_move_is_exact(self):
         # A relative move must shift the location by exactly the delta and shift
         # the canvas item by the same amount (no bbox-induced 1px drift).
-        before = self.screen._canvas.coords(self.text._ref)
+        before = self.screen._canvas.coords(self._item_for(self.text))
         self.text.move(15, 25)
-        after = self.screen._canvas.coords(self.text._ref)
+        self.screen.update()
+        after = self.screen._canvas.coords(self._item_for(self.text))
         self.assertEqual(self.text.location(), Location(215, 225))
         self.assertEqual([round(b - a, 4) for a, b in zip(before, after)], [15, 25])
 
@@ -94,9 +98,9 @@ class TextMethodTest(unittest.TestCase):
         self.assertEqual(self.text.location(), Location(300, 400))
 
     def test_move_zero_is_noop(self):
-        before = self.screen._canvas.coords(self.text._ref)
+        before = self.screen._canvas.coords(self._item_for(self.text))
         self.text.move(0, 0)
-        self.assertEqual(self.screen._canvas.coords(self.text._ref), before)
+        self.assertEqual(self.screen._canvas.coords(self._item_for(self.text)), before)
 
     def test_dimensions_are_read_only(self):
         w, h = self.text.width(), self.text.height()
@@ -127,6 +131,26 @@ class TextMethodTest(unittest.TestCase):
             getattr(self.text, setter)(False)
             self.assertFalse(getter())
 
+    def test_mutations_emit_one_retained_text_node(self):
+        render_id = self.text._render_id
+        self.text.text('updated')
+        self.text.color(Color('purple'))
+        self.text.font('Courier')
+        self.text.size(22)
+        self.text.align('center')
+        self.text.bold(True)
+        self.text.rotation(30)
+
+        node = self.text._render_node()
+        self.assertEqual(node.id, render_id)
+        self.assertEqual(node.text, 'updated')
+        self.assertEqual(node.color, Color('purple').rgb())
+        self.assertEqual(node.font, 'Courier')
+        self.assertEqual(node.size, 22)
+        self.assertEqual(node.align, 'center')
+        self.assertTrue(node.bold)
+        self.assertEqual(node.rotation, 30)
+
     def test_rotation_and_rotate(self):
         self.text.rotation(45)
         self.assertEqual(self.text.rotation(), 45)
@@ -139,8 +163,11 @@ class TextMethodTest(unittest.TestCase):
         constructed = Text(self.screen, 'A', 50, 150, rotation=45)
         rotated = Text(self.screen, 'B', 250, 150)
         rotated.rotation(45)
-        self.assertEqual(float(cv.itemcget(constructed._ref, 'angle')),
-                         float(cv.itemcget(rotated._ref, 'angle')))
+        self.screen.update()
+        self.assertEqual(
+            float(cv.itemcget(self._item_for(constructed), 'angle')),
+            float(cv.itemcget(self._item_for(rotated), 'angle')),
+        )
 
     def test_lookat_location(self):
         self.text.lookat(Location(400, 200))

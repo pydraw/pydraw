@@ -4,7 +4,9 @@ import unittest
 from unittest import mock
 
 from pydraw import Screen, Color, Location, Rectangle
+from pydraw.backends.tk import TkBackend
 from pydraw.errors import PydrawError
+from pydraw.render import RenderBatch
 
 
 class ScreenTest(unittest.TestCase):
@@ -25,7 +27,76 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(self.screen.title(), 'Updated Name')
         self.assertEqual(self.screen.color(), Color('red'))
         self.assertEqual(self.screen._root.title(), 'Updated Name')
-        self.assertEqual(self.screen._screen.bgcolor(), 'red')
+        self.assertEqual(self.screen._screen.bgcolor(), (255.0, 0.0, 0.0))
+
+    def test_platform_services_route_through_backend(self):
+        with mock.patch.object(
+                self.screen._backend, 'set_background_image') as picture, \
+                mock.patch.object(self.screen._backend, 'resize') as resize, \
+                mock.patch.object(
+                    self.screen._backend, 'window_size', return_value=(810, 610)
+                ) as window_size, \
+                mock.patch.object(
+                    self.screen._backend, 'canvas_size', return_value=(800, 600)
+                ) as canvas_size, \
+                mock.patch.object(
+                    self.screen._backend, 'set_fullscreen'
+                ) as set_fullscreen:
+            self.screen.picture('background.gif')
+            self.screen.resize(640, 480)
+            self.assertEqual(self.screen.size(), (810, 610))
+            self.assertEqual(
+                (self.screen.width(), self.screen.height()),
+                (800, 600),
+            )
+            self.screen.fullscreen(True)
+
+        picture.assert_called_once_with('background.gif')
+        resize.assert_called_once_with(640, 480)
+        window_size.assert_called_once_with()
+        self.assertEqual(canvas_size.call_count, 2)
+        set_fullscreen.assert_called_once_with(True)
+
+    def test_dialogs_and_screenshot_route_through_backend(self):
+        with mock.patch.object(
+                self.screen._backend, 'alert', return_value=True) as alert, \
+                mock.patch.object(
+                    self.screen._backend, 'prompt', return_value='Ada'
+                ) as prompt, \
+                mock.patch.object(self.screen._backend, 'listen') as listen, \
+                mock.patch.object(
+                    self.screen._backend, 'grab', return_value='frame.png'
+                ) as grab:
+            self.assertTrue(
+                self.screen.alert('Continue?', 'Question', 'Yes', 'No')
+            )
+            self.assertEqual(self.screen.prompt('Name?', 'Student'), 'Ada')
+            self.assertEqual(self.screen.grab('frame'), 'frame.png')
+
+        alert.assert_called_once_with('Continue?', 'Question', 'Yes', 'No')
+        prompt.assert_called_once_with('Name?', 'Student')
+        listen.assert_called_once_with()
+        grab.assert_called_once_with('frame.png')
+
+    def test_uses_tk_backend_with_legacy_native_aliases(self):
+        self.assertIsInstance(self.screen._backend, TkBackend)
+        self.assertIs(self.screen._screen, self.screen._backend.screen)
+        self.assertIs(self.screen._canvas, self.screen._backend.canvas)
+        self.assertIs(self.screen._root, self.screen._backend.root)
+
+    def test_update_routes_through_backend(self):
+        with mock.patch.object(
+                self.screen._backend,
+                'poll_events',
+                wraps=self.screen._backend.poll_events) as poll_events, \
+                mock.patch.object(
+                    self.screen._backend,
+                    'present',
+                    wraps=self.screen._backend.present) as present:
+            self.screen.update()
+
+        poll_events.assert_called_once_with()
+        self.assertIsInstance(present.call_args[0][0], RenderBatch)
 
     def test_geometry_helpers(self):
         self.assertEqual(self.screen.width(), 800)
@@ -62,13 +133,19 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(rect.y(), 275)
         self.assertIn(rect, self.screen)
         self.assertEqual(self.screen.objects(), (rect,))
-        self.assertNotEqual(self.screen._canvas.type(rect._ref), '')
+        self.screen.update()
+        self.assertNotEqual(
+            self.screen._canvas.type(self.screen._backend.item_for(rect._render_id)),
+            '',
+        )
 
         self.screen.remove(rect)
+        self.screen.update()
         self.assertNotIn(rect, self.screen)
-        self.assertIsNone(self.screen._canvas.type(rect._ref))
+        self.assertIsNone(self.screen._backend.item_for(rect._render_id))
 
         self.screen.add(rect)
+        self.screen.update()
         self.assertIn(rect, self.screen)
         with self.assertRaises(PydrawError):
             self.screen.add(rect)
@@ -80,7 +157,11 @@ class ScreenTest(unittest.TestCase):
         self.screen.update()
 
         self.assertEqual(rect.location(), Location(35, 55))
-        self.assertEqual(self.screen._canvas.itemcget(rect._ref, 'fill'), 'blue')
+        item = self.screen._backend.item_for(rect._render_id)
+        self.assertEqual(
+            self.screen._canvas.winfo_rgb(self.screen._canvas.itemcget(item, 'fill')),
+            self.screen._canvas.winfo_rgb('blue'),
+        )
 
     def test_reset_disables_input_before_removing_objects(self):
         rect = Rectangle(self.screen, 10, 10, 20, 20)
@@ -112,6 +193,7 @@ class ScreenTest(unittest.TestCase):
                 self.assertRaises(SystemExit):
             self.screen.exit()
 
+        self.screen._backend.closed = False
         self.assertEqual(events, [])
         self.assertEqual(self.screen.registry, {})
 

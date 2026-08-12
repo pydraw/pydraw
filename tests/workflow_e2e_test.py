@@ -94,4 +94,7 @@ class WorkflowEndToEndTest(unittest.TestCase):
         )
         for obj in self.screen.objects():
             with self.subTest(obj=type(obj).__name__):
-                self.assertIsNotNone(canvas.type(obj._ref))
+                render_id = getattr(obj, '_render_id', None)
+                item = (self.screen._backend.item_for(render_id)
+                        if render_id is not None else obj._ref)
+                self.assertIsNotNone(canvas.type(item))

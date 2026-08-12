@@ -9,10 +9,11 @@ dispatch gap (missing 8/9-arg forms)
 import unittest
 from unittest.mock import patch
 from pydraw.errors import InvalidArgumentError
-from pydraw import Screen, Location, Color, Rectangle, Oval, Triangle, Polygon, CustomPolygon, Renderable
+from pydraw import (Screen, Location, Color, Rectangle, RoundedRectangle,
+                    Oval, Triangle, Polygon, CustomPolygon, Renderable)
 
 # Shapes that share the standard (x, y, w, h, ...) Renderable constructor.
-SIMPLE_SHAPES = (Rectangle, Oval, Triangle)
+SIMPLE_SHAPES = (Rectangle, RoundedRectangle, Oval, Triangle)
 
 
 def build(screen, Shape, x=100, y=100, w=50, h=50,
@@ -490,6 +491,78 @@ class MethodTest(unittest.TestCase):
             far = build(self.screen, Shape, x=500, y=500, w=20, h=20)
             self.assertTrue(a.overlaps(near))
             self.assertFalse(a.overlaps(far))
+
+
+class RoundedRectangleTest(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.screen = Screen(800, 600)
+
+    def setUp(self) -> None:
+        self.screen.clear()
+
+    def test_radius_builds_rounded_geometry(self):
+        shape = RoundedRectangle(self.screen, 100, 100, 120, 60, radius=20)
+
+        self.assertGreater(len(shape.vertices()), 4)
+        self.assertFalse(shape.contains(100, 100))
+        self.assertTrue(shape.contains(110, 110))
+        self.assertTrue(shape.contains(shape.center()))
+
+    def test_full_constructor_matches_rectangle_then_radius(self):
+        shape = RoundedRectangle(
+            self.screen,
+            10,
+            20,
+            50,
+            60,
+            Color('blue'),
+            Color('red'),
+            False,
+            45,
+            False,
+            12,
+        )
+
+        self.assertEqual(shape.border(), Color('red'))
+        self.assertFalse(shape.fill())
+        self.assertEqual(shape.rotation(), 45)
+        self.assertFalse(shape.visible())
+        self.assertEqual(shape.radius(), 12)
+
+    def test_radius_is_independent_from_border(self):
+        shape = RoundedRectangle(
+            self.screen,
+            100,
+            100,
+            120,
+            60,
+            Color('blue'),
+            Color('red'),
+            radius=18,
+        )
+
+        shape.border_width(5)
+        self.assertEqual(shape.radius(), 18)
+        self.assertEqual(shape.border(), Color('red'))
+        self.assertEqual(shape.border_width(), 5)
+
+    def test_radius_updates_and_clamps_geometry(self):
+        shape = RoundedRectangle(self.screen, 100, 100, 40, 20, radius=100)
+        render_id = shape._render_id
+
+        self.assertEqual(shape.radius(), 100)
+        self.assertTrue(all(100 <= point.x() <= 140 for point in shape.vertices()))
+        self.assertTrue(all(100 <= point.y() <= 120 for point in shape.vertices()))
+
+        shape.radius(0)
+        self.assertEqual(len(shape.vertices()), 4)
+        self.assertEqual(shape._render_id, render_id)
+
+    def test_negative_radius_is_rejected(self):
+        with self.assertRaises(InvalidArgumentError):
+            RoundedRectangle(self.screen, 100, 100, 40, 20, radius=-1)
 
 
 class CustomPolygonTest(unittest.TestCase):
