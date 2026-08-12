@@ -62,8 +62,7 @@ class WorkflowEndToEndTest(unittest.TestCase):
         self.screen.reset()
 
     def test_pointer_and_click_complete_rendered_workflow(self):
-        # Bindings live on Turtle's inner Tk Canvas.
-        canvas = self.screen._canvas._canvas
+        canvas = self.screen._backend.canvas
 
         canvas.event_generate('<Motion>', x=25, y=35)
         canvas.event_generate('<Button-1>', x=40, y=50)

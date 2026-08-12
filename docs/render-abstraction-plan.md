@@ -360,6 +360,25 @@ After the rendering and host boundaries are established:
 The compatibility suite must demonstrate that removing the hidden coordinate
 translations did not change visible native behavior.
 
+### Raw Tk cutover result
+
+Completed on `render-abstract`:
+
+- The native backend now creates a raw Tk root and Canvas without importing
+  Turtle.
+- Render nodes, Canvas items, and pointer events all use pyDraw's public
+  top-left coordinate system directly.
+- Core rendering and color handling contain no Tk or Turtle fallback paths.
+- The transitional native `Screen` aliases and legacy coordinate conversion
+  helpers were removed; Tk-specific tests reach the Tk backend explicitly.
+- The unused vendored Turtle module was removed and the single-file compiler
+  was updated to include the runtime, event, render, and Tk backend modules.
+
+All 18 suites passed with 270 tests. The compatibility coverage includes 15
+render/coordinate tests and 9 input/event-loop tests. The native event benchmark
+remained effectively unchanged: 0.118 ms median and 0.176 ms p95 with explicit
+`update()`, and 0.065 ms median and 0.096 ms p95 under `screen.loop()`.
+
 ## 8. Handle Browser Scheduling Deliberately
 
 Native pyDraw can preserve the existing `update()` and `loop()` behavior. A

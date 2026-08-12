@@ -78,9 +78,7 @@ class InputTest(unittest.TestCase):
 
     def test_tk_events_reach_registered_handlers(self):
         """Exercise the actual widget bindings installed by Screen.listen()."""
-        # Turtle's ScrolledCanvas forwards bind(), but event_generate() itself
-        # belongs to its inner Tk Canvas.
-        canvas = self.screen._canvas._canvas
+        canvas = self.screen._backend.canvas
         canvas.event_generate('<Motion>', x=25, y=35)
         canvas.event_generate('<Button-1>', x=40, y=50)
         self.screen.update()

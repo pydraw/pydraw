@@ -19,7 +19,7 @@ class InputCompatibilityTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         try:
-            cls.screen._root.destroy()
+            cls.screen._backend.root.destroy()
         except Exception:
             pass
 
@@ -28,10 +28,7 @@ class InputCompatibilityTest(unittest.TestCase):
         self.screen.update()
 
     def _canvas(self):
-        canvas = self.screen._canvas
-        while hasattr(canvas, '_canvas'):
-            canvas = canvas._canvas
-        return canvas
+        return self.screen._backend.canvas
 
     def test_pointer_event_order_coordinates_and_buttons(self):
         received = []
@@ -130,7 +127,7 @@ class InputCompatibilityTest(unittest.TestCase):
                 self.screen._backend, 'poll_events', recording_poll), \
                 mock.patch.object(
                     self.screen._backend, 'present', recording_present):
-            self.screen._root.after_idle(
+            self.screen._backend.root.after_idle(
                 lambda: canvas.event_generate('<Button-1>', x=70, y=80)
             )
             self.screen.update()
@@ -152,7 +149,7 @@ class InputCompatibilityTest(unittest.TestCase):
         self.screen.registry['mousedown'] = mousedown
         self.screen._listen()
         canvas = self._canvas()
-        self.screen._root.after_idle(
+        self.screen._backend.root.after_idle(
             lambda: canvas.event_generate('<Button-1>', x=50, y=60)
         )
         try:
@@ -178,13 +175,13 @@ class InputCompatibilityTest(unittest.TestCase):
         self.screen.registry['mousedown'] = mousedown
         self.screen._listen()
         canvas = self._canvas()
-        self.screen._root.after(
+        self.screen._backend.root.after(
             1,
             lambda: canvas.event_generate('<Button-1>', x=50, y=60),
         )
-        safety_quit[0] = self.screen._root.after(
+        safety_quit[0] = self.screen._backend.root.after(
             250,
-            self.screen._root.quit,
+            self.screen._backend.root.quit,
         )
         try:
             self.screen.loop()
@@ -198,7 +195,7 @@ class InputCompatibilityTest(unittest.TestCase):
         else:
             self.fail('the loop callback exception did not propagate')
         finally:
-            self.screen._root.after_cancel(safety_quit[0])
+            self.screen._backend.root.after_cancel(safety_quit[0])
 
         self.assertIn('mousedown', frames)
 
@@ -209,7 +206,7 @@ class InputCompatibilityTest(unittest.TestCase):
         self.screen.registry['mousedown'] = mousedown
         self.screen._listen()
         canvas = self._canvas()
-        self.screen._root.after_idle(
+        self.screen._backend.root.after_idle(
             lambda: canvas.event_generate('<Button-1>', x=50, y=60)
         )
 
@@ -226,27 +223,27 @@ class InputCompatibilityTest(unittest.TestCase):
         def mousedown(location, button):
             received.append((location, button))
             rectangle.moveto(location)
-            self.screen._root.after_cancel(safety_quit[0])
-            self.screen._root.after(5, self.screen._root.quit)
+            self.screen._backend.root.after_cancel(safety_quit[0])
+            self.screen._backend.root.after(5, self.screen._backend.root.quit)
 
         self.screen.registry['mousedown'] = mousedown
         self.screen._listen()
         canvas = self._canvas()
-        self.screen._root.after(
+        self.screen._backend.root.after(
             1,
             lambda: canvas.event_generate('<Button-1>', x=90, y=65),
         )
-        safety_quit[0] = self.screen._root.after(
+        safety_quit[0] = self.screen._backend.root.after(
             250,
-            self.screen._root.quit,
+            self.screen._backend.root.quit,
         )
 
         self.screen.loop()
 
         self.assertEqual(received, [(Location(90, 65), 1)])
         item = self.screen._backend.item_for(rectangle._render_id)
-        coordinates = self.screen._canvas.coords(item)
-        self.assertEqual(coordinates[:2], [-70.0, -35.0])
+        coordinates = self.screen._backend.canvas.coords(item)
+        self.assertEqual(coordinates[:2], [90.0, 65.0])
 
     def test_deprecated_pointer_signature_remains_supported(self):
         received = []

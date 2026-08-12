@@ -1,5 +1,3 @@
-import turtle
-import tkinter as tk
 from pydraw.errors import *
 
 
@@ -169,14 +167,7 @@ class Color:
         """
 
         if color.name() is not None:
-            try:
-                rgb = turtle.getcanvas().winfo_rgb(color.name())
-            except tk.TclError as e:
-                if hasattr(e, 'message') and e.message == 'can\'t invoke "winfo" command: application has been destroyed':
-                    return 255, 255, 255
-                raise PydrawError(f"Color(): unknown color name '{color.name()}'.")
-            except turtle.Terminator:
-                return 255, 255, 255  # Just return black if Program is shutting down.
+            raise PydrawError(f"Color(): unknown color name '{color.name()}'.")
         elif color.hex() is not None:
             hexval = color.hex().replace('#', '')
 
@@ -194,7 +185,7 @@ class Color:
             rgb = (color.red(), color.green(), color.blue())
 
         return rgb
-    
+
     @staticmethod
     def all():
         """

@@ -1,12 +1,8 @@
 """Temporary characterization tests for the rendering-backend rewrite.
 
-These tests intentionally describe behavior at the boundary between pydraw and
-the visible Tk widget.  The current turtle backend stores centered canvas
-coordinates, while the replacement backend is expected to use native top-left
-Tk coordinates.  Assertions therefore convert an item's internal canvas
-coordinates to widget pixels before comparing them with public pydraw
-coordinates.  The internal representation is free to change; visible behavior
-is not.
+These tests describe behavior at the boundary between pydraw and the visible
+Tk widget. The raw Tk backend stores native top-left Canvas coordinates, which
+must match public pydraw coordinates exactly.
 
 Keep this module for the duration of the ``render-abstract`` work.  Once the
 new backend is stable, its durable assertions can be folded into the normal
@@ -47,7 +43,7 @@ class RenderCompatibilityTest(unittest.TestCase):
     def tearDownClass(cls):
         # Do not use Screen.exit(): it intentionally raises SystemExit.
         try:
-            cls.screen._root.destroy()
+            cls.screen._backend.root.destroy()
         except Exception:
             pass
 
@@ -57,18 +53,7 @@ class RenderCompatibilityTest(unittest.TestCase):
         self.screen.update()
 
     def _widget_canvas(self):
-        """Return the actual Tk Canvas under either backend.
-
-        turtle.ScrolledCanvas forwards most Canvas methods but keeps the real
-        widget in ``_canvas``.  The direct Tk backend will return its Canvas
-        immediately.  Avoiding a hard-coded backend type lets these tests span
-        the migration.
-        """
-
-        canvas = self.screen._canvas
-        while hasattr(canvas, '_canvas'):
-            canvas = canvas._canvas
-        return canvas
+        return self.screen._backend.canvas
 
     def _item_widget_coordinates(self, item):
         """Translate stored item coordinates into visible widget pixels."""
@@ -76,7 +61,7 @@ class RenderCompatibilityTest(unittest.TestCase):
         canvas = self._widget_canvas()
         origin_x = canvas.canvasx(0)
         origin_y = canvas.canvasy(0)
-        stored = self.screen._canvas.coords(item)
+        stored = self.screen._backend.canvas.coords(item)
         return [
             coordinate - (origin_x if index % 2 == 0 else origin_y)
             for index, coordinate in enumerate(stored)
@@ -268,7 +253,7 @@ class RenderCompatibilityTest(unittest.TestCase):
         line_item = self.screen._backend.item_for(line._render_id)
 
         canvas = self._widget_canvas()
-        self.assertEqual(self.screen._root.title(), 'compatibility title')
+        self.assertEqual(self.screen._backend.root.title(), 'compatibility title')
         self.assertEqual(
             canvas.winfo_rgb(canvas.cget('background')),
             canvas.winfo_rgb('navy'),
@@ -424,7 +409,7 @@ class RenderCompatibilityTest(unittest.TestCase):
 
     def test_update_processes_pending_tk_callbacks(self):
         callbacks = []
-        self.screen._root.after_idle(lambda: callbacks.append('idle'))
+        self.screen._backend.root.after_idle(lambda: callbacks.append('idle'))
 
         self.assertEqual(callbacks, [])
         self.screen.update()
@@ -438,13 +423,13 @@ class RenderCompatibilityTest(unittest.TestCase):
         def mutate():
             rectangle.move(13, 7)
             callbacks.append('mutated')
-            self.screen._root.after(5, finish_loop)
+            self.screen._backend.root.after(5, finish_loop)
 
         def finish_loop():
             callbacks.append('finished')
-            self.screen._root.quit()
+            self.screen._backend.root.quit()
 
-        self.screen._root.after(1, mutate)
+        self.screen._backend.root.after(1, mutate)
         self.screen.loop()
 
         self.assertEqual(callbacks, ['mutated', 'finished'])

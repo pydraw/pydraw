@@ -169,9 +169,8 @@ class RuntimeRegistryTest(unittest.TestCase):
 
         screen = Screen(320, 200, 'browser')
 
-        self.assertIsNone(screen._screen)
-        self.assertIsNone(screen._canvas)
-        self.assertIsNone(screen._root)
+        self.assertFalse(hasattr(screen, '_canvas'))
+        self.assertFalse(hasattr(screen, '_root'))
         self.assertEqual(screen._dims(), (320, 200))
 
     def test_backend_can_resolve_non_filesystem_image_sources(self):

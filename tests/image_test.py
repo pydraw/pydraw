@@ -161,11 +161,11 @@ class ImageMethodTest(unittest.TestCase):
     def test_move_is_exact(self):
         # A relative move must shift the location by exactly the delta (no
         # doubling) and shift the canvas item by the same amount.
-        before = self.screen._canvas.coords(self._item_for(self.img))
+        before = self.screen._backend.canvas.coords(self._item_for(self.img))
         image_ref = self.screen._backend.image_refs[self.img._render_id]
         self.img.move(30, -20)
         self.screen.update()
-        after = self.screen._canvas.coords(self._item_for(self.img))
+        after = self.screen._backend.canvas.coords(self._item_for(self.img))
         self.assertEqual(self.img.location(), Location(130, 80))
         self.assertEqual([round(b - a, 4) for a, b in zip(before, after)], [30, -20])
         self.assertIs(
@@ -178,9 +178,12 @@ class ImageMethodTest(unittest.TestCase):
         self.assertEqual(self.img.location(), Location(300, 250))
 
     def test_move_zero_is_noop(self):
-        before = self.screen._canvas.coords(self._item_for(self.img))
+        before = self.screen._backend.canvas.coords(self._item_for(self.img))
         self.img.move(0, 0)
-        self.assertEqual(self.screen._canvas.coords(self._item_for(self.img)), before)
+        self.assertEqual(
+            self.screen._backend.canvas.coords(self._item_for(self.img)),
+            before,
+        )
 
     def test_vertices(self):
         verts = self.img.vertices()

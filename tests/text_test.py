@@ -75,7 +75,7 @@ class TextMethodTest(unittest.TestCase):
         self.assertRaises(InvalidArgumentError, self.text.text, 123)
 
     def test_unchanged_text_skips_canvas_and_measurement_work(self):
-        canvas = self.text._screen._canvas
+        canvas = self.text._screen._backend.canvas
         with patch.object(canvas, 'itemconfigure') as itemconfigure, \
                 patch.object(self.text, '_update_coords') as update_coords:
             self.assertEqual(self.text.text('hello'), 'hello')
@@ -86,10 +86,10 @@ class TextMethodTest(unittest.TestCase):
     def test_move_is_exact(self):
         # A relative move must shift the location by exactly the delta and shift
         # the canvas item by the same amount (no bbox-induced 1px drift).
-        before = self.screen._canvas.coords(self._item_for(self.text))
+        before = self.screen._backend.canvas.coords(self._item_for(self.text))
         self.text.move(15, 25)
         self.screen.update()
-        after = self.screen._canvas.coords(self._item_for(self.text))
+        after = self.screen._backend.canvas.coords(self._item_for(self.text))
         self.assertEqual(self.text.location(), Location(215, 225))
         self.assertEqual([round(b - a, 4) for a, b in zip(before, after)], [15, 25])
 
@@ -98,9 +98,12 @@ class TextMethodTest(unittest.TestCase):
         self.assertEqual(self.text.location(), Location(300, 400))
 
     def test_move_zero_is_noop(self):
-        before = self.screen._canvas.coords(self._item_for(self.text))
+        before = self.screen._backend.canvas.coords(self._item_for(self.text))
         self.text.move(0, 0)
-        self.assertEqual(self.screen._canvas.coords(self._item_for(self.text)), before)
+        self.assertEqual(
+            self.screen._backend.canvas.coords(self._item_for(self.text)),
+            before,
+        )
 
     def test_dimensions_are_read_only(self):
         w, h = self.text.width(), self.text.height()
@@ -159,7 +162,7 @@ class TextMethodTest(unittest.TestCase):
 
     def test_rotation_matches_constructor_on_canvas(self):
         # Constructor and .rotation() must yield the same canvas angle (getter can't catch a wrong sign).
-        cv = self.screen._screen.cv
+        cv = self.screen._backend.canvas
         constructed = Text(self.screen, 'A', 50, 150, rotation=45)
         rotated = Text(self.screen, 'B', 250, 150)
         rotated.rotation(45)

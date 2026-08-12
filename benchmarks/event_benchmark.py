@@ -31,10 +31,7 @@ def summarize(samples):
 
 
 def widget_canvas(screen):
-    canvas = screen._canvas
-    while hasattr(canvas, '_canvas'):
-        canvas = canvas._canvas
-    return canvas
+    return screen._backend.canvas
 
 
 def main():
@@ -68,20 +65,20 @@ def main():
     def loop_handler(location, button):
         loop_samples.append((time.perf_counter() - started[0]) * 1000)
         if len(loop_samples) == args.events:
-            screen._root.after(1, screen._root.quit)
+            screen._backend.root.after(1, screen._backend.root.quit)
         else:
-            screen._root.after(1, emit)
+            screen._backend.root.after(1, emit)
 
     screen.registry['mousedown'] = loop_handler
     screen._listen()
-    screen._root.after(1, emit)
+    screen._backend.root.after(1, emit)
     screen.loop()
 
     print(json.dumps({
         'explicit_update_input': summarize(explicit_samples),
         'screen_loop_input': summarize(loop_samples),
     }, indent=2))
-    screen._root.destroy()
+    screen._backend.root.destroy()
 
 
 if __name__ == '__main__':

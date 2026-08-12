@@ -26,8 +26,13 @@ class ScreenTest(unittest.TestCase):
 
         self.assertEqual(self.screen.title(), 'Updated Name')
         self.assertEqual(self.screen.color(), Color('red'))
-        self.assertEqual(self.screen._root.title(), 'Updated Name')
-        self.assertEqual(self.screen._screen.bgcolor(), (255.0, 0.0, 0.0))
+        self.assertEqual(self.screen._backend.root.title(), 'Updated Name')
+        self.assertEqual(
+            self.screen._backend.canvas.winfo_rgb(
+                self.screen._backend.canvas.cget('background')
+            ),
+            self.screen._backend.canvas.winfo_rgb('red'),
+        )
 
     def test_platform_services_route_through_backend(self):
         with mock.patch.object(
@@ -78,11 +83,8 @@ class ScreenTest(unittest.TestCase):
         listen.assert_called_once_with()
         grab.assert_called_once_with('frame.png')
 
-    def test_uses_tk_backend_with_legacy_native_aliases(self):
+    def test_uses_raw_tk_backend(self):
         self.assertIsInstance(self.screen._backend, TkBackend)
-        self.assertIs(self.screen._screen, self.screen._backend.screen)
-        self.assertIs(self.screen._canvas, self.screen._backend.canvas)
-        self.assertIs(self.screen._root, self.screen._backend.root)
 
     def test_update_routes_through_backend(self):
         with mock.patch.object(
@@ -106,9 +108,6 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(self.screen.top_right(), Location(800, 0))
         self.assertEqual(self.screen.bottom_left(), Location(0, 600))
         self.assertEqual(self.screen.bottom_right(), Location(800, 600))
-
-        self.assertEqual(self.screen.create_location(0, 0), Location(400, 300))
-        self.assertEqual(self.screen.canvas_location(400, 300), Location(0, 0))
 
     def test_grid_is_screen_decoration_not_user_object(self):
         rect = Rectangle(self.screen, 10, 10, 20, 20)
@@ -135,7 +134,9 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(self.screen.objects(), (rect,))
         self.screen.update()
         self.assertNotEqual(
-            self.screen._canvas.type(self.screen._backend.item_for(rect._render_id)),
+            self.screen._backend.canvas.type(
+                self.screen._backend.item_for(rect._render_id)
+            ),
             '',
         )
 
@@ -159,8 +160,10 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(rect.location(), Location(35, 55))
         item = self.screen._backend.item_for(rect._render_id)
         self.assertEqual(
-            self.screen._canvas.winfo_rgb(self.screen._canvas.itemcget(item, 'fill')),
-            self.screen._canvas.winfo_rgb('blue'),
+            self.screen._backend.canvas.winfo_rgb(
+                self.screen._backend.canvas.itemcget(item, 'fill')
+            ),
+            self.screen._backend.canvas.winfo_rgb('blue'),
         )
 
     def test_reset_disables_input_before_removing_objects(self):
@@ -187,13 +190,12 @@ class ScreenTest(unittest.TestCase):
         def clear_during_queued_input():
             self.screen._keydown('q')
 
-        with mock.patch.object(self.screen._screen, 'clear',
-                               side_effect=clear_during_queued_input), \
-                mock.patch.object(self.screen._root, 'destroy'), \
+        with mock.patch.object(
+                self.screen._backend, 'close',
+                side_effect=clear_during_queued_input), \
                 self.assertRaises(SystemExit):
             self.screen.exit()
 
-        self.screen._backend.closed = False
         self.assertEqual(events, [])
         self.assertEqual(self.screen.registry, {})
 

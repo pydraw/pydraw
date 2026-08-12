@@ -54,7 +54,7 @@ def main():
 
     idle = measure(args.frames, lambda index: screen.update())
 
-    canvas = screen._canvas
+    canvas = screen._backend.canvas
     direct_item = canvas.create_line(-100, 0, 100, 0)
 
     def direct_frame(index):
@@ -237,7 +237,7 @@ def main():
         'growing_pen_frame': pen_growth,
     }, indent=2))
 
-    screen._root.destroy()
+    screen._backend.root.destroy()
 
 
 if __name__ == '__main__':

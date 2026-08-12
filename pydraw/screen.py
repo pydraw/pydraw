@@ -1,5 +1,3 @@
-import turtle
-import tkinter as tk
 import inspect
 import math
 import time
@@ -34,8 +32,6 @@ class Screen:
     the window that is created. Sort of like a canvas.
     """
 
-    _TERMINATING = False
-
     def __init__(self, width: int = 800, height: int = 600, title: str = "pydraw"):
         verify(width, int, height, int, title, str)
 
@@ -43,10 +39,6 @@ class Screen:
             ScreenConfig(width, height, title),
             _default_runtime,
         )
-        self._screen = getattr(self._backend, 'screen', None)
-        self._turtle = getattr(self._backend, 'turtle', None)
-        self._canvas = getattr(self._backend, 'canvas', None)
-        self._root = getattr(self._backend, 'root', None)
 
         self._width = width
         self._height = height
@@ -391,11 +383,7 @@ class Screen:
                 f'Screen#front(): expected an Object; received {type(obj)} ({obj!r}).'
             )
 
-        render_id = getattr(obj, '_render_id', None)
-        if render_id is None:
-            self._canvas.tag_raise(obj._ref)
-        else:
-            self._render_queue.front(render_id)
+        self._render_queue.front(obj._render_id)
 
     def _back(self, obj) -> None:
         from pydraw import Object
@@ -405,11 +393,7 @@ class Screen:
                 f'Screen#back(): expected an Object; received {type(obj)} ({obj!r}).'
             )
 
-        render_id = getattr(obj, '_render_id', None)
-        if render_id is None:
-            self._canvas.tag_lower(obj._ref)
-        else:
-            self._render_queue.back(render_id)
+        self._render_queue.back(obj._render_id)
 
     def _register_render_source(self, source, render_id=None):
         return self._render_queue.register(source, render_id)
@@ -453,20 +437,13 @@ class Screen:
 
     # noinspection PyProtectedMember
     def remove(self, obj):
-        # self._screen.cv.delete(obj._ref)
-        try:
-            render_id = getattr(obj, '_render_id', None)
-            if render_id is None:
-                self._canvas.delete(obj._ref)
-            else:
-                self._remove_render(render_id)
-            if obj in self._objects:
-                self._objects.remove(obj)
-            else:
-                # print('possible error here')
-                pass
-        except tk.TclError:
-            pass
+        render_id = getattr(obj, '_render_id', None)
+        if render_id is None:
+            render_id = getattr(obj, '_ref', None)
+        if render_id is not None:
+            self._remove_render(render_id)
+        if obj in self._objects:
+            self._objects.remove(obj)
 
     def objects(self) -> tuple:
         """
@@ -497,14 +474,9 @@ class Screen:
         :return: None
         """
 
-        try:
-            for i in range(len(self._objects) - 1, -1, -1):
-                self._objects[i].remove()
-            # if self._gridstate:
-            #     self._redraw_grid()  # Redraw the grid if it was active.
-            self.color(self._color)  # Redraw the color of the screen.
-        except (tk.TclError, AttributeError):
-            pass
+        for i in range(len(self._objects) - 1, -1, -1):
+            self._objects[i].remove()
+        self.color(self._color)
 
     def scene(self, scene=None):
         """
@@ -516,7 +488,7 @@ class Screen:
         :return: the new scene that was set, the existing scene if no args passed, or None
         """
         from pydraw import Scene
-        
+
         if scene is None:
             return self._scene
 
@@ -653,10 +625,6 @@ class Screen:
 
         self._updating = True
         try:
-            if Screen._TERMINATING:
-                print('Terminated.')
-                exit(0)
-
             for event in self._backend.poll_events():
                 self._dispatch_input_event(event)
             self._backend.present(self._render_queue.take())
@@ -694,8 +662,8 @@ class Screen:
 
     def exit(self) -> None:
         """
-        Called at the end of pydraw programs as an event for succesful program execution and termination.
-        For something similar to turtle.done() see Screen.stop()
+        Called at the end of pydraw programs as an event for successful program execution and termination.
+        To keep a program open, use Screen.loop().
 
         :return: None
         """
@@ -705,25 +673,6 @@ class Screen:
         self.registry.clear()
         self._backend.close()
         exit(0)
-
-    def _colorstr(self, color: Color) -> str:
-        """
-        Takes a pydraw Color and returns a tkinter-friendly string, while also preventing errors
-        from occurring after tkinter has shut down.
-
-        :param color: the Color to convert
-        :return: the converted color (tkinter-str)
-        """
-
-        try:
-            # noinspection PyProtectedMember
-            # noinspection PyUnresolvedReferences
-            colorstr = self._screen._colorstr(color.__value__())
-            return colorstr
-        except (turtle.TurtleGraphicsError, tk.TclError):
-            pass
-
-    # ------------------------------------------------------- #
 
     def listen(self) -> None:
         """
@@ -900,23 +849,3 @@ class Screen:
             return
 
         self.registry['mousemove'](location)
-
-    # --- Helper Methods --- #
-    def create_location(self, x, y, canvas: bool = False) -> Location:
-        """
-        Is passed turtle-based coordinates and converts them into normal coordinates
-
-        :param x: the x component
-        :param y: the y component
-        :param canvas: whether or not the supplied coordinates are from the canvas or input
-        :return: a location comprised of the passed x and y components
-        """
-
-        # Switch these around if the coords are from, for example, canvas.bbox
-        if canvas:
-            y = -y
-
-        return Location(x + (self.width() / 2), -y + (self.height() / 2))
-
-    def canvas_location(self, x, y) -> Location:
-        return Location(x - self.width() / 2, y - self.height() / 2)

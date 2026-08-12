@@ -5,20 +5,21 @@ from pydraw.events import InputEvent
 from pydraw.render import EllipseNode, ImageNode, PolygonNode, PolylineNode, TextNode
 
 
-BORDER_CONSTANT = 10
-
-
 class TkBackend(ScreenBackend):
 
     def __init__(self, config):
         import tkinter as tk
-        import turtle
 
         self.tk = tk
-        self.turtle = turtle
-        self.screen = turtle.Screen()
-        self.canvas = self.screen.cv
-        self.root = self.canvas.winfo_toplevel()
+        self.root = tk.Tk()
+        self.canvas = tk.Canvas(
+            self.root,
+            width=config.width,
+            height=config.height,
+            borderwidth=0,
+            highlightthickness=0,
+        )
+        self.canvas.pack(fill='both', expand=True)
         self.width = config.width
         self.height = config.height
         self.items = {}
@@ -30,18 +31,12 @@ class TkBackend(ScreenBackend):
         self.running = False
         self.closed = False
         self._canvas_size = (config.width, config.height)
+        self.background_ref = None
+        self.background_item = None
 
-        self.turtle.mode('logo')
-        self.screen.setup(
-            config.width + BORDER_CONSTANT,
-            config.height + BORDER_CONSTANT,
-        )
-        self.screen.screensize(config.width, config.height)
         self.root.resizable(False, False)
-        self.screen.title(config.title)
-        self.screen.colormode(255)
-        self.screen.tracer(0)
-        self.screen.update()
+        self.root.title(config.title)
+        self.root.update_idletasks()
         self.root.protocol('WM_DELETE_WINDOW', self._window_closed)
         self.canvas.bind('<Configure>', self._configure, add='+')
 
@@ -59,7 +54,7 @@ class TkBackend(ScreenBackend):
         try:
             if not self.running:
                 self.canvas.update()
-        except (self.turtle.Terminator, self.tk.TclError) as error:
+        except self.tk.TclError as error:
             raise BackendTerminated() from error
         events = tuple(self.events)
         self.events.clear()
@@ -92,10 +87,9 @@ class TkBackend(ScreenBackend):
             )
 
     def _position(self, event):
-        width, height = self.canvas_size()
         return (
-            self.canvas.canvasx(event.x) / self.screen.xscale + width / 2,
-            self.canvas.canvasy(event.y) / self.screen.yscale + height / 2,
+            self.canvas.canvasx(event.x),
+            self.canvas.canvasy(event.y),
         )
 
     def _queue_pointer(self, kind, event, button=None):
@@ -121,7 +115,7 @@ class TkBackend(ScreenBackend):
             raise BackendTerminated()
         try:
             return self._present(frame)
-        except (self.turtle.Terminator, self.tk.TclError) as error:
+        except self.tk.TclError as error:
             raise BackendTerminated() from error
 
     def _present(self, frame):
@@ -166,10 +160,10 @@ class TkBackend(ScreenBackend):
         if len(points) == 1:
             points = points + points
         for x, y in points:
-            coordinates.extend((x - self.width / 2, y - self.height / 2))
+            coordinates.extend((x, y))
 
         options = {
-            'fill': self.screen._colorstr(node.color),
+            'fill': self._color(node.color),
             'width': node.width,
             'dash': node.dash,
             'state': 'normal' if node.visible else 'hidden',
@@ -189,11 +183,11 @@ class TkBackend(ScreenBackend):
     def _present_polygon(self, node):
         coordinates = []
         for x, y in node.points:
-            coordinates.extend((x - self.width / 2, y - self.height / 2))
+            coordinates.extend((x, y))
 
         options = {
-            'fill': '' if node.fill is None else self.screen._colorstr(node.fill),
-            'outline': '' if node.outline is None else self.screen._colorstr(node.outline),
+            'fill': '' if node.fill is None else self._color(node.fill),
+            'outline': '' if node.outline is None else self._color(node.outline),
             'width': node.width,
             'state': 'normal' if node.visible else 'hidden',
             'joinstyle': self.tk.MITER,
@@ -222,12 +216,12 @@ class TkBackend(ScreenBackend):
             'text': node.text,
             'anchor': 'nw',
             'justify': node.align,
-            'fill': self.screen._colorstr(node.color),
+            'fill': self._color(node.color),
             'font': (node.font, -node.size, ' '.join(decorations)),
             'state': 'normal' if node.visible else 'hidden',
             'angle': -node.rotation,
         }
-        coordinates = (x - self.width / 2, y - self.height / 2)
+        coordinates = (x, y)
         item = self.items.get(node.id)
         if item is None:
             item = self.canvas.create_text(*coordinates, **options)
@@ -256,8 +250,8 @@ class TkBackend(ScreenBackend):
 
         x, y = node.position
         coordinates = (
-            x + node.width / 2 - self.width / 2,
-            y + node.height / 2 - self.height / 2,
+            x + node.width / 2,
+            y + node.height / 2,
         )
         options = {
             'image': self.image_refs[node.id],
@@ -341,25 +335,44 @@ class TkBackend(ScreenBackend):
                 expand=1,
                 fillcolor=None,
             )
-        return ImageTk.PhotoImage(image=image)
+        return ImageTk.PhotoImage(image=image, master=self.root)
 
     def set_title(self, title):
-        self.screen.title(title)
+        self.root.title(title)
 
     def set_background(self, color):
-        self.screen.bgcolor(color)
+        self.canvas.configure(background=self._color(color))
 
     def set_background_image(self, source):
-        self.screen.bgpic(source)
+        self.background_ref = self.tk.PhotoImage(master=self.root, file=source)
+        width, height = self.canvas_size()
+        if self.background_item is None:
+            self.background_item = self.canvas.create_image(
+                width / 2,
+                height / 2,
+                image=self.background_ref,
+            )
+        else:
+            self.canvas.coords(self.background_item, width / 2, height / 2)
+            self.canvas.itemconfigure(
+                self.background_item,
+                image=self.background_ref,
+            )
+        self.canvas.tag_lower(self.background_item)
+
+    @staticmethod
+    def _color(color):
+        if isinstance(color, tuple):
+            return '#{:02x}{:02x}{:02x}'.format(*color)
+        return color
 
     def canvas_size(self):
         if self._canvas_size is not None:
             return self._canvas_size
         try:
-            canvas = self.screen.getcanvas()
-            width = canvas.winfo_width() - BORDER_CONSTANT
-            height = canvas.winfo_height() - BORDER_CONSTANT
-        except (self.turtle.Terminator, self.tk.TclError):
+            width = self.canvas.winfo_width()
+            height = self.canvas.winfo_height()
+        except self.tk.TclError:
             return -1, -1
         if width > 1 and height > 1:
             self._canvas_size = (width, height)
@@ -369,14 +382,15 @@ class TkBackend(ScreenBackend):
 
     def window_size(self):
         try:
-            return self.screen.window_width(), self.screen.window_height()
-        except (self.turtle.Terminator, self.tk.TclError):
+            return self.root.winfo_width(), self.root.winfo_height()
+        except self.tk.TclError:
             return -1, -1
 
     def resize(self, width, height):
-        self.screen.screensize(width, height)
+        self.canvas.configure(width=width, height=height)
+        self.root.geometry('{}x{}'.format(width, height))
         self._canvas_size = None
-        self.screen.update()
+        self.root.update_idletasks()
 
     def set_fullscreen(self, fullscreen):
         self.root.attributes('-fullscreen', fullscreen)
@@ -395,17 +409,19 @@ class TkBackend(ScreenBackend):
         return dialog.go()
 
     def prompt(self, text, title):
-        return self.screen.textinput(title, text)
+        from tkinter.simpledialog import askstring
+
+        return askstring(title, text, parent=self.root)
 
     def grab(self, filename):
         try:
             from PIL import ImageGrab
 
             width, height = self.canvas_size()
-            x1 = self.root.winfo_rootx() + self.canvas.winfo_x() + BORDER_CONSTANT
-            y1 = self.root.winfo_rooty() + self.canvas.winfo_y() + BORDER_CONSTANT
-            x2 = x1 + width - BORDER_CONSTANT
-            y2 = y1 + height - BORDER_CONSTANT
+            x1 = self.canvas.winfo_rootx()
+            y1 = self.canvas.winfo_rooty()
+            x2 = x1 + width
+            y2 = y1 + height
             ImageGrab.grab().crop((x1, y1, x2, y2)).save(filename)
             return filename
         except Exception as error:
@@ -426,7 +442,7 @@ class TkBackend(ScreenBackend):
         font_data = (font, -size, ' '.join(decorations))
         measured_font = self.fonts.get(font_data)
         if measured_font is None:
-            measured_font = tkfont.Font(font=font_data)
+            measured_font = tkfont.Font(root=self.root, font=font_data)
             self.fonts[font_data] = measured_font
 
         width = max((measured_font.measure(line) for line in text.split('\n')),
@@ -452,7 +468,7 @@ class TkBackend(ScreenBackend):
         if extension in ('.png', '.gif', '.ppm'):
             image = self.source_images.get(source)
             if image is None:
-                image = self.tk.PhotoImage(file=source)
+                image = self.tk.PhotoImage(master=self.root, file=source)
                 self.source_images[source] = image
             return image.width(), image.height()
 
@@ -510,7 +526,7 @@ class TkBackend(ScreenBackend):
         self.running = True
         try:
             self.root.mainloop()
-        except (self.turtle.Terminator, self.tk.TclError) as error:
+        except self.tk.TclError as error:
             raise BackendTerminated() from error
         finally:
             self.running = False
@@ -526,7 +542,7 @@ class TkBackend(ScreenBackend):
 
     def close(self):
         self.closed = True
-        self.screen.clear()
+        self.canvas.delete('all')
         self.root.destroy()
 
 
