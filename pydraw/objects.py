@@ -374,13 +374,6 @@ class Object:
         self.update()
         self._sync_pen()
 
-    def _get_real_location(self):
-        # todo: move this to renderable
-        real_x = self.x() + self.width() / 2 - (self._screen.width() / 2)
-        real_y = -self.y() + self._screen.height() / 2 - self.height() / 2
-
-        return real_x, real_y
-
     def front(self) -> None:
         """
         Brings the object to the front of the Screen

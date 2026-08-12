@@ -69,7 +69,7 @@ class Color:
 
     def __value__(self):
         """
-        Retrieves the value to be interpreted internally by Turtle
+        Retrieve the original color representation.
 
         :return:
         """

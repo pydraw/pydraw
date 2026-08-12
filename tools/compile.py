@@ -22,6 +22,7 @@ input_files = [
     'pydraw/screen.py',
     'pydraw/scene.py',
     'pydraw/objects.py',
+    'pydraw/compound.py',
 ]
 header_file = 'tools/header.txt'
 output_file = 'compiled/pydraw.py'
@@ -44,7 +45,7 @@ def inline(source):
             lines.append(indent + '# ' + stripped)
         else:
             lines.append(line.rstrip())
-    return '\n'.join(lines)
+    return '\n'.join(lines).rstrip()
 
 
 with open(output_file, 'w') as output:
@@ -52,10 +53,10 @@ with open(output_file, 'w') as output:
         output.write(header.read().replace('{version}', version()))
         output.write('\n\n')
 
-    for input_file in input_files:
+    for index, input_file in enumerate(input_files):
         print('Inlining {}'.format(input_file))
         with open(input_file, 'r') as source:
             output.write(inline(source.read()))
-            output.write('\n\n')
+            output.write('\n\n' if index < len(input_files) - 1 else '\n')
 
 print('\nCompilation completed in {}s'.format(time.time() - time_start))
