@@ -48,7 +48,7 @@ class FakeBackend(ScreenBackend):
         pass
 
     def set_fullscreen(self, fullscreen):
-        pass
+        return fullscreen
 
     def alert(self, text, title, accept_text, cancel_text):
         return True

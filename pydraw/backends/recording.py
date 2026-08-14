@@ -69,6 +69,7 @@ class RecordingBackend(ScreenBackend):
 
     def set_fullscreen(self, fullscreen):
         self.fullscreen = fullscreen
+        return self.fullscreen
 
     def alert(self, text, title, accept_text, cancel_text):
         return True

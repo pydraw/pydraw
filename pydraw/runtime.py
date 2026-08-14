@@ -72,8 +72,8 @@ class ScreenBackend(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def set_fullscreen(self, fullscreen: bool) -> None:
-        """Apply the host fullscreen state."""
+    def set_fullscreen(self, fullscreen: bool) -> bool:
+        """Apply and return the host fullscreen state."""
         raise NotImplementedError
 
     @abstractmethod

@@ -394,6 +394,9 @@ class TkBackend(ScreenBackend):
 
     def set_fullscreen(self, fullscreen):
         self.root.attributes('-fullscreen', fullscreen)
+        return bool(self.root.tk.getboolean(
+            self.root.attributes('-fullscreen')
+        ))
 
     def alert(self, text, title, accept_text, cancel_text):
         from tkinter.simpledialog import SimpleDialog

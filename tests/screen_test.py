@@ -45,7 +45,7 @@ class ScreenTest(unittest.TestCase):
                     self.screen._backend, 'canvas_size', return_value=(800, 600)
                 ) as canvas_size, \
                 mock.patch.object(
-                    self.screen._backend, 'set_fullscreen'
+                    self.screen._backend, 'set_fullscreen', return_value=True
                 ) as set_fullscreen:
             self.screen.picture('background.gif')
             self.screen.resize(640, 480)
@@ -55,12 +55,21 @@ class ScreenTest(unittest.TestCase):
                 (800, 600),
             )
             self.screen.fullscreen(True)
+            self.assertTrue(self.screen.fullscreen())
 
         picture.assert_called_once_with('background.gif')
         resize.assert_called_once_with(640, 480)
         window_size.assert_called_once_with()
         self.assertEqual(canvas_size.call_count, 2)
         set_fullscreen.assert_called_once_with(True)
+
+    def test_fullscreen_uses_backend_result(self):
+        with mock.patch.object(
+                self.screen._backend,
+                'set_fullscreen',
+                return_value=False,
+        ):
+            self.assertFalse(self.screen.fullscreen(True))
 
     def test_dialogs_and_screenshot_route_through_backend(self):
         with mock.patch.object(

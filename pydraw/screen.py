@@ -369,8 +369,7 @@ class Screen:
 
         if fullscreen is not None:
             verify(fullscreen, bool)
-            self._fullscreen = fullscreen
-            self._backend.set_fullscreen(fullscreen)
+            self._fullscreen = self._backend.set_fullscreen(fullscreen)
             self.update()
 
         return self._fullscreen
