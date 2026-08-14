@@ -36,6 +36,10 @@ class ScreenBackend(metaclass=ABCMeta):
         """Begin collecting platform input events."""
         raise NotImplementedError
 
+    def set_handlers(self, handlers) -> None:
+        """Publish the normalized input handlers registered by Screen."""
+        pass
+
     @abstractmethod
     def present(self, frame) -> None:
         """Synchronously present or acknowledge one platform-neutral frame."""

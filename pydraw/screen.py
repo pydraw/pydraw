@@ -701,6 +701,7 @@ class Screen:
         self._listen()
 
     def _listen(self):
+        self._backend.set_handlers(tuple(self.registry))
         self._backend.listen()
 
     class Key:

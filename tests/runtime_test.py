@@ -19,12 +19,16 @@ class FakeBackend(ScreenBackend):
         self.config = config
         self.presented = []
         self.closed = False
+        self.handlers = ()
 
     def poll_events(self):
         return ()
 
     def listen(self):
         pass
+
+    def set_handlers(self, handlers):
+        self.handlers = tuple(handlers)
 
     def present(self, frame):
         self.presented.append(frame)
@@ -172,6 +176,22 @@ class RuntimeRegistryTest(unittest.TestCase):
         self.assertFalse(hasattr(screen, '_canvas'))
         self.assertFalse(hasattr(screen, '_root'))
         self.assertEqual(screen._dims(), (320, 200))
+
+    def test_screen_publishes_registered_handlers_to_backend(self):
+        installed = FakeRuntime()
+        install_runtime(installed)
+        screen = Screen(320, 200, 'browser')
+        screen.registry.update({
+            'keydown': lambda key: None,
+            'mouseup': lambda: None,
+        })
+
+        screen._listen()
+
+        self.assertEqual(
+            installed.backends[0].handlers,
+            ('keydown', 'mouseup'),
+        )
 
     def test_backend_can_resolve_non_filesystem_image_sources(self):
         installed = RecordingRuntime()
