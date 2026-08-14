@@ -409,7 +409,7 @@ class TkBackend(ScreenBackend):
             cancel=1,
             title=title,
         )
-        return dialog.go()
+        return dialog.go() == 0
 
     def prompt(self, text, title):
         from tkinter.simpledialog import askstring
