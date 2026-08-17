@@ -1,0 +1,927 @@
+:root {
+  --pydraw-ink: #152b32;
+  --pydraw-ink-soft: #4e6267;
+  --pydraw-paper: #f8f5ec;
+  --pydraw-paper-deep: #eee9dc;
+  --pydraw-white: #fffdf8;
+  --pydraw-blue: #2368a2;
+  --pydraw-blue-dark: #164d79;
+  --pydraw-sky: #9fd7ee;
+  --pydraw-yellow: #f4c84b;
+  --pydraw-orange: #ef7a4f;
+  --pydraw-green: #4c9c78;
+  --pydraw-line: rgba(21, 43, 50, 0.16);
+  --pydraw-shadow: 0 24px 70px rgba(31, 54, 58, 0.12);
+  --pydraw-header-height: 84px;
+  --pydraw-sidebar-width: 300px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--pydraw-header-height) + 24px);
+}
+
+body,
+.wy-body-for-nav {
+  color: var(--pydraw-ink);
+  background: var(--pydraw-paper);
+  font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--pydraw-blue);
+}
+
+a:hover,
+a:focus {
+  color: var(--pydraw-blue-dark);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--pydraw-yellow);
+  outline-offset: 3px;
+}
+
+::selection {
+  color: var(--pydraw-ink);
+  background: rgba(244, 200, 75, 0.55);
+}
+
+.docs-skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: -64px;
+  left: 16px;
+  padding: 12px 18px;
+  color: white;
+  background: var(--pydraw-ink);
+  font-size: 13px;
+  font-weight: 800;
+  transition: top 0.2s;
+}
+
+.docs-skip-link:focus {
+  top: 12px;
+  color: white;
+}
+
+/* Platform header */
+.docs-site-header {
+  position: fixed;
+  z-index: 500;
+  inset: 0 0 auto;
+  height: var(--pydraw-header-height);
+  background: rgba(248, 245, 236, 0.96);
+  border-bottom: 1px solid var(--pydraw-line);
+  backdrop-filter: blur(14px);
+}
+
+.docs-site-nav {
+  width: min(1240px, calc(100% - 48px));
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.docs-brand,
+.docs-brand:visited {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--pydraw-ink);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.docs-brand:hover,
+.docs-brand:focus {
+  color: var(--pydraw-ink);
+}
+
+.docs-brand-mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+
+.docs-brand-mark::before {
+  content: "";
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--pydraw-blue);
+  border-radius: 50%;
+}
+
+.docs-brand-pencil {
+  position: relative;
+  z-index: 1;
+  width: 8px;
+  height: 32px;
+  background: var(--pydraw-yellow);
+  border: 1.5px solid var(--pydraw-ink);
+  transform: rotate(42deg);
+}
+
+.docs-brand-pencil::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: -1.5px;
+  width: 8px;
+  height: 7px;
+  background: var(--pydraw-orange);
+  border: 1.5px solid var(--pydraw-ink);
+  border-bottom: 0;
+}
+
+.docs-brand-pencil::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: -1.5px;
+  border-top: 8px solid var(--pydraw-ink);
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+}
+
+.docs-brand-name {
+  font-size: 24px;
+  letter-spacing: -1.4px;
+}
+
+.docs-brand-name > span {
+  color: var(--pydraw-blue);
+}
+
+.docs-product-name {
+  margin-left: 22px;
+  padding-left: 22px;
+  color: var(--pydraw-ink-soft);
+  border-left: 1px solid var(--pydraw-line);
+  font: 500 11px "DM Mono", ui-monospace, monospace;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.docs-header-links {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.docs-header-links > a {
+  position: relative;
+  color: var(--pydraw-ink);
+  text-decoration: none;
+}
+
+.docs-header-links > a:not(.docs-header-cta)::after {
+  content: "";
+  position: absolute;
+  right: 100%;
+  bottom: -7px;
+  left: 0;
+  height: 2px;
+  background: var(--pydraw-blue);
+  transition: right 0.25s;
+}
+
+.docs-header-links > a:not(.docs-header-cta):hover::after,
+.docs-header-links > a:not(.docs-header-cta):focus::after {
+  right: 0;
+}
+
+.docs-header-links .docs-header-cta {
+  padding: 12px 18px;
+  color: white;
+  background: var(--pydraw-ink);
+  border: 2px solid var(--pydraw-ink);
+  transition: color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.docs-header-links .docs-header-cta:hover,
+.docs-header-links .docs-header-cta:focus {
+  color: white;
+  background: var(--pydraw-blue);
+  transform: translateY(-2px);
+}
+
+/* Sphinx shell and navigation */
+.wy-grid-for-nav {
+  min-height: 100vh;
+}
+
+.wy-nav-side {
+  top: var(--pydraw-header-height);
+  width: var(--pydraw-sidebar-width);
+  height: calc(100vh - var(--pydraw-header-height));
+  color: var(--pydraw-ink-soft);
+  background: var(--pydraw-paper-deep);
+  border-right: 1px solid var(--pydraw-line);
+}
+
+.wy-side-scroll {
+  width: var(--pydraw-sidebar-width);
+}
+
+.wy-side-nav-search {
+  padding: 32px 24px 24px;
+  color: var(--pydraw-ink);
+  background: var(--pydraw-paper-deep);
+  border-bottom: 1px solid var(--pydraw-line);
+}
+
+.wy-side-nav-search .docs-reference-home {
+  display: block;
+  margin-bottom: 22px;
+  color: var(--pydraw-ink);
+  text-decoration: none;
+}
+
+.wy-side-nav-search .docs-reference-home:hover,
+.wy-side-nav-search .docs-reference-home:focus {
+  color: var(--pydraw-blue-dark);
+}
+
+.wy-side-nav-search .docs-reference-home > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--pydraw-blue);
+  font: 500 10px "DM Mono", ui-monospace, monospace;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.wy-side-nav-search .docs-reference-home > strong {
+  color: var(--pydraw-ink);
+  font-size: 22px;
+  letter-spacing: -0.7px;
+}
+
+.wy-side-nav-search input[type="text"] {
+  height: 42px;
+  padding: 0 13px;
+  color: var(--pydraw-ink);
+  background: var(--pydraw-white);
+  border: 1px solid var(--pydraw-line);
+  border-radius: 0;
+  box-shadow: none;
+  font-family: "Manrope", ui-sans-serif, sans-serif;
+  font-size: 12px;
+}
+
+.wy-side-nav-search input[type="text"]::placeholder {
+  color: #7c898c;
+}
+
+.wy-menu-vertical {
+  padding: 20px 0 36px;
+}
+
+.wy-menu-vertical p.caption {
+  margin: 20px 24px 9px;
+  color: var(--pydraw-blue-dark);
+  font: 500 10px "DM Mono", ui-monospace, monospace;
+  letter-spacing: 1.3px;
+}
+
+html.writer-html5 .wy-menu-vertical a,
+html.writer-html5 .wy-menu-vertical li.current a,
+html.writer-html5 .wy-menu-vertical li.toctree-l2.current > a,
+html.writer-html5 .wy-menu-vertical li.toctree-l3.current > a {
+  color: var(--pydraw-ink-soft);
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.wy-menu-vertical a {
+  padding: 9px 24px;
+}
+
+.wy-menu-vertical li.toctree-l2 a {
+  padding-left: 38px;
+}
+
+.wy-menu-vertical li.toctree-l3 a {
+  padding-left: 52px;
+}
+
+html.writer-html5 .wy-menu-vertical a:hover,
+html.writer-html5 .wy-menu-vertical li.current > a:hover {
+  color: var(--pydraw-blue-dark);
+  background: rgba(255, 253, 248, 0.65);
+}
+
+html.writer-html5 .wy-menu-vertical li.current > a,
+html.writer-html5 .wy-menu-vertical li.current > a button.toctree-expand,
+html.writer-html5 .wy-menu-vertical li.on a {
+  color: var(--pydraw-blue-dark);
+  background: var(--pydraw-white);
+  font-weight: 800;
+}
+
+html.writer-html5 .wy-menu-vertical li.current > a {
+  box-shadow: inset 3px 0 0 var(--pydraw-blue);
+}
+
+html.writer-html5 .wy-menu-vertical li.current,
+html.writer-html5 .wy-menu-vertical li.current ul {
+  background: transparent;
+}
+
+html.writer-html5 .wy-menu-vertical li.current li a {
+  background: rgba(255, 253, 248, 0.38) !important;
+  border-bottom-color: var(--pydraw-line);
+}
+
+.wy-menu-vertical span.toctree-expand {
+  color: currentColor;
+}
+
+.wy-nav-content-wrap {
+  min-height: 100vh;
+  margin-left: var(--pydraw-sidebar-width);
+  padding-top: var(--pydraw-header-height);
+  background: var(--pydraw-paper);
+}
+
+.wy-nav-content {
+  max-width: 1080px;
+  min-height: calc(100vh - var(--pydraw-header-height));
+  margin: 0 auto;
+  padding: 54px 72px 72px;
+  background: transparent;
+}
+
+.wy-nav-top {
+  color: white;
+  background: var(--pydraw-blue-dark);
+}
+
+.wy-nav-top a {
+  color: white;
+  font-weight: 800;
+}
+
+/* Breadcrumbs and article typography */
+.wy-breadcrumbs {
+  margin-bottom: 44px;
+  color: var(--pydraw-ink-soft);
+  font: 500 10px "DM Mono", ui-monospace, monospace;
+  letter-spacing: 0.3px;
+}
+
+.wy-breadcrumbs a {
+  color: var(--pydraw-blue-dark);
+}
+
+.wy-breadcrumbs-aside a {
+  color: var(--pydraw-ink-soft);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.rst-content .document > [itemprop="articleBody"] > section > h1:first-child,
+.rst-content h1,
+.rst-content h2,
+.rst-content h3,
+.rst-content h4,
+.rst-content h5,
+.rst-content h6 {
+  color: var(--pydraw-ink);
+  font-family: "Manrope", ui-sans-serif, sans-serif;
+  font-weight: 700;
+}
+
+.rst-content h1 {
+  margin: 0 0 34px;
+  font-size: clamp(38px, 5vw, 54px);
+  line-height: 1.05;
+  letter-spacing: -2.8px;
+}
+
+.rst-content h2 {
+  margin-top: 64px;
+  padding-top: 20px;
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -1.1px;
+  border-top: 1px solid var(--pydraw-line);
+}
+
+.rst-content h3 {
+  margin-top: 42px;
+  font-size: 21px;
+  letter-spacing: -0.5px;
+}
+
+.rst-content h4,
+.rst-content h5,
+.rst-content h6 {
+  letter-spacing: -0.2px;
+}
+
+.rst-content p,
+.rst-content li,
+.rst-content dd {
+  color: var(--pydraw-ink-soft);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.rst-content a:not(.headerlink) {
+  color: var(--pydraw-blue);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(35, 104, 162, 0.28);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.rst-content a:not(.headerlink):hover,
+.rst-content a:not(.headerlink):focus {
+  color: var(--pydraw-blue-dark);
+  text-decoration-color: currentColor;
+}
+
+.rst-content .headerlink {
+  color: var(--pydraw-orange);
+  font-size: 0.7em;
+}
+
+.rst-content hr {
+  border-color: var(--pydraw-line);
+}
+
+/* API objects */
+.rst-content dl.py {
+  margin: 28px 0 34px;
+}
+
+html.writer-html5 .rst-content dl.py > dt.sig {
+  display: block;
+  padding: 14px 17px;
+  overflow-x: auto;
+  color: #eaf3f3 !important;
+  background: var(--pydraw-ink) !important;
+  border: 0 !important;
+  border-left: 4px solid var(--pydraw-orange) !important;
+  border-radius: 0;
+  font: 500 12px/1.7 "DM Mono", ui-monospace, monospace;
+  box-shadow: 5px 5px 0 var(--pydraw-paper-deep);
+}
+
+html.writer-html5 .rst-content dl.py.class > dt.sig,
+html.writer-html5 .rst-content dl.py.exception > dt.sig {
+  border-left-color: var(--pydraw-yellow) !important;
+}
+
+html.writer-html5 .rst-content dl.py.method > dt.sig,
+html.writer-html5 .rst-content dl.py.function > dt.sig {
+  border-left-color: var(--pydraw-sky) !important;
+}
+
+html.writer-html5 .rst-content dl.py.attribute > dt.sig,
+html.writer-html5 .rst-content dl.py.property > dt.sig {
+  border-left-color: var(--pydraw-green) !important;
+}
+
+html.writer-html5 .rst-content dl.py > dt.sig .property,
+html.writer-html5 .rst-content dl.py > dt.sig .sig-prename {
+  color: var(--pydraw-sky) !important;
+}
+
+html.writer-html5 .rst-content dl.py > dt.sig .sig-name {
+  color: var(--pydraw-yellow) !important;
+}
+
+html.writer-html5 .rst-content dl.py > dt.sig .sig-param {
+  color: #eaf3f3 !important;
+}
+
+html.writer-html5 .rst-content dl.py > dt.sig .headerlink {
+  color: var(--pydraw-orange) !important;
+}
+
+.rst-content dl.py > dd {
+  margin: 0;
+  padding: 22px 18px 4px;
+  border-left: 1px solid var(--pydraw-line);
+}
+
+.rst-content dl.py > dd > dl.py {
+  margin-left: 10px;
+}
+
+.rst-content code.literal,
+.rst-content tt.literal {
+  padding: 0.15em 0.4em;
+  color: var(--pydraw-blue-dark);
+  background: var(--pydraw-paper-deep);
+  border: 1px solid rgba(21, 43, 50, 0.09);
+  font: 500 0.88em "DM Mono", ui-monospace, monospace;
+  white-space: normal;
+}
+
+.rst-content pre,
+.rst-content div[class^="highlight"] {
+  border-radius: 0;
+}
+
+.rst-content div[class^="highlight"] {
+  margin: 26px 0;
+  background: var(--pydraw-ink);
+  box-shadow: var(--pydraw-shadow);
+}
+
+.rst-content div[class^="highlight"] pre {
+  padding: 22px 24px;
+  color: #eaf3f3;
+  background: var(--pydraw-ink);
+  border: 0;
+  font: 400 12px/1.75 "DM Mono", ui-monospace, monospace;
+}
+
+.rst-content table.docutils,
+.rst-content table.field-list {
+  width: 100%;
+  margin: 24px 0;
+  background: var(--pydraw-white);
+  border: 1px solid var(--pydraw-line);
+}
+
+.rst-content table.docutils thead,
+.rst-content table.field-list th {
+  color: var(--pydraw-ink);
+  background: var(--pydraw-paper-deep);
+}
+
+.rst-content table.docutils td,
+.rst-content table.docutils th,
+.rst-content table.field-list td,
+.rst-content table.field-list th {
+  padding: 11px 14px;
+  border-color: var(--pydraw-line);
+}
+
+.rst-content .admonition {
+  padding: 0;
+  overflow: hidden;
+  background: var(--pydraw-white);
+  border: 1px solid var(--pydraw-line);
+  box-shadow: 6px 6px 0 var(--pydraw-paper-deep);
+}
+
+.rst-content .admonition-title {
+  margin: 0;
+  padding: 12px 16px;
+  color: white;
+  background: var(--pydraw-blue);
+  font: 800 11px "Manrope", ui-sans-serif, sans-serif;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.rst-content .admonition > :not(.admonition-title) {
+  margin-right: 17px;
+  margin-left: 17px;
+}
+
+/* API landing page */
+.rst-content .api-landing-lede {
+  max-width: 720px;
+  margin: -10px 0 50px;
+  color: var(--pydraw-ink-soft);
+  font-size: 18px;
+  line-height: 1.75;
+}
+
+.rst-content .api-module-grid {
+  margin: 30px 0 56px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: var(--pydraw-line);
+  border-top: 1px solid var(--pydraw-line);
+  border-left: 1px solid var(--pydraw-line);
+  gap: 1px;
+}
+
+.rst-content .api-module-card {
+  min-height: 190px;
+  margin: 0;
+  padding: 27px 28px 24px;
+  position: relative;
+  background: var(--pydraw-white);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.rst-content .api-module-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  min-height: 160px;
+}
+
+.rst-content .api-module-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--pydraw-blue);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.rst-content .api-module-card:hover {
+  z-index: 1;
+  background: #fff;
+  transform: translateY(-2px);
+}
+
+.rst-content .api-module-card:hover::before {
+  opacity: 1;
+}
+
+.rst-content .api-module-card:nth-child(4n + 2)::before,
+.rst-content .api-module-card:nth-child(4n + 3)::before {
+  background: var(--pydraw-orange);
+}
+
+.rst-content .api-module-card > p:first-child {
+  margin: 0 0 14px;
+}
+
+.rst-content .api-module-card > p:first-child strong {
+  font-weight: 700;
+}
+
+.rst-content .api-module-card > p:first-child a {
+  color: var(--pydraw-ink);
+  font-size: 20px;
+  letter-spacing: -0.5px;
+  text-decoration: none;
+}
+
+.rst-content .api-module-card > p:first-child a::after {
+  content: "\2192";
+  margin-left: 8px;
+  color: var(--pydraw-blue);
+  font-size: 15px;
+  transition: margin-left 0.2s;
+}
+
+.rst-content .api-module-card > p:first-child a:hover,
+.rst-content .api-module-card > p:first-child a:focus {
+  color: var(--pydraw-blue-dark);
+}
+
+.rst-content .api-module-card > p:first-child a:hover::after,
+.rst-content .api-module-card > p:first-child a:focus::after {
+  margin-left: 12px;
+}
+
+.rst-content .api-module-card > p:not(:first-child):not(:last-child) {
+  margin-bottom: 20px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.rst-content .api-module-card > p:last-child {
+  position: absolute;
+  right: 28px;
+  bottom: 22px;
+  left: 28px;
+  margin: 0;
+}
+
+.rst-content .api-module-card > p:last-child code {
+  padding: 0;
+  color: var(--pydraw-blue-dark);
+  background: transparent;
+  border: 0;
+  font-size: 10px;
+}
+
+/* Generated toctrees and controls */
+.rst-content .toctree-wrapper > .caption {
+  margin: 0 0 12px;
+  color: var(--pydraw-blue-dark);
+  font: 500 10px/1.5 "DM Mono", ui-monospace, monospace;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+
+.rst-content .toctree-wrapper ul {
+  list-style: none !important;
+}
+
+.rst-content .toctree-wrapper > ul {
+  margin: 20px 0 48px;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.rst-content .toctree-wrapper > ul > li {
+  padding: 22px 24px;
+  background: var(--pydraw-white);
+  border-top: 3px solid var(--pydraw-blue);
+  box-shadow: 0 14px 34px rgba(31, 54, 58, 0.07);
+}
+
+.rst-content .toctree-wrapper li > ul {
+  margin: 12px 0 0;
+}
+
+.rst-content .toctree-wrapper li > ul a {
+  font-size: 13px;
+}
+
+.rst-footer-buttons {
+  margin-top: 64px;
+}
+
+.rst-footer-buttons .btn,
+.wy-menu-vertical .btn {
+  padding: 11px 15px;
+  color: var(--pydraw-ink);
+  background: var(--pydraw-yellow);
+  border: 0;
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--pydraw-ink);
+  font-family: "Manrope", ui-sans-serif, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rst-footer-buttons .btn:hover,
+.rst-footer-buttons .btn:focus {
+  color: var(--pydraw-ink);
+  background: #ffda65;
+  box-shadow: 6px 6px 0 var(--pydraw-ink);
+  transform: translateY(-2px);
+}
+
+.rst-content footer {
+  margin-top: 60px;
+  color: var(--pydraw-ink-soft);
+  border-top: 1px solid var(--pydraw-line);
+  font-size: 11px;
+}
+
+.rst-content footer p,
+.rst-content footer a {
+  font-size: 11px;
+}
+
+#main-content:focus {
+  outline: none;
+}
+
+@media screen and (max-width: 940px) {
+  .docs-site-nav {
+    width: calc(100% - 32px);
+  }
+
+  .docs-header-links {
+    gap: 16px;
+  }
+
+  .docs-header-links > a:not(.docs-header-cta) {
+    display: none;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  :root {
+    --pydraw-header-height: 70px;
+  }
+
+  .docs-brand-name {
+    font-size: 21px;
+  }
+
+  .docs-product-name {
+    margin-left: 14px;
+    padding-left: 14px;
+    font-size: 9px;
+  }
+
+  .docs-header-links .docs-header-cta {
+    padding: 9px 11px;
+    font-size: 10px;
+  }
+
+  .wy-nav-side {
+    top: var(--pydraw-header-height);
+    height: calc(100vh - var(--pydraw-header-height));
+  }
+
+  .wy-nav-content-wrap {
+    margin-left: 0;
+    padding-top: var(--pydraw-header-height);
+  }
+
+  .wy-nav-content-wrap.shift {
+    position: fixed;
+    min-width: 100%;
+  }
+
+  .wy-nav-top {
+    padding: 12px 20px;
+    font-size: 13px;
+  }
+
+  .wy-nav-content {
+    width: 100%;
+    padding: 34px 24px 56px;
+  }
+
+  .wy-breadcrumbs {
+    margin-bottom: 32px;
+  }
+
+  .wy-breadcrumbs-aside {
+    display: none;
+  }
+
+  .rst-content h1 {
+    font-size: 38px;
+    letter-spacing: -2px;
+  }
+
+  .rst-content h2 {
+    margin-top: 50px;
+    font-size: 25px;
+  }
+
+  html.writer-html5 .rst-content dl.py > dt.sig {
+    padding: 12px 13px;
+    font-size: 11px;
+  }
+
+  .rst-content dl.py > dd {
+    padding-right: 4px;
+    padding-left: 14px;
+  }
+
+  .rst-content .api-module-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rst-content .api-module-card {
+    grid-column: auto;
+    min-height: 168px;
+  }
+}
+
+@media screen and (max-width: 520px) {
+  .docs-product-name {
+    display: none;
+  }
+
+  .docs-header-links .docs-header-cta {
+    padding: 9px 10px;
+  }
+
+  .docs-header-links .docs-header-cta > span {
+    display: none;
+  }
+
+  .rst-content p,
+  .rst-content li,
+  .rst-content dd {
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

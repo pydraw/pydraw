@@ -53,7 +53,26 @@ exclude_patterns = []
 #
 html_theme = 'sphinx_rtd_theme'
 
+html_title = 'pyDraw API Reference'
+html_theme_options = {
+    'collapse_navigation': False,
+    'navigation_depth': 3,
+    'prev_next_buttons_location': 'bottom',
+    'sticky_navigation': True,
+    'style_external_links': True,
+}
+
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+html_css_files = ['custom.css']
+
+# Links used by the platform header in ``_templates/layout.html``. Keeping
+# these here makes the docs usable at /api/ without coupling them to Next.js.
+html_context = {
+    'platform_home_url': '/',
+    'platform_learn_url': '/learn',
+    'platform_play_url': '/play',
+    'project_github_url': 'https://github.com/pydraw/pydraw',
+}

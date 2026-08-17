@@ -3004,7 +3004,7 @@ class Text(CustomRenderable):
 
     def text(self, text: str = None) -> str:
         """
-        Get or set the text. Use '\n' to separate lines
+        Get or set the text. Use '\\n' to separate lines.
 
         :param text: text to set to (str), if any
         :return: the text

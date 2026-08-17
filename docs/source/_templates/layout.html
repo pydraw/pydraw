@@ -1,0 +1,62 @@
+{% extends "!layout.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <meta name="theme-color" content="#f8f5ec" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap"
+    rel="stylesheet"
+  />
+  <link rel="icon" href="{{ platform_home_url }}favicon-32x32.png" sizes="32x32" type="image/png" />
+{% endblock %}
+
+{% block extrabody %}
+  <a class="docs-skip-link" href="#main-content">Skip to documentation</a>
+  <header class="docs-site-header">
+    <nav class="docs-site-nav" aria-label="Main navigation">
+      <a class="docs-brand" href="{{ platform_home_url }}" aria-label="pyDraw home">
+        <span class="docs-brand-mark" aria-hidden="true">
+          <span class="docs-brand-pencil"></span>
+        </span>
+        <span class="docs-brand-name"><span>py</span>Draw</span>
+      </a>
+      <span class="docs-product-name">API Reference</span>
+      <div class="docs-header-links">
+        <a href="{{ platform_home_url }}">Home</a>
+        <a href="{{ platform_learn_url }}">Learn</a>
+        <a href="{{ project_github_url }}" rel="external">GitHub</a>
+        <a class="docs-header-cta" href="{{ platform_play_url }}">
+          Open playground <span aria-hidden="true">&rarr;</span>
+        </a>
+      </div>
+    </nav>
+  </header>
+{% endblock %}
+
+{% block sidebartitle %}
+  <a class="docs-reference-home" href="{{ pathto(root_doc) }}">
+    <span>Documentation</span>
+    <strong>Python API</strong>
+  </a>
+  {% include "searchbox.html" %}
+{% endblock %}
+
+{% block mobile_nav %}
+  <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+  <a href="{{ pathto(root_doc) }}">Browse the API</a>
+{% endblock %}
+
+{% block document %}
+  <div id="main-content" role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article" tabindex="-1">
+    <div itemprop="articleBody">
+      {% block body %}{% endblock %}
+    </div>
+    {% if self.comments()|trim %}
+      <div class="articleComments">
+        {% block comments %}{% endblock %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
