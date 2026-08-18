@@ -1,99 +1,112 @@
+import inspect
+
 from pydraw import Screen, Location
+from pydraw.errors import PydrawError
 
 
 class Scene:
-    """
-    An abstraction of the Screen, designed to store the Screen in a certain state while retaining registered input
-    handlers and the positions and attributes of objects registered to it.
+    """A reusable Screen state with lifecycle and input hooks.
 
-    You can use Scenes to create multi-screen games or to manage different levels easily. It works exactly like a screen
-    but will not render anything until it is "applied" to a Screen via `Screen.scene(some_scene)`
+    ``Screen`` owns the application loop. A Scene creates its objects in
+    :meth:`start`, advances one frame in :meth:`update`, and releases any
+    external state in :meth:`stop`. Input methods are registered automatically
+    when the Scene is applied with ``screen.scene(scene)``.
     """
 
     def __init__(self):
         self._screen = None
+        self._update_accepts_dt = True
 
     def screen(self):
-        """
-        Retrieve the screen that the scene is tied to
+        """Return the bound Screen, or ``None`` before activation."""
 
-        :return: a Screen
-        """
         return self._screen
 
     def start(self) -> None:
-        """
-        Run as the initializer for the scene
+        """Initialize the Scene after it has been bound to a Screen."""
 
-        :return: None
+    def update(self, dt: float = None) -> None:
+        """Advance the Scene by one frame.
+
+        Subclasses may define either ``update(self)`` or ``update(self, dt)``.
+
+        :param dt: optional elapsed seconds since the previous frame; ``0.0``
+                   on the first frame after activation
         """
 
-    def run(self) -> None:
-        """
-        Run the scene (the loop should go here)
+    def stop(self) -> None:
+        """Release Scene state immediately before deactivation."""
 
-        :return: None
+    def goto(self, scene: 'Scene') -> 'Scene':
+        """Request another Scene.
+
+        During an input callback or frame update, the transition is deferred
+        until the safe frame boundary. Outside an update, it is applied
+        immediately.
+
+        :param scene: the Scene to activate next
+        :return: the requested Scene
         """
+
+        if self._screen is None:
+            raise PydrawError('Scene#goto(): the Scene is not active.')
+        return self._screen.scene(scene)
 
     def mousedown(self, location: Location, button: int) -> None:
-        """
-        Mouse event, called when a mouse button is pressed down.
+        """Handle a pointer-button press.
 
-        :param location: the location that was clicked
-        :param button: the button pressed (0-2)
-        :return: None
+        :param location: the pressed location
+        :param button: left, middle, or right button (1-3)
         """
 
     def mouseup(self, location: Location, button: int) -> None:
-        """
-        Mouse event, called when a mouse button is released.
+        """Handle a pointer-button release.
 
-        :param location: the location that was clicked
-        :param button: the button released (0-2)
-        :return: None
+        :param location: the released location
+        :param button: left, middle, or right button (1-3)
         """
 
     def mousedrag(self, location: Location, button: int) -> None:
-        """
-        Mouse event, called when the mouse moves after a mousedown event (without a mouseup event)
+        """Handle pointer movement while a button is held.
 
-        :param location: the Location the mouse has moved to
-        :param button: the button being held (0-2)
-        :return: None
+        :param location: the current pointer location
+        :param button: held left, middle, or right button (1-3)
         """
 
     def mousemove(self, location: Location) -> None:
-        """
-        Mouse event called when the mouse moves over the Screen
-
-        :param location: the Location the mouse moved to
-        :return: None
-        """
+        """Handle pointer movement without a held button."""
 
     def keydown(self, key: Screen.Key) -> None:
-        """
-        Key event called when a key is pressed
-
-        :param key: the Key that was pressed
-        :return: None
-        """
+        """Handle a normalized key press."""
 
     def keyup(self, key: Screen.Key) -> None:
-        """
-        Key event called when a key is released
+        """Handle a normalized key release."""
 
-        :param key: the Key that was released
-        :return: None
-        """
-
-    def activate(self, screen: Screen) -> None:
-        """
-        Activates the Scene with a Screen (called internally)
-
-        :param screen: the Screen to display the Scene on
-        :return: None
-        """
+    def _activate(self, screen: Screen) -> None:
+        signature = inspect.signature(self.update)
+        try:
+            signature.bind(0.0)
+            self._update_accepts_dt = True
+        except TypeError:
+            try:
+                signature.bind()
+                self._update_accepts_dt = False
+            except TypeError as error:
+                raise PydrawError(
+                    'Scene#update(): expected update(self) or update(self, dt).'
+                ) from error
 
         self._screen = screen
         self.start()
-        self.run()
+
+    def _step(self, dt: float) -> None:
+        if self._update_accepts_dt:
+            self.update(dt)
+        else:
+            self.update()
+
+    def _deactivate(self) -> None:
+        try:
+            self.stop()
+        finally:
+            self._screen = None

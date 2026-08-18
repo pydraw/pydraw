@@ -67,6 +67,8 @@ class Screen:
         self._helperstate = 0
 
         self._scene = None  # We store our current Scene.
+        self._pending_scene = None
+        self._scene_frame_time = None
 
         self.registry = {}  # The input function registry (stores input callbacks)
 
@@ -479,12 +481,14 @@ class Screen:
 
     def scene(self, scene=None):
         """
-        Apply a new scene to the screen!
+        Get or apply a Scene.
 
-        Note that this will override ALL previously registered input handlers.
+        Applying a Scene stops the current Scene, clears its Screen objects and
+        input handlers, and starts the replacement. A transition requested from
+        an input handler or Scene update is deferred until the frame boundary.
 
-        :param scene: The Scene to apply!
-        :return: the new scene that was set, the existing scene if no args passed, or None
+        :param scene: the Scene to apply, if any
+        :return: the requested Scene, or the active Scene when called without one
         """
         from pydraw import Scene
 
@@ -496,12 +500,15 @@ class Screen:
                 f'Screen#scene(): expected a Scene; received {type(scene)} ({scene!r}).'
             )
 
-        if self._scene is not None:
-            del self._scene # calls our delete handler
+        if self._updating:
+            self._pending_scene = scene
+            return scene
 
-        self.reset()  # Clears screen and destroys all registered input handlers.
+        return self._apply_scene(scene)
 
-        # Defines all input methods from the Scene.
+    def _apply_scene(self, scene):
+        self.reset()
+
         for (name, function) in inspect.getmembers(scene, predicate=inspect.ismethod):
             if name.lower() not in INPUT_TYPES:
                 continue
@@ -510,16 +517,57 @@ class Screen:
 
         self._scene = scene
         self._listen()
-        scene.activate(self)
+        try:
+            scene._activate(self)
+        except BaseException:
+            self.registry.clear()
+            self._scene = None
+            self._scene_frame_time = None
+            if scene.screen() is self:
+                scene._screen = None
+            self.clear()
+            raise
+        return scene
+
+    def _apply_pending_scene(self):
+        scene = self._pending_scene
+        if scene is None:
+            return False
+
+        self._pending_scene = None
+        self._apply_scene(scene)
+        return True
+
+    def _update_scene(self):
+        if self._scene is None:
+            return
+
+        now = time.perf_counter()
+        if self._scene_frame_time is None:
+            dt = 0.0
+        else:
+            dt = now - self._scene_frame_time
+        self._scene_frame_time = now
+        self._scene._step(dt)
+
+    def _deactivate_scene(self):
+        scene = self._scene
+        self._scene = None
+        self._scene_frame_time = None
+        if scene is not None:
+            scene._deactivate()
 
     def reset(self) -> None:
         """
-        Resets the screen, removing all objects and input methods.
+        Reset the Screen, deactivating its Scene and removing all objects and
+        input handlers.
 
         :return: None
         """
 
-        # A reset commonly starts a new scene and therefore a new frame loop.
+        self._deactivate_scene()
+        self._pending_scene = None
+
         self._last_frame_time = None
         self._next_frame_time = None
 
@@ -615,7 +663,11 @@ class Screen:
 
     def update(self) -> None:
         """
-        Updates the screen.
+        Process queued input, advance the active Scene, and present one frame.
+
+        Input callbacks run before the Scene update. Scene transitions
+        requested by either stage are applied at a safe frame boundary before
+        the frame is presented. This method is not reentrant.
 
         :return: None
         """
@@ -626,6 +678,9 @@ class Screen:
         try:
             for event in self._backend.poll_events():
                 self._dispatch_input_event(event)
+            self._apply_pending_scene()
+            self._update_scene()
+            self._apply_pending_scene()
             self._backend.present(self._render_queue.take())
         except BackendTerminated:
             print('Terminated.')
@@ -658,6 +713,8 @@ class Screen:
             self._backend.run(self.update)
         finally:
             self._looping = False
+            self._pending_scene = None
+            self._deactivate_scene()
 
     def exit(self) -> None:
         """
@@ -669,6 +726,8 @@ class Screen:
 
         # Prevent queued Tk events from reaching callbacks while the canvas and
         # its objects are being destroyed.
+        self._pending_scene = None
+        self._deactivate_scene()
         self.registry.clear()
         self._backend.close()
         exit(0)
