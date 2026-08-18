@@ -100,6 +100,23 @@ class ImageConstructorTest(unittest.TestCase):
         self.assertGreater(img.width(), 1)
         self.assertGreater(img.height(), 1)
 
+    def test_single_dimension_preserves_aspect_ratio(self):
+        natural = Image(self.screen, PNG)
+        natural_width = natural.width()
+        natural_height = natural.height()
+
+        width_only = Image(self.screen, PNG, 10, 20, natural_width * 2)
+        self.assertEqual(width_only.width(), natural_width * 2)
+        self.assertEqual(width_only.height(), natural_height * 2)
+
+        height_only = Image(self.screen, PNG, height=natural_height / 2)
+        self.assertEqual(height_only.width(), natural_width / 2)
+        self.assertEqual(height_only.height(), natural_height / 2)
+
+        explicit = Image(self.screen, PNG, width=80, height=30)
+        self.assertEqual(explicit.width(), 80)
+        self.assertEqual(explicit.height(), 30)
+
     def test_png_loads_without_pillow(self):
         """PNG is documented as a tkinter-native format and must not import PIL."""
         real_import = builtins.__import__
@@ -263,6 +280,16 @@ class ImagePILMethodTest(unittest.TestCase):
     def test_color_mask(self):
         self.img.color(Color('red'))
         self.assertEqual(self.img.color(), Color('red'))
+
+    def test_color_mask_alpha_range(self):
+        self.img.color(Color('red'), 0)
+        self.assertEqual(self.img._mask, 0)
+        self.img.color(Color('blue'), 255)
+        self.assertEqual(self.img._mask, 255)
+
+        self.assertRaises(InvalidArgumentError, self.img.color, Color('red'), -1)
+        self.assertRaises(InvalidArgumentError, self.img.color, Color('red'), 256)
+        self.assertRaises(InvalidArgumentError, self.img.color, Color('red'), 0.5)
 
     def test_border_setter(self):
         self.img.border(Color('blue'))

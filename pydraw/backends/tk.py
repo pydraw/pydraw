@@ -313,10 +313,15 @@ class TkBackend(ScreenBackend):
         if node.tint is not None:
             alpha = image.getchannel('A')
             gray = ImageOps.grayscale(image)
-            image = ImageOps.colorize(
+            tinted = ImageOps.colorize(
                 gray,
-                (0, 0, 0, 0),
-                node.tint + (node.tint_alpha,),
+                (0, 0, 0),
+                node.tint,
+            ).convert('RGBA')
+            image = PILImage.blend(
+                image,
+                tinted,
+                node.tint_alpha / 255,
             )
             image.putalpha(alpha)
         if node.border is not None:

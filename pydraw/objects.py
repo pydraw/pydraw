@@ -2452,6 +2452,21 @@ class Image(Renderable):
 
         self._width, self._height = screen._backend.measure_image(image)
 
+        if width is not None:
+            verify(width, (float, int))
+        if height is not None:
+            verify(height, (float, int))
+
+        if width is not None and height is None:
+            height = self._height * width / self._width
+        elif height is not None and width is None:
+            width = self._width * height / self._height
+
+        if width is not None:
+            self._width = width
+        if height is not None:
+            self._height = height
+
         self._frame = -1
         self._frames = -1
 
@@ -2469,11 +2484,6 @@ class Image(Renderable):
 
         super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
                          rotation=rotation, visible=visible)
-
-        if width is not None and width != self._width:
-            self.width(width)
-        if height is not None and height != self._height:
-            self.height(height)
 
         if color is not None:
             self.color(color)
@@ -2558,12 +2568,16 @@ class Image(Renderable):
         Retrieves or applies a color-mask to the image
 
         :param color: the color to mask to, if any
-        :param alpha: The alpha level of the mask, defaults to 123 (half of 255)
+        :param alpha: Tint intensity from 0 (original colors) to 255 (full tint), defaults to 123
         :return: the mask-color of the object
         """
 
         if color is not None:
-            verify(color, Color)
+            verify(color, Color, alpha, int)
+            if alpha < 0 or alpha > 255:
+                raise InvalidArgumentError(
+                    'Image#color(): alpha must be between 0 and 255.'
+                )
 
             if self._color == color and self._mask == alpha:
                 return self._color
