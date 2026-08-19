@@ -4,6 +4,7 @@ Color Test: Tests methods in the Color class
 
 import unittest
 from pydraw import Color
+from pydraw import color as color_module
 from pydraw.errors import InvalidArgumentError
 
 
@@ -45,6 +46,21 @@ class ColorTest(unittest.TestCase):
             with self.subTest(rgb=rgb):
                 with self.assertRaises(InvalidArgumentError):
                     Color(rgb)
+
+    def test_all_contains_every_canonical_table_name(self):
+        colors = Color.all()
+
+        self.assertEqual(len(colors), len(color_module._COLOR_TABLE))
+        self.assertEqual(
+            tuple(color.name() for color in colors),
+            tuple(color_module._COLOR_TABLE),
+        )
+        self.assertFalse(hasattr(color_module, 'COLORS'))
+
+    def test_random_uses_the_full_color_table(self):
+        random_color = Color.random()
+
+        self.assertIn(random_color.name(), color_module._COLOR_TABLE)
 
 
 if __name__ == '__main__':
