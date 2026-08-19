@@ -5,7 +5,7 @@ import random
 
 GRAVITY = 0.02
 MAX_GRAVITY = 0.1
-THRUST = 0.05
+THRUST = 0.15
 MAX_SPEED = 6
 FPS = 60
 
@@ -120,8 +120,8 @@ while True:
         dy *= MAX_SPEED / speed
 
     # Keep the ship centered and move the world in the opposite direction.
-    for star in stars:
-        star.move(-dx, -dy)
+    # for star in stars:
+    #     star.move(-dx, -dy)
     for planet in planets:
         planet.move(-dx, -dy)
 

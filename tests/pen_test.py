@@ -65,7 +65,7 @@ class PenTest(unittest.TestCase):
         obj.moveto(30, 40)
         self.assertEqual(
             pen.coordinates(),
-            [Location(10, 20), Location(15, 26), Location(30, 40)]
+            [Location(25, 40), Location(30, 46), Location(45, 60)]
         )
 
         self.assertFalse(obj.pen_stop())
@@ -87,7 +87,7 @@ class PenTest(unittest.TestCase):
 
         self.assertEqual(
             pen.coordinates(),
-            [Location(20, 30), Location(25, 35)]
+            [Location(35, 50), Location(40, 55)]
         )
 
     def test_line_and_compound_do_not_support_pens(self):

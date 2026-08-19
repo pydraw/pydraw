@@ -463,12 +463,15 @@ class Object:
 
         return self._pen
 
+    def _pen_location(self) -> Location:
+        return Location(self.x(), self.y())
+
     def _sync_pen(self) -> None:
         pen = getattr(self, '_pen', None)
         if pen is None or not pen.drawing():
             return
 
-        location = Location(self.x(), self.y())
+        location = self._pen_location()
         if pen.location() != location:
             pen.moveto(location)
 
@@ -477,7 +480,10 @@ class Object:
         verify(color, Color, width, int, top, bool)
 
         if self._pen is None:
-            self._pen = Pen(self._screen, self.x(), self.y(), color, width, top)
+            location = self._pen_location()
+            self._pen = Pen(
+                self._screen, location.x(), location.y(), color, width, top
+            )
         else:
             self._pen.color(color)
             self._pen.width(width)
@@ -550,6 +556,10 @@ class Renderable(Object):
     # instance shadows these with per-instance values.
     _bounds_sig = None
     _bounds_cache = None
+
+    def _pen_location(self) -> Location:
+        return self.center()
+
     def _render_color(self, color):
         return None if color == Color.NONE else color.rgb()
 
@@ -2980,6 +2990,7 @@ class Text(CustomRenderable):
         self._strikethrough = strikethrough
         self._angle = rotation
         self._visible = visible
+        self._pen = None
 
         verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
                align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
