@@ -252,6 +252,10 @@ class ImageMethodTest(unittest.TestCase):
         # A non-animated image reports -1 frames.
         self.assertEqual(self.img.frames(), -1)
 
+    def test_next_requires_loaded_animation(self):
+        with self.assertRaises(PydrawError):
+            self.img.next()
+
     def test_remove(self):
         self.img.remove()
         self.assertNotIn(self.img, self.screen.objects())

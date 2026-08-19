@@ -80,6 +80,12 @@ class LocationTest(unittest.TestCase):
         self.assertRaises(InvalidArgumentError, loc.move, 'a', 'b')
         self.assertRaises(InvalidArgumentError, loc.moveto, 'a', 'b')
 
+    def test_rejects_malformed_coordinate_tuples(self):
+        for value in ((), (1,), (1, 2, 3), ('x', 'y')):
+            with self.subTest(value=value):
+                with self.assertRaises(InvalidArgumentError):
+                    Location(value)
+
     def test_rejects_unknown_keywords(self):
         with self.assertRaises(InvalidArgumentError):
             Location(horizontal=10)

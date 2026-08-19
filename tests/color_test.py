@@ -4,6 +4,7 @@ Color Test: Tests methods in the Color class
 
 import unittest
 from pydraw import Color
+from pydraw.errors import InvalidArgumentError
 
 
 class ColorTest(unittest.TestCase):
@@ -38,6 +39,12 @@ class ColorTest(unittest.TestCase):
             with self.subTest(arguments=arguments):
                 with self.assertRaises(NameError):
                     Color(*arguments)
+
+    def test_rejects_rgb_tuples_with_wrong_length(self):
+        for rgb in ((), (1,), (1, 2), (1, 2, 3, 4)):
+            with self.subTest(rgb=rgb):
+                with self.assertRaises(InvalidArgumentError):
+                    Color(rgb)
 
 
 if __name__ == '__main__':

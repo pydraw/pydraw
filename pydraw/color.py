@@ -25,7 +25,7 @@ class Color:
         self._name = None
         self._hex_value = None
 
-        # we should expect three-four arguments for rgb or rgba
+        # we should expect three arguments for RGB
         if len(args) >= 3:
             for arg in args:
                 if type(arg) is not int:
@@ -38,6 +38,11 @@ class Color:
             self._mode = 0
         elif len(args) == 1:
             if type(args[0]) is tuple:
+                if len(args[0]) != 3:
+                    raise InvalidArgumentError(
+                        'Color(): RGB tuples must contain exactly three values (R, G, B).'
+                    )
+
                 for arg in args[0]:
                     if type(arg) is not int:
                         raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.')

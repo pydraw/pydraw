@@ -11,6 +11,7 @@ methods the tkinter bindings call), so no real event loop is needed.
 
 import unittest
 from pydraw import Screen, Location
+from pydraw.events import InputEvent
 
 # Screen.listen() discovers module-level functions by these exact names.
 _events = []
@@ -75,6 +76,18 @@ class InputTest(unittest.TestCase):
         self.assertEqual(_events[-1], ('mousemove', Location(5, 5)))
         # _mousemove also caches the position, exposed via screen.mouse().
         self.assertEqual(self.screen.mouse(), Location(5, 5))
+
+    def test_pointer_events_update_mouse_without_handlers(self):
+        self.screen.registry.clear()
+
+        for kind, button, location in (
+                ('mousedown', 1, Location(10, 20)),
+                ('mouseup', 1, Location(30, 40)),
+                ('mousedrag', 1, Location(50, 60))):
+            self.screen._dispatch_input_event(
+                InputEvent(kind, (location.x(), location.y()), button, None)
+            )
+            self.assertEqual(self.screen.mouse(), location)
 
     def test_tk_events_reach_registered_handlers(self):
         """Exercise the actual widget bindings installed by Screen.listen()."""

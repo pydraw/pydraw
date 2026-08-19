@@ -218,6 +218,15 @@ class LineTest(unittest.TestCase):
         self.assertAlmostEqual(line.pos2().x(), 0)
         self.assertAlmostEqual(line.pos2().y(), 10)
 
+    def test_lookat_point_one_pivots_around_pos2(self):
+        line = Line(self.screen, 0, 0, 10, 0)
+        line.lookat(10, 10, point=1)
+
+        self.assertEqual(line.pos2(), Location(10, 0))
+        self.assertAlmostEqual(line.length(), 10.0)
+        self.assertAlmostEqual(line.pos1().x(), 10)
+        self.assertAlmostEqual(line.pos1().y(), 10)
+
     def test_lookat_rejects_unknown_keywords(self):
         line = Line(self.screen, 0, 0, 10, 0)
         with self.assertRaises(InvalidArgumentError):

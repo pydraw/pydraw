@@ -20,7 +20,7 @@ Indicators: (⭐ = Important, 🚀 = Awesome/Fun Feature, 😻 = Cat)
 - Precise `.overlaps()` and `.contains()` methods for all Renderables!
   - Highly Optimized Algorithms for __0.01 * 10<sup>-16</sup>s__ runtime (avg).
 - Separated Location (Vector2D) and Color classes!
-- Support for Tuples/Locations in most cases (excluding constructors)!
+- Support for tuples and Locations in most cases, including constructors!
 - Designed for LEARNING! 🚀😻
 
 ## Getting Started
@@ -53,7 +53,7 @@ running = True
 while running:
     screen.update()  # We want to update the screen if we make any changes!
     screen.sleep(1 / fps)  # Limit our updates by a certain time delay, in this case 30fps
-                                       # The argument is the delay in milliseconds
+                                       # The argument is the delay in seconds
 
 screen.exit()  # Must be called at the end of a pydraw program
 ```
@@ -154,10 +154,10 @@ box.remove()  # Just get rid of that old box. We can make a better one soon :)
 
 Lastly we can create some other objects and interact with them:
 
-(It's important to note that all the Renderables below can use the methods listed 
-above (including `overlaps()` and `contains()`, which we see in the excerpt below) 
-except the CustomRenderables: CustomPolygon and Image, which are only supported for
-a few.)
+(It's important to note that all the Renderables below can use the methods listed
+above (including `overlaps()` and `contains()`, which we see in the excerpt below).
+CustomPolygon (a CustomRenderable) and Image (a Renderable) have specialized
+constructors and a few specialized operations, but support these common methods.)
 ```python
 # ... code above
 

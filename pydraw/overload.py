@@ -48,6 +48,7 @@ def _toposort(edges):
         L - an ordered list of nodes that satisfy the dependencies of edges
     >>> _toposort({1: (2, 3), 2: (3, )})
     [1, 2, 3]
+
     Closely follows the wikipedia page [2]
     [1] Kahn, Arthur B. (1962), "Topological sorting of large networks",
     Communications of the ACM
@@ -195,12 +196,18 @@ class VariadicSignatureMeta(type):
     """
 
     def __getitem__(self, variadic_type):
-        if not (isinstance(variadic_type, (type, tuple)) or type(variadic_type)):
-            raise ValueError("Variadic types must be type or tuple of types"
-                             " (Variadic[int] or Variadic[(int, float)]")
+        if isinstance(variadic_type, type):
+            variadic_type = (variadic_type,)
+        elif not (
+            isinstance(variadic_type, tuple)
+            and variadic_type
+            and all(isinstance(item, type) for item in variadic_type)
+        ):
+            raise ValueError(
+                "Variadic types must be a type or non-empty tuple of types "
+                "(Variadic[int] or Variadic[(int, float)])."
+            )
 
-        if not isinstance(variadic_type, tuple):
-            variadic_type = variadic_type,
         return VariadicSignatureType(
             'Variadic[%s]' % typename(variadic_type),
             (),
@@ -213,10 +220,10 @@ class Variadic(metaclass=VariadicSignatureMeta):
     representing a specific variadic signature.
     Examples
     --------
-    >>> Variadic[int]  # any number of int arguments
-    <class 'multipledispatch.variadic.Variadic[int]'>
-    >>> Variadic[(int, str)]  # any number of one of int or str arguments
-    <class 'multipledispatch.variadic.Variadic[(int, str)]'>
+    >>> Variadic[int].__name__  # any number of int arguments
+    'Variadic[int]'
+    >>> Variadic[(int, str)].__name__  # any number of one of int or str arguments
+    'Variadic[(int, str)]'
     >>> issubclass(int, Variadic[int])
     True
     >>> issubclass(int, Variadic[(int, str)])
@@ -548,10 +555,11 @@ class Dispatcher(object):
         >>> D.add((float, float), lambda x, y: x + y)
         >>> D(1, 2)
         3
-        >>> D(1, 2.0)
+        >>> D(1, 2.0)  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
         ...
         NotImplementedError: Could not find signature for add: <int, float>
+
         When ``add`` detects a warning it calls the ``on_ambiguity`` callback
         with a dispatcher/itself, and a set of ambiguous type signature pairs
         as inputs.  See ``ambiguity_warn`` for an example.
@@ -670,6 +678,7 @@ class Dispatcher(object):
         4
         >>> print(inc.dispatch(float))
         None
+
         See Also:
           ``multipledispatch.conflict`` - module to determine resolution order
         """
@@ -850,11 +859,13 @@ def overload(*types, **kwargs):
     4
     >>> f(3.0)
     2.0
+
     Specify an isolated namespace with the namespace keyword argument
     >>> my_namespace = dict()
     >>> @overload(int, namespace=my_namespace)
     ... def foo(x):
     ...     return x + 1
+
     Dispatch on instance methods within classes
     >>> class MyClass(object):
     ...     @overload(list)

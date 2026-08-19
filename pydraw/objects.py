@@ -544,10 +544,11 @@ class Object:
 
 class Renderable(Object):
     """
-    Test class for new itemconfigure-based pyDraw objects.
+    Base class for drawable, transformable shapes.
 
-    Update method is now only used for changes in position (and possibly changes that cannot be configured and require
-    the item to be remade)
+    Subclasses provide their own geometry and rendering details. ``update()``
+    synchronizes the rendered object with its current state; subclasses may
+    rebuild geometry when a change cannot be applied in place.
     """
 
     # bounds() cache. Class-level defaults so every subclass inherits them, even
@@ -729,7 +730,11 @@ class Renderable(Object):
 
     def center(self, *args, **kwargs) -> Location:
         """
-        Returns the location of the center
+        Get or set the object's center.
+
+        By default the center is the midpoint of the object's unrotated
+        bounding rectangle. With ``centroid=True``, it is the arithmetic mean
+        of the current vertices (not an area-weighted polygon centroid).
 
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
         :param x: if defined, move the center x-coordinate to the specified value
@@ -1027,7 +1032,11 @@ class Renderable(Object):
 
     def distance(self, obj) -> float:
         """
-        Returns the distance between two objs or locations in pixels (center to center)
+        Return the center-to-center Euclidean distance in pixels.
+
+        A ``Location`` is measured from this object's center; a Renderable is
+        measured from the other object's reported center. This is not an
+        edge-to-edge or collision distance.
 
         :param obj: the Renderable/location to check distance between
         :return: the distance between this obj and the passed Renderable/Location.
@@ -1105,8 +1114,11 @@ class Renderable(Object):
 
     def vertices(self) -> list:
         """
-        Returns the list of vertices for the Renderable.
-        (The vertices will be returned clockwise, starting from the top-leftmost point)
+        Return the shape's vertices as ``Location`` objects.
+
+        Vertex count and ordering are subclass-specific; callers should not
+        assume that every Renderable starts at the top-left corner or uses the
+        same winding order.
 
         :return: a list of Locations representing the vertices
         """
@@ -1567,6 +1579,9 @@ class CustomRenderable(Renderable):
 class RoundedRectangle(CustomRenderable):
     """
     A rectangle with rounded corners.
+
+    The requested radius is retained by :meth:`radius`, while the effective
+    geometry clamps it to half the rectangle's width and height.
     """
 
     if TYPE_CHECKING:
@@ -1607,7 +1622,11 @@ class RoundedRectangle(CustomRenderable):
 
     def radius(self, radius: float = None) -> float:
         """
-        Set the corner radius of the rounded shape in pixels.
+        Get or set the requested corner radius in pixels.
+
+        The rendered radius is clamped to no more than half the current width
+        and height, so a requested value can be larger than the effective
+        corner radius.
 
         :param radius: the radius to set
         :return: the radius
@@ -1918,15 +1937,14 @@ class CustomPolygon(CustomRenderable):
 
             return center
 
-        # We are going to create a centroid, so we can rotate the points around a realistic center
-        # Sorry for those of you that get weird rotations..
+        # Use the arithmetic mean of the vertices so this agrees with the
+        # centroid=True contract on Renderable, rather than an area centroid.
         x_list = []
         y_list = []
         for vertex in self.vertices():
             x_list.append(vertex.x())
             y_list.append(vertex.y())
 
-        # Create a simple centroid (not full centroid)
         centroid_x = sum(x_list) / len(y_list)
         centroid_y = sum(y_list) / len(x_list)
 
@@ -2167,10 +2185,12 @@ class Oval(Renderable):
 
     def slices(self) -> list:
         """
-        Gets the slices of the Oval based on wedges. Note that this generates slices that are not tied to the oval,
-        these are simply slices of the oval based on its wedges. You can use them how you see fit.
+        Return a list of triangular ``CustomPolygon`` slices for the Oval.
 
-        :return: a tuple (immutable list) of CustomPolygons
+        The returned polygons are independent objects generated from the
+        current wedges; they are not kept in sync with the Oval.
+
+        :return: a list of CustomPolygons
         """
 
         return self._generate_slices()
@@ -2414,11 +2434,12 @@ class Polygon(Renderable):
 
 class Image(Renderable):
     """
-    Image class. Supports basic formats: PNG, GIF, JPG, PPM, images.
+    Drawable image supporting the basic PNG, GIF, and PPM formats.
 
-    NOTE: This class supports the basic displaying of images, but also supports much more,
-    such as image modification (width, height, color, etc) if you have PIL (Pillow) installed!
-    You can install PIL/Pillow by running: `pip install pillow` in a terminal!
+    Displaying those formats and reading intrinsic dimensions use the Tk
+    backend directly. Pillow is additionally required for other formats and
+    for bitmap operations such as resizing, tinting, rotating, flipping, and
+    animated-frame control.
     """
 
     # (x, y) INITIALIZERS
@@ -2537,10 +2558,14 @@ class Image(Renderable):
 
     def width(self, width: float = None) -> float:
         """
-        Get or set the width of the image (REQUIRES: PIL or Pillow)
+        Get or set the image width in pixels.
+
+        Reading the current width does not require Pillow. Setting it rebuilds
+        the bitmap and may require Pillow; the Tk backend requires Pillow when
+        the displayed size actually changes.
 
         :param width: the width to set to, if any
-        :return: None
+        :return: the width of the image
         """
 
         if width is not None:
@@ -2687,13 +2712,13 @@ class Image(Renderable):
 
 
     @_overload
-    def center(self, x: float, y: float, *, centroid: bool = ...) -> Location: ...
+    def center(self, x: float, y: float) -> Location: ...
 
     @_overload
-    def center(self, location: Location, *, centroid: bool = ...) -> Location: ...
+    def center(self, location: Location) -> Location: ...
 
     @_overload
-    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ..., centroid: bool = ...) -> Location: ...
+    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ...) -> Location: ...
 
     def center(self, *args, **kwargs) -> Location:
         """
@@ -2786,8 +2811,12 @@ class Image(Renderable):
 
     def vertices(self) -> list:
         """
-        Returns the list of vertices for the Renderable.
-        (The vertices will be returned clockwise, starting from the top-leftmost point)
+        Return the four transformed image corners clockwise.
+
+        At zero rotation the order is top-left, top-right, bottom-right,
+        bottom-left. With rotation, the same corner identities remain in that
+        order; the first point is not necessarily the top-leftmost point on
+        the screen.
 
         :return: a list of Locations representing the vertices
         """
@@ -2868,10 +2897,18 @@ class Image(Renderable):
 
     def next(self) -> None:
         """
-        Changes frame to the next frame (Can only be used with animated GIFs)
+        Advance to the next frame of a successfully loaded animated image.
 
-        :return:
+        Call :meth:`load` first. Raises ``PydrawError`` when no positive frame
+        count has been loaded.
+
+        :return: None
         """
+        if self._frames <= 0:
+            raise PydrawError(
+                'Image#next(): load an animated image before advancing frames.'
+            )
+
         self._frame += 1
 
         if self._frame >= self._frames:
@@ -2895,9 +2932,12 @@ class Image(Renderable):
 
     def frames(self) -> int:
         """
-        Returns how many frames there are, returns -1 if not animated, 0 if corrupted file.
+        Return the loaded frame count.
 
-        :return:
+        Before :meth:`load`, this returns ``-1``. After a successful load it
+        is a positive frame count; errors raised while loading are propagated.
+
+        :return: ``-1`` before loading, otherwise the positive frame count
         """
 
         return self._frames
@@ -3106,7 +3146,10 @@ class Text(CustomRenderable):
     # noinspection PyMethodOverriding
     def width(self) -> float:
         """
-        Get the width of the text (cannot be modified)
+        Return the text width (read-only directly).
+
+        The value is derived from the current text, font, size, and font
+        styles, so it can change when those properties are modified.
 
         :return the width of the text
         """
@@ -3116,7 +3159,10 @@ class Text(CustomRenderable):
     # noinspection PyMethodOverriding
     def height(self) -> float:
         """
-        Get the height of the text, (cannot be modified, although technically the font-size is the text's height)
+        Return the text height (read-only directly).
+
+        The value is derived from the current text, font, size, and font
+        styles, so it can change when those properties are modified.
 
         :return: the height of the text.
         """
@@ -3262,7 +3308,7 @@ class Text(CustomRenderable):
         """
         Get or set the rotation of the text
 
-        :param rotation: the strikethrough to set to, if any
+        :param rotation: the angle to set in degrees, if any
         :return: the rotation of the text
         """
 
@@ -3300,13 +3346,13 @@ class Text(CustomRenderable):
         self.rotate(theta)
 
     @_overload
-    def center(self, x: float, y: float, *, centroid: bool = ...) -> Location: ...
+    def center(self, x: float, y: float) -> Location: ...
 
     @_overload
-    def center(self, location: Location, *, centroid: bool = ...) -> Location: ...
+    def center(self, location: Location) -> Location: ...
 
     @_overload
-    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ..., centroid: bool = ...) -> Location: ...
+    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ...) -> Location: ...
 
     def center(self, *args, **kwargs) -> Location:
         """
@@ -3376,7 +3422,12 @@ class Text(CustomRenderable):
 
     def vertices(self) -> list:
         """
-        Get the vertices of a Rectangle superposed in the same transform of the Text
+        Return the four transformed corners of the Text's bounding rectangle.
+
+        At zero rotation the order is top-left, top-right, bottom-right,
+        bottom-left. Rotation preserves those corner identities and their
+        clockwise order; the first point is not necessarily top-leftmost on
+        the screen.
 
         :return: a list of Locations
         """
@@ -3623,13 +3674,14 @@ class Line(Object):
 
     def move(self, *args, **kwargs) -> None:
         """
-        Move both endpoints by the same dx and dy
+        Move one or both endpoints by a delta.
 
         Can take either a tuple, Location, or two numbers (dx, dy)
 
         :param dx: the distance x to move
         :param dy: the distance y to move
-        :param point: affect only one of the endpoints options: (1, 2), default=0 (Must be 1 or 2)
+        :param point: endpoint to affect: ``1`` moves ``pos1``, ``2`` moves
+            ``pos2``, and ``0`` (the default) moves both endpoints.
         :return: None
         """
 
@@ -3763,7 +3815,11 @@ class Line(Object):
 
     def lookat(self, *args, **kwargs) -> None:
         """
-        Make the line look at the given point by moving the second point.
+        Rotate the line toward a target while preserving its length.
+
+        ``point=2`` (the default) keeps ``pos1`` as the pivot and aims
+        ``pos2`` at the target. ``point=1`` keeps ``pos2`` as the pivot and
+        aims ``pos1`` at the target.
 
         :return: None
         """
@@ -3814,7 +3870,8 @@ class Line(Object):
         else:
             raise InvalidArgumentError('Line#lookat(): point must be 1 or 2.')
 
-        self.rotate(math.degrees(theta))
+        pivot = 1 if point == 2 else 2
+        self.rotate(math.degrees(theta), point=pivot)
 
     def rotation(self, angle: float = None):
         """
@@ -3929,14 +3986,19 @@ class Line(Object):
 
     def dashes(self, dashes: Union[int, tuple] = None) -> Union[int, tuple]:
         """
-        Retrieve or enable/disable the dashes for the line
+        Get or set the line's dash pattern.
+
+        An integer is a symmetric dash-and-gap length; an ``(on, off)`` tuple
+        supplies the dash and gap lengths in pixels. When no pattern has been configured, the
+        getter returns ``None`` and the line is solid. The backend may choose
+        the closest supported pattern.
 
         On systems which support only a limited set of dash patterns, the dash pattern will be displayed as the closest
         dash pattern that is available. For example, on Windows only a few dash patterns are available, most of which
         do not allow for special dash-spacing (if passing in a tuple).
 
-        :param dashes: the visibility to set to, if any
-        :return: the toggle-state of dashes
+        :param dashes: an integer or dash/gap tuple to set, if any
+        :return: the configured pattern, or ``None``
         """
 
         if dashes is not None:
@@ -3991,9 +4053,10 @@ class Line(Object):
 
     def intersects(self, obj) -> bool:
         """
-        Check if a line intersects with another line or Renderable
+        Check if a line intersects with another line, Renderable, or sequence
+        of ``Location`` vertices.
 
-        :param obj: Line, Renderable, or List/Tuple
+        :param obj: Line, Renderable, or list/tuple containing Locations
         :return: Whether the line intersects with the object
         """
 

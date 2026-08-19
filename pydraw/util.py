@@ -23,10 +23,12 @@ def verify_type(obj, required_type):
 
 def verify(*args):
     """
-    Takes a list of values and expected types and returns if all objects meet their expected types.
+    Validate a list of values against expected types.
 
     :param args: a list of objects and types, ex: (some_number, float, some_location, Location)
-    :return: True if all args meet their expected types, throws an error if not.
+    :return: None when every object meets its expected type.
+    :raises InvalidArgumentError: if the arguments are not object/type pairs or
+        an object does not meet its expected type.
     """
     if len(args) % 2 != 0:
         raise InvalidArgumentError(

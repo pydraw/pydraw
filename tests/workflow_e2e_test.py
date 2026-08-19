@@ -80,7 +80,7 @@ class WorkflowEndToEndTest(unittest.TestCase):
         self.assertEqual(self.workflow.status.text(), 'hit')
         self.assertEqual(
             self.workflow.pen.coordinates(),
-            [Location(10, 10), Location(100, 10)]
+            [Location(25, 25), Location(115, 25)]
         )
 
         self.assertEqual(

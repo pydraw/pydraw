@@ -231,13 +231,13 @@ class Screen:
         verify(text, str, title, str, accept_text, str, cancel_text, str)
         return self._backend.alert(text, title, accept_text, cancel_text)
 
-    def prompt(self, text: str, title: str = 'Prompt') -> str:
+    def prompt(self, text: str, title: str = 'Prompt') -> Optional[str]:
         """
         Prompts the user for keyboard input
 
         :param: text the text to prompt the user with
         :param: title the title of the dialog box
-        :return: None
+        :return: the entered text, or None if the prompt was cancelled
         """
 
         verify(text, str, title, str)
@@ -663,11 +663,15 @@ class Screen:
 
     def update(self) -> None:
         """
-        Process queued input, advance the active Scene, and present one frame.
+        Process and present one complete frame.
 
-        Input callbacks run before the Scene update. Scene transitions
-        requested by either stage are applied at a safe frame boundary before
-        the frame is presented. This method is not reentrant.
+        The frame order is: poll pending input, run each input callback
+        synchronously, advance the active Scene once, and present the render
+        batch produced by that work. Input callbacks and the Scene step are
+        therefore visible in the same frame. Scene transitions requested by
+        either stage are applied at a safe frame boundary before presentation.
+        This method is not reentrant; calling ``update()`` from a callback (or
+        another update) raises ``PydrawError``.
 
         :return: None
         """
@@ -699,8 +703,12 @@ class Screen:
 
     def loop(self) -> None:
         """
-        Holds the program open and calls screen.update() for you. Must be used at the end of any pyDraw program
-        unless there is a while loop with screen.update() in it instead.
+        Hold the program open while the backend calls ``update()`` per frame.
+
+        The backend owns the platform loop, but each frame follows the same
+        poll, synchronous callback, Scene-step, and present order as an
+        explicit ``update()`` call. ``loop()`` is not reentrant and cannot be
+        called while another loop is running.
 
         :returns: None
         """
@@ -734,16 +742,17 @@ class Screen:
 
     def listen(self) -> None:
         """
-        Reads the file for input functions and registers them as callbacks!
-        The input-type is determined by the name of the function.
+        Inspect the caller's module for input functions and register them as
+        callbacks. The input type is determined by each function's name.
 
         Allowed Names:
           - mousedown
           - mouseup
           - mousedrag
+          - mousemove
           - keydown
           - keyup
-          - keypress (deprecated)
+          - keypress (deprecated legacy/custom-backend event; Tk does not emit it)
 
         :return: None
         """
@@ -841,6 +850,8 @@ class Screen:
         self.registry['keypress'](self.Key(key.lower()))
 
     def _mousedown(self, button, location) -> None:
+        self._mouse = location
+
         if 'mousedown' not in self.registry:
             return
 
@@ -859,6 +870,8 @@ class Screen:
         self.registry['mousedown'](location, button)
 
     def _mouseup(self, button, location) -> None:
+        self._mouse = location
+
         if 'mouseup' not in self.registry:
             return
 
@@ -883,6 +896,8 @@ class Screen:
         self.registry['mouseclick'](button, location)
 
     def _mousedrag(self, button, location) -> None:
+        self._mouse = location
+
         if 'mousedrag' not in self.registry:
             return
 

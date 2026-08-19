@@ -139,9 +139,11 @@ class CompoundObject(Object):
 
     def width(self, width: float = None) -> float:
         """
-        Get the width of the compound object
+        Return the compound object's bounding width.
 
-        :param width: a new width, if provided
+        This is a getter only; setting the width is unsupported.
+
+        :param width: unsupported legacy argument; omit it when reading width
         :return: a float
         """
 
@@ -152,9 +154,11 @@ class CompoundObject(Object):
 
     def height(self, height: float = None) -> float:
         """
-        Get the height of the compound object
+        Return the compound object's bounding height.
 
-        :param height: a new height, if provided
+        This is a getter only; setting the height is unsupported.
+
+        :param height: unsupported legacy argument; omit it when reading height
         :return: a float
         """
 
@@ -225,9 +229,13 @@ class CompoundObject(Object):
 
     def center(self, centroid: bool = True) -> Location:
         """
-        Calculate the center point of the CompoundObject
+        Calculate the center point of the CompoundObject.
 
-        :centroid: whether to use the centroid or the center of the bounding box
+        With the default ``centroid=True``, this is the arithmetic mean of the
+        child centers. With ``centroid=False``, it is the midpoint of the
+        compound's axis-aligned bounding box.
+        :param centroid: whether to average child centers instead of using the
+            bounding-box midpoint
         :return: Location of the center
         """
 
@@ -337,6 +345,7 @@ class CompoundObject(Object):
         Add another Object to the CompoundObject
 
         :param obj: the Object to add
+        :param name: optional registry key; when omitted, ``str(obj)`` is used
         :return: None
         """
 
@@ -385,8 +394,10 @@ class CompoundObject(Object):
         """
         Retrieve a specific object
 
-        :param name: the name of the object (can be a str, or another type of object)
-        :return: Object
+        :param name: the registry key. Positional constructor objects and
+            unnamed additions are keyed by ``str(obj)``; keyword constructor
+            arguments and named additions use the supplied name.
+        :return: the registered Object, or ``None`` when the key is absent
         """
 
         return self._objects.get(name)
@@ -438,5 +449,3 @@ class CompoundObject(Object):
             Location(min(bound[0] for bound in bounds), min(bound[1] for bound in bounds)),
             Location(max(bound[2] for bound in bounds), max(bound[3] for bound in bounds)),
         )
-
-

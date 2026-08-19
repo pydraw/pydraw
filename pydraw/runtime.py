@@ -7,7 +7,7 @@ lazy factory when it requests its backend.
 """
 
 from abc import ABCMeta, abstractmethod
-from typing import Callable, Iterable, NamedTuple
+from typing import Callable, Iterable, NamedTuple, Optional
 
 
 class ScreenConfig(NamedTuple):
@@ -21,14 +21,14 @@ class ScreenConfig(NamedTuple):
 class ScreenBackend(metaclass=ABCMeta):
     """Platform operations owned by one Screen.
 
-    Event and render payloads remain intentionally unspecified until their
-    platform-neutral data models are introduced by the corresponding migration
-    slices.  The lifecycle boundary itself is stable.
+    Backends translate platform input into :class:`pydraw.events.InputEvent`
+    values and consume :class:`pydraw.render.RenderBatch` frames. The
+    lifecycle boundary is intentionally independent of any one platform.
     """
 
     @abstractmethod
     def poll_events(self) -> Iterable:
-        """Return pending normalized input events without blocking."""
+        """Return pending normalized ``InputEvent`` values without blocking."""
         raise NotImplementedError
 
     @abstractmethod
@@ -42,7 +42,7 @@ class ScreenBackend(metaclass=ABCMeta):
 
     @abstractmethod
     def present(self, frame) -> None:
-        """Synchronously present or acknowledge one platform-neutral frame."""
+        """Synchronously present or acknowledge one ``RenderBatch`` frame."""
         raise NotImplementedError
 
     @abstractmethod
@@ -86,8 +86,8 @@ class ScreenBackend(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def prompt(self, text, title):
-        """Show a host text prompt and return its result."""
+    def prompt(self, text, title) -> Optional[str]:
+        """Show a host text prompt and return its text, or ``None``."""
         raise NotImplementedError
 
     @abstractmethod
@@ -112,7 +112,11 @@ class ScreenBackend(metaclass=ABCMeta):
 
     @abstractmethod
     def run(self, step: Callable[[], None]) -> None:
-        """Run ``step`` until the screen closes."""
+        """Run ``step`` repeatedly until the screen closes.
+
+        ``step`` is the owning Screen's frame update. The Screen enforces that
+        both ``update()`` and ``loop()`` are non-reentrant.
+        """
         raise NotImplementedError
 
     @abstractmethod

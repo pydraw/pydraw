@@ -5,6 +5,13 @@ import math
 
 
 class Location:
+    """A two-dimensional coordinate.
+
+    Locations can be constructed from two numbers, a ``Location``, a two-value
+    tuple, or partial coordinate keywords such as ``Location(x=10)`` and
+    ``Location(y=20)``. An omitted keyword coordinate defaults to zero.
+    """
+
     __slots__ = ('_x', '_y')
 
     @classmethod
@@ -29,6 +36,15 @@ class Location:
     @_overload
     def __init__(self, xy: Tuple[float, float]) -> None: ...
 
+    @_overload
+    def __init__(self, *, x: float) -> None: ...
+
+    @_overload
+    def __init__(self, *, y: float) -> None: ...
+
+    @_overload
+    def __init__(self, *, x: float, y: float) -> None: ...
+
     def __init__(self, *args, **kwargs):
         # Fast path: Location(x, y) with two numbers is by far the most common
         # (and hottest) construction, so handle it before the general parsing.
@@ -45,7 +61,13 @@ class Location:
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and (type(args[0]) is tuple or type(args[0]) is Location):
+            if len(args) == 1 and type(args[0]) is tuple:
+                if len(args[0]) != 2 or not all(type(value) in (int, float) for value in args[0]):
+                    raise InvalidArgumentError(
+                        'Location(): expected a tuple/Location or two numbers (x, y).'
+                    )
+                location = (args[0][0], args[0][1])
+            elif len(args) == 1 and type(args[0]) is Location:
                 location = (args[0][0], args[0][1])
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 location = (args[0], args[1])
@@ -84,13 +106,20 @@ class Location:
     def move(self, dxy: Tuple[float, float]) -> 'Location': ...
 
     @_overload
-    def move(self, *, dx: float = ..., dy: float = ...) -> 'Location': ...
+    def move(self, *, dx: float) -> 'Location': ...
+
+    @_overload
+    def move(self, *, dy: float) -> 'Location': ...
+
+    @_overload
+    def move(self, *, dx: float, dy: float) -> 'Location': ...
 
     def move(self, *args, **kwargs) -> 'Location':
         """
         Moves the location by a specified difference.
 
-        Can take two numbers (dx, dy), a tuple, or a Location
+        Can take two numbers (dx, dy), a tuple, a Location, or at least one
+        coordinate keyword (dx and/or dy).
 
         :param dx: the dx to move by
         :param dy: the dy to move by
@@ -167,13 +196,20 @@ class Location:
     def moveto(self, xy: Tuple[float, float]) -> 'Location': ...
 
     @_overload
-    def moveto(self, *, x: float = ..., y: float = ...) -> 'Location': ...
+    def moveto(self, *, x: float) -> 'Location': ...
+
+    @_overload
+    def moveto(self, *, y: float) -> 'Location': ...
+
+    @_overload
+    def moveto(self, *, x: float, y: float) -> 'Location': ...
 
     def moveto(self, *args, **kwargs) -> 'Location':
         """
         Moves the location to a new location!
 
-        Can take two coordinates (x, y), a tuple, or a Location
+        Can take two coordinates (x, y), a tuple, a Location, or at least one
+        coordinate keyword (x and/or y).
 
         :param x: the x to move to
         :param y: the y to move to
