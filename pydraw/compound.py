@@ -1,4 +1,4 @@
-from typing import Union, Tuple, overload as _overload
+from typing import Optional, Union, Tuple, overload as _overload
 
 from pydraw import Object, Renderable, verify
 from pydraw import Location, Color
@@ -372,7 +372,7 @@ class CompoundObject(Object):
         if obj.y() + obj.height() > self._end.y():
             self._end.y(obj.y() + obj.height())
 
-    def remove(self, obj: Object = None, name=None) -> Object:
+    def remove(self, obj: Object = None, name=None) -> Optional[Object]:
         """
         Remove an object from the Compound Object
 
@@ -381,14 +381,12 @@ class CompoundObject(Object):
         :return: the Object that got removed (or None)
         """
 
-        removed_obj = None
-
         if obj is not None and name is None:
-            removed_obj = self._objects.pop(str(obj))
-        elif name is not None:
-            removed_obj = self._objects.pop(name)
+            return self._objects.pop(str(obj), None)
+        if name is not None:
+            return self._objects.pop(name, None)
 
-        return removed_obj
+        return None
 
     def object(self, name) -> Object:
         """

@@ -134,6 +134,21 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(self.screen.gridlines(), ())
         self.assertEqual(self.screen.objects(), ())
 
+    def test_clear_removes_only_registered_user_objects(self):
+        Rectangle(self.screen, 10, 10, 20, 20)
+        self.screen.grid(rows=2, cols=2, helpers=True)
+        gridlines = self.screen.gridlines()
+        helpers = tuple(self.screen._helpers)
+        handler = lambda key: None
+        self.screen.registry['keydown'] = handler
+
+        self.screen.clear()
+
+        self.assertEqual(self.screen.objects(), ())
+        self.assertEqual(self.screen.gridlines(), gridlines)
+        self.assertEqual(tuple(self.screen._helpers), helpers)
+        self.assertIs(self.screen.registry['keydown'], handler)
+
     def test_object_lifecycle_updates_registry_and_canvas(self):
         rect = Rectangle(self.screen, self.screen.width() / 2 - 25, self.screen.height() / 2 - 25, 50, 50)
 

@@ -92,6 +92,14 @@ class CompoundObjectTest(unittest.TestCase):
         self.assertIs(removed, a)
         self.assertEqual(len(comp.objects()), 1)
 
+    def test_remove_unknown_entry_returns_none(self):
+        a, b, comp = self._pair()
+
+        self.assertIs(comp.remove(a), a)
+        self.assertIsNone(comp.remove(a))
+        self.assertIsNone(comp.remove(name='missing'))
+        self.assertEqual(comp.objects(), (b,))
+
     def test_front_and_back_do_not_crash(self):
         # Regression: front()/back() used to iterate the dict's keys (strings)
         # and call .front() on a str.

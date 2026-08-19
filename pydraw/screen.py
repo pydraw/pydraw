@@ -470,7 +470,12 @@ class Screen:
 
     def clear(self) -> None:
         """
-        Clears the screen.
+        Remove all registered user objects from the Screen.
+
+        Screen decorations such as grid lines and coordinate helpers are
+        preserved, as are the background color or image, input handlers, and
+        the active Scene. Use :meth:`reset` to also clear lifecycle, handler,
+        and decoration state.
 
         :return: None
         """
@@ -483,9 +488,11 @@ class Screen:
         """
         Get or apply a Scene.
 
-        Applying a Scene stops the current Scene, clears its Screen objects and
-        input handlers, and starts the replacement. A transition requested from
-        an input handler or Scene update is deferred until the frame boundary.
+        Applying a Scene stops the current Scene, removes its registered user
+        objects, grid/helper decorations, and input handlers, then starts the
+        replacement. Screen background configuration is preserved. A
+        transition requested from an input handler or Scene update is deferred
+        until the frame boundary.
 
         :param scene: the Scene to apply, if any
         :return: the requested Scene, or the active Scene when called without one
@@ -559,8 +566,9 @@ class Screen:
 
     def reset(self) -> None:
         """
-        Reset the Screen, deactivating its Scene and removing all objects and
-        input handlers.
+        Reset lifecycle state, deactivating the Scene and removing registered
+        user objects, grid/helper decorations, and input handlers. Screen
+        background configuration is preserved.
 
         :return: None
         """
