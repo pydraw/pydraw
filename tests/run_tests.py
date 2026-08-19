@@ -30,6 +30,7 @@ SUITES = {
         'color_test',
         'location_test',
         'overload_test',
+        'public_api_test',
         'render_test',
         'runtime_test',
         'sleep_test',

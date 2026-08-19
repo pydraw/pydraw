@@ -15,3 +15,35 @@ from pydraw.scene import Scene
 from pydraw.objects import *
 from pydraw.compound import CompoundObject
 # from pydraw.sound import Sound
+
+
+# The package root is the convenient drawing API. Backend authors can import
+# the lower-level extension contracts from pydraw.render and pydraw.runtime.
+__all__ = [
+    '__version__',
+    'Color',
+    'CompoundObject',
+    'CustomPolygon',
+    'CustomRenderable',
+    'Image',
+    'InvalidArgumentError',
+    'Line',
+    'Location',
+    'Object',
+    'Oval',
+    'Pen',
+    'Polygon',
+    'PydrawError',
+    'Rectangle',
+    'Renderable',
+    'RoundedRectangle',
+    'Scene',
+    'Screen',
+    'Text',
+    'Triangle',
+    'UnsupportedError',
+    'overload',
+    'verify',
+    'verify_keywords',
+    'verify_type',
+]

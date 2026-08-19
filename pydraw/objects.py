@@ -18,7 +18,7 @@ from pydraw.render import EllipseNode, ImageNode, PolygonNode, PolylineNode, Tex
 
 from pydraw.overload import overload
 
-PIXEL_RATIO = 20
+_NORMALIZED_SHAPE_SIZE = 20
 NoneType = type(None)
 
 
@@ -1498,7 +1498,10 @@ class Renderable(Object):
         width = self._width
         height = self._height
 
-        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO)
+        scale_factor = (
+            width / _NORMALIZED_SHAPE_SIZE,
+            height / _NORMALIZED_SHAPE_SIZE,
+        )
 
         cx = 0
         cy = 0
@@ -1548,8 +1551,8 @@ class Renderable(Object):
 
         # Hoist per-object constants out of the vertex loops. (cx/cy were always
         # 0, so the old `(v - c) + c` was a no-op.)
-        scale_x = self._width / PIXEL_RATIO
-        scale_y = self._height / PIXEL_RATIO
+        scale_x = self._width / _NORMALIZED_SHAPE_SIZE
+        scale_y = self._height / _NORMALIZED_SHAPE_SIZE
         offset_x = self.x() + self._width / 2
         offset_y = self.y() + self._height / 2
 
@@ -2176,7 +2179,7 @@ class Oval(Renderable):
             verify(wedges, int)
             if wedges < 20:
                 raise InvalidArgumentError('Oval(): wedges must be at least 20.')
-            self._shape = self._generate_vertices(PIXEL_RATIO / 2, wedges=wedges)
+            self._shape = self._generate_vertices(_NORMALIZED_SHAPE_SIZE / 2, wedges=wedges)
             self._wedges = wedges
             self._custom_wedges = True
             self._update_coords()
@@ -2212,7 +2215,7 @@ class Oval(Renderable):
     def _convert_vertices(self):
         radius = ((self._width + self._height) / 2) / 2
         angle = 18 if radius <= 150 else (radius * 9) / 300
-        shape_vertices = self._generate_vertices(PIXEL_RATIO / 2, angle)
+        shape_vertices = self._generate_vertices(_NORMALIZED_SHAPE_SIZE / 2, angle)
 
         # Report the wedge count actually generated (size-dependent), not a fixed default.
         self._wedges = len(shape_vertices)
@@ -2317,7 +2320,7 @@ class Polygon(Renderable):
                 raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
 
             self._num_sides = num_sides
-            radius = PIXEL_RATIO / 2
+            radius = _NORMALIZED_SHAPE_SIZE / 2
             shape_points = []
             for i in range(num_sides):
                 shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
@@ -2340,7 +2343,7 @@ class Polygon(Renderable):
             y = location.y()
 
             self._num_sides = num_sides
-            radius = PIXEL_RATIO / 2
+            radius = _NORMALIZED_SHAPE_SIZE / 2
             shape_points = []
             for i in range(num_sides):
                 shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
@@ -2356,14 +2359,14 @@ class Polygon(Renderable):
 
         shape = self._shape  # List of normal vertices.
 
-        a = math.pi * 2 / self._num_sides * (PIXEL_RATIO / 2)
+        a = math.pi * 2 / self._num_sides * (_NORMALIZED_SHAPE_SIZE / 2)
         n = self._num_sides
 
         # Degree converted to radians
         apothem = a / (2 * math.tan((180 / n) *
                                     math.pi / 180))
 
-        true_width = PIXEL_RATIO
+        true_width = _NORMALIZED_SHAPE_SIZE
         true_height = apothem * 2
 
         width = self._width
@@ -2380,7 +2383,7 @@ class Polygon(Renderable):
             vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy)
 
             vertex.move(self.x() + width / 2, self.y() + height / 2)
-            vertex.move(dy=PIXEL_RATIO - true_height)
+            vertex.move(dy=_NORMALIZED_SHAPE_SIZE - true_height)
 
         self._vertices = vertices
 
@@ -2400,14 +2403,14 @@ class Polygon(Renderable):
         self._check()
         shape = self._shape  # List of normal vertices.
 
-        a = math.pi * 2 / self._num_sides * (PIXEL_RATIO / 2)
+        a = math.pi * 2 / self._num_sides * (_NORMALIZED_SHAPE_SIZE / 2)
         n = self._num_sides
 
         # Degree converted to radians
         apothem = a / (2 * math.tan((180 / n) *
                                     math.pi / 180))
 
-        true_width = PIXEL_RATIO
+        true_width = _NORMALIZED_SHAPE_SIZE
         true_height = apothem * 2
 
         width = self._width
@@ -2424,7 +2427,7 @@ class Polygon(Renderable):
             vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy)
 
             vertex.move(self.x() + width / 2, self.y() + height / 2)
-            vertex.move(dy=PIXEL_RATIO - true_height)
+            vertex.move(dy=_NORMALIZED_SHAPE_SIZE - true_height)
 
         self._vertices = vertices
 
