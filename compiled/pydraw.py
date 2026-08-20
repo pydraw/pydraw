@@ -2566,8 +2566,8 @@ class ScreenBackend(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def run(self, step: Callable[[], None]) -> None:
-        """Run ``step`` until the screen closes."""
+    def run(self, step: Callable[[], None], frame_duration: float) -> None:
+        """Run ``step`` repeatedly at the target frame duration."""
         raise NotImplementedError
 
     @abstractmethod
@@ -2666,6 +2666,9 @@ __all__ = [
 ]
 
 """Built-in Tk backend."""
+
+import math
+import time
 
 # from pydraw.runtime import BackendTerminated, Runtime, ScreenBackend
 # from pydraw.events import InputEvent
@@ -3169,12 +3172,13 @@ class TkBackend(ScreenBackend):
     def item_for(self, render_id):
         return self.items.get(render_id)
 
-    def run(self, step):
+    def run(self, step, frame_duration):
         if self.closed:
             raise BackendTerminated()
         active = [True]
         scheduled = [None]
         failure = [None]
+        next_frame_time = [time.perf_counter()]
 
         def tick():
             if not active[0]:
@@ -3187,7 +3191,13 @@ class TkBackend(ScreenBackend):
                 self.root.quit()
                 return
             if active[0]:
-                scheduled[0] = self.root.after(1, tick)
+                now = time.perf_counter()
+                next_frame_time[0] += frame_duration
+                if now - next_frame_time[0] > frame_duration:
+                    next_frame_time[0] = now
+                remaining = max(0.0, next_frame_time[0] - now)
+                delay_ms = max(1, math.ceil(remaining * 1000))
+                scheduled[0] = self.root.after(delay_ms, tick)
 
         scheduled[0] = self.root.after(1, tick)
         self.running = True
@@ -3863,20 +3873,41 @@ class Screen:
 
         self.loop()
 
-    def loop(self) -> None:
+    def loop(self, fps: float = 60) -> None:
         """
-        Holds the program open and calls screen.update() for you. Must be used at the end of any pyDraw program
-        unless there is a while loop with screen.update() in it instead.
+        Hold the program open while targeting the requested frames per second.
 
+        :param fps: positive, finite target frames per second; defaults to 60
         :returns: None
         """
+
+        original_fps = fps
+        if type(fps) is not int and type(fps) is not float:
+            raise InvalidArgumentError(
+                f'Screen#loop(): fps must be a finite, positive number; received {type(fps)} ({fps!r}).'
+            )
+        try:
+            fps = float(fps)
+        except OverflowError:
+            raise InvalidArgumentError(
+                f'Screen#loop(): fps must be a finite, positive number; received {original_fps!r}.'
+            )
+        if fps <= 0 or not math.isfinite(fps):
+            raise InvalidArgumentError(
+                f'Screen#loop(): fps must be a finite, positive number; received {original_fps!r}.'
+            )
+        frame_duration = 1 / fps
+        if not math.isfinite(frame_duration):
+            raise InvalidArgumentError(
+                f'Screen#loop(): fps must be a finite, positive number; received {original_fps!r}.'
+            )
 
         if self._looping:
             raise PydrawError('Screen#loop(): loop is not reentrant.')
 
         self._looping = True
         try:
-            self._backend.run(self.update)
+            self._backend.run(self.update, frame_duration)
         finally:
             self._looping = False
 

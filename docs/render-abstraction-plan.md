@@ -193,25 +193,28 @@ class ScreenBackend(Protocol):
     def listen(self): ...
     def poll_events(self) -> tuple[InputEvent, ...]: ...
     def present(self, batch: RenderBatch): ...
-    def run(self, step): ...
+    def run(self, step, frame_duration): ...
     def close(self): ...
 ```
 
 A runtime creates the backend with a `ScreenConfig`, so mounting and initial
-size configuration do not require a second public lifecycle API. `run(step)`
-implements `Screen.loop()` by invoking the supplied core step until the screen
-closes. Core retains render sources by stable ID and coalesces repeated
-mutations. Each update contains only created, changed, removed, or reordered
-nodes. Each backend may choose its own retained implementation strategy:
+size configuration do not require a second public lifecycle API.
+`run(step, frame_duration)` implements `Screen.loop(fps=...)` by invoking the
+supplied core step until the screen closes and scheduling each frame against
+the supplied target duration. Core retains render sources by stable ID and
+coalesces repeated mutations. Each update contains only created, changed,
+removed, or reordered nodes. Each backend may choose its own retained
+implementation strategy:
 
 - Tk can retain Canvas items and diff frames by stable node ID.
 - HTML Canvas can retain the neutral scene and redraw when a batch arrives.
 - A test, SVG, or other future renderer can consume the same batches.
 
-Tk schedules the global core step from inside `mainloop()` on a 1 ms timer. It
-does not present a frame before entering the loop or recursively poll Tk while
-the loop is active. A continuously rescheduled idle callback is not used
-because it can starve Tk input and timers. Scheduled callbacks can mutate
+Tk schedules the global core step from inside `mainloop()` and subtracts the
+time spent in that step from the requested frame duration. It does not present
+a frame before entering the loop, block inside a callback, or recursively poll
+Tk while the loop is active. A continuously rescheduled idle callback is not
+used because it can starve Tk input and timers. Scheduled callbacks can mutate
 retained objects and the following step presents those mutations before the
 next callback cycle.
 

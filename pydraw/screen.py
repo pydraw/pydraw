@@ -709,24 +709,49 @@ class Screen:
 
         self.loop()
 
-    def loop(self) -> None:
+    def loop(self, fps: float = 60) -> None:
         """
         Hold the program open while the backend calls ``update()`` per frame.
 
         The backend owns the platform loop, but each frame follows the same
         poll, synchronous callback, Scene-step, and present order as an
         explicit ``update()`` call. ``loop()`` is not reentrant and cannot be
-        called while another loop is running.
+        called while another loop is running. The backend targets ``fps`` by
+        waiting only for the portion of the frame budget left after
+        ``update()`` finishes. The actual frame rate may be lower when a frame
+        takes longer than that budget.
 
+        :param fps: positive, finite target frames per second; defaults to 60
         :returns: None
         """
+
+        original_fps = fps
+        if type(fps) is not int and type(fps) is not float:
+            raise InvalidArgumentError(
+                f'Screen#loop(): fps must be a finite, positive number; received {type(fps)} ({fps!r}).'
+            )
+        try:
+            fps = float(fps)
+        except OverflowError:
+            raise InvalidArgumentError(
+                f'Screen#loop(): fps must be a finite, positive number; received {original_fps!r}.'
+            )
+        if fps <= 0 or not math.isfinite(fps):
+            raise InvalidArgumentError(
+                f'Screen#loop(): fps must be a finite, positive number; received {original_fps!r}.'
+            )
+        frame_duration = 1 / fps
+        if not math.isfinite(frame_duration):
+            raise InvalidArgumentError(
+                f'Screen#loop(): fps must be a finite, positive number; received {original_fps!r}.'
+            )
 
         if self._looping:
             raise PydrawError('Screen#loop(): loop is not reentrant.')
 
         self._looping = True
         try:
-            self._backend.run(self.update)
+            self._backend.run(self.update, frame_duration)
         finally:
             self._looping = False
             self._pending_scene = None

@@ -1,5 +1,8 @@
 """Built-in Tk backend."""
 
+import math
+import time
+
 from pydraw.runtime import BackendTerminated, Runtime, ScreenBackend
 from pydraw.events import InputEvent
 from pydraw.render import EllipseNode, ImageNode, PolygonNode, PolylineNode, TextNode
@@ -510,12 +513,13 @@ class TkBackend(ScreenBackend):
     def item_for(self, render_id):
         return self.items.get(render_id)
 
-    def run(self, step):
+    def run(self, step, frame_duration):
         if self.closed:
             raise BackendTerminated()
         active = [True]
         scheduled = [None]
         failure = [None]
+        next_frame_time = [time.perf_counter()]
 
         def tick():
             if not active[0]:
@@ -528,7 +532,13 @@ class TkBackend(ScreenBackend):
                 self.root.quit()
                 return
             if active[0]:
-                scheduled[0] = self.root.after(1, tick)
+                now = time.perf_counter()
+                next_frame_time[0] += frame_duration
+                if now - next_frame_time[0] > frame_duration:
+                    next_frame_time[0] = now
+                remaining = max(0.0, next_frame_time[0] - now)
+                delay_ms = max(1, math.ceil(remaining * 1000))
+                scheduled[0] = self.root.after(delay_ms, tick)
 
         scheduled[0] = self.root.after(1, tick)
         self.running = True

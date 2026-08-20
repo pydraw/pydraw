@@ -1,9 +1,12 @@
+import math
 import unittest
 from unittest import mock
 
 import pydraw.runtime as runtime_module
 from pydraw import Image, Screen
 from pydraw.backends.recording import RecordingRuntime
+from pydraw.backends.tk import TkBackend
+from pydraw.errors import InvalidArgumentError
 from pydraw.runtime import (
     Runtime,
     RuntimeAlreadyConfiguredError,
@@ -20,6 +23,7 @@ class FakeBackend(ScreenBackend):
         self.presented = []
         self.closed = False
         self.handlers = ()
+        self.frame_durations = []
 
     def poll_events(self):
         return ()
@@ -72,7 +76,8 @@ class FakeBackend(ScreenBackend):
     def image_frames(self, source):
         return 1
 
-    def run(self, step):
+    def run(self, step, frame_duration):
+        self.frame_durations.append(frame_duration)
         step()
 
     def close(self):
@@ -90,6 +95,37 @@ class FakeRuntime(Runtime):
         self.configs.append(config)
         self.backends.append(backend)
         return backend
+
+
+class ScheduledRoot:
+    """Small foreground scheduler used to exercise Tk pacing without Tk."""
+
+    def __init__(self):
+        self.delays = []
+        self.callbacks = []
+        self.quitting = False
+
+    def after(self, delay, callback):
+        handle = len(self.delays) + 1
+        self.delays.append(delay)
+        self.callbacks.append((handle, callback))
+        return handle
+
+    def after_cancel(self, handle):
+        pass
+
+    def mainloop(self):
+        while self.callbacks and not self.quitting:
+            _, callback = self.callbacks.pop(0)
+            callback()
+
+    def quit(self):
+        self.quitting = True
+
+
+class FakeTk:
+    class TclError(Exception):
+        pass
 
 
 class RuntimeRegistryTest(unittest.TestCase):
@@ -207,6 +243,69 @@ class RuntimeRegistryTest(unittest.TestCase):
             installed.backends[0].nodes[image._render_id].source,
             'asset://sprite',
         )
+
+    def test_screen_loop_passes_default_and_explicit_frame_durations(self):
+        installed = FakeRuntime()
+        install_runtime(installed)
+        screen = Screen(320, 200, 'paced')
+
+        screen.loop()
+        screen.loop(fps=120)
+
+        self.assertEqual(len(installed.backends[0].frame_durations), 2)
+        self.assertAlmostEqual(
+            installed.backends[0].frame_durations[0], 1 / 60,
+        )
+        self.assertAlmostEqual(
+            installed.backends[0].frame_durations[1], 1 / 120,
+        )
+
+    def test_screen_loop_rejects_invalid_fps(self):
+        installed = FakeRuntime()
+        install_runtime(installed)
+        screen = Screen(320, 200, 'paced')
+
+        invalid_values = (
+            0, -1, math.inf, -math.inf, math.nan, 10 ** 1000,
+            None, True, 'fast',
+        )
+        for fps in invalid_values:
+            with self.subTest(fps=fps):
+                with self.assertRaisesRegex(
+                        InvalidArgumentError, 'finite, positive number'):
+                    screen.loop(fps=fps)
+
+        self.assertEqual(installed.backends[0].frame_durations, [])
+
+    def test_tk_loop_waits_only_for_remaining_frame_budget(self):
+        backend = TkBackend.__new__(TkBackend)
+        backend.closed = False
+        backend.running = False
+        backend.root = ScheduledRoot()
+        backend.tk = FakeTk()
+
+        with mock.patch(
+                'pydraw.backends.tk.time.perf_counter',
+                side_effect=(10.0, 10.005)):
+            backend.run(backend.root.quit, 0.02)
+
+        self.assertEqual(backend.root.delays[0], 1)
+        self.assertGreaterEqual(backend.root.delays[1], 15)
+        self.assertLessEqual(backend.root.delays[1], 16)
+
+    def test_tk_loop_does_not_add_frame_delay_after_long_overrun(self):
+        backend = TkBackend.__new__(TkBackend)
+        backend.closed = False
+        backend.running = False
+        backend.root = ScheduledRoot()
+        backend.tk = FakeTk()
+
+        with mock.patch(
+                'pydraw.backends.tk.time.perf_counter',
+                side_effect=(10.0, 10.05)):
+            backend.run(backend.root.quit, 0.02)
+
+        self.assertEqual(backend.root.delays, [1, 1])
 
 
 if __name__ == '__main__':

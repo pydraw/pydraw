@@ -46,7 +46,7 @@ class RecordingBackend(ScreenBackend):
             if node is not None:
                 self.nodes[render_id] = node
 
-    def run(self, step):
+    def run(self, step, frame_duration):
         step()
 
     def set_title(self, title):

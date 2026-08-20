@@ -111,11 +111,13 @@ class ScreenBackend(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def run(self, step: Callable[[], None]) -> None:
+    def run(self, step: Callable[[], None], frame_duration: float) -> None:
         """Run ``step`` repeatedly until the screen closes.
 
-        ``step`` is the owning Screen's frame update. The Screen enforces that
-        both ``update()`` and ``loop()`` are non-reentrant.
+        ``step`` is the owning Screen's frame update and ``frame_duration`` is
+        the target time between frame starts, in seconds. Backends account for
+        time spent in ``step`` rather than adding a fixed post-frame delay. The
+        Screen enforces that both ``update()`` and ``loop()`` are non-reentrant.
         """
         raise NotImplementedError
 
