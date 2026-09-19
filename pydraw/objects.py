@@ -4818,6 +4818,7 @@ class Text(CustomRenderable):
         font_data = (self.font(), -self.size(), decorations)
 
         self._screen._canvas.itemconfigure(self._ref, font=font_data)
+        self._update_coords()  # the font changed so we have to re-measure our width and height too!
 
     def _update_coords(self):
         """
