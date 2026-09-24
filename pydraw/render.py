@@ -76,6 +76,7 @@ class RenderBatch(NamedTuple):
     removals: tuple
     fronts: tuple
     backs: tuple
+    translations: tuple = ()
 
     def empty(self):
         return not any(self)
@@ -90,6 +91,7 @@ class RenderQueue:
         self._removals = OrderedDict()
         self._fronts = OrderedDict()
         self._backs = OrderedDict()
+        self._translations = []
 
     def allocate(self) -> int:
         render_id = self._next_id
@@ -128,6 +130,10 @@ class RenderQueue:
             self._fronts.pop(render_id, None)
             self._backs[render_id] = None
 
+    def translate_group(self, owner, render_ids, dx: float, dy: float) -> None:
+        """Queue a relative move for already presented render nodes."""
+        self._translations.append((owner, tuple(render_ids), dx, dy))
+
     def take(self) -> RenderBatch:
         upserts = []
         for render_id in self._dirty:
@@ -139,16 +145,25 @@ class RenderQueue:
                 raise ValueError('render source returned the wrong ID')
             upserts.append(node)
 
+        translations = []
+        for owner, ids, dx, dy in self._translations:
+            active = tuple(render_id for render_id in ids
+                           if render_id in self._sources and render_id not in self._dirty)
+            if active:
+                translations.append((owner, active, dx, dy))
+
         batch = RenderBatch(
             tuple(upserts),
             tuple(self._removals),
             tuple(self._fronts),
             tuple(self._backs),
+            tuple(translations),
         )
         self._dirty.clear()
         self._removals.clear()
         self._fronts.clear()
         self._backs.clear()
+        self._translations.clear()
         return batch
 
 

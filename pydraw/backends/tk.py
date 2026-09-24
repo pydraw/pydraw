@@ -2,6 +2,8 @@
 
 import math
 import time
+from itertools import count
+from weakref import WeakKeyDictionary
 
 from pydraw.runtime import BackendTerminated, Runtime, ScreenBackend
 from pydraw.events import InputEvent
@@ -9,6 +11,9 @@ from pydraw.render import EllipseNode, ImageNode, PolygonNode, PolylineNode, Tex
 
 
 class TkBackend(ScreenBackend):
+
+    def supports_group_translation(self):
+        return True
 
     def __init__(self, config):
         import tkinter as tk
@@ -26,6 +31,8 @@ class TkBackend(ScreenBackend):
         self.width = config.width
         self.height = config.height
         self.items = {}
+        self._group_tags = WeakKeyDictionary()
+        self._next_group_tag = count()
         self.fonts = {}
         self.image_refs = {}
         self.image_keys = {}
@@ -144,6 +151,9 @@ class TkBackend(ScreenBackend):
             else:
                 raise TypeError('TkBackend received an unsupported render node')
 
+        for owner, render_ids, dx, dy in frame.translations:
+            self._translate_group(owner, render_ids, dx, dy)
+
         for render_id in frame.backs:
             item = self.items.get(render_id)
             if item is not None:
@@ -156,6 +166,29 @@ class TkBackend(ScreenBackend):
         if not frame.empty():
             self.canvas.update_idletasks()
         return None
+
+    def _translate_group(self, owner, render_ids, dx, dy):
+        items = {render_id: self.items[render_id] for render_id in render_ids
+                 if render_id in self.items}
+        if not items:
+            return
+        if len(items) == 1:
+            self.canvas.move(next(iter(items.values())), dx, dy)
+            return
+
+        state = self._group_tags.get(owner)
+        if state is None:
+            state = ('pydraw_compound_{}'.format(next(self._next_group_tag)), {})
+            self._group_tags[owner] = state
+        tag, previous = state
+        for render_id, item in previous.items():
+            if items.get(render_id) != item:
+                self.canvas.dtag(item, tag)
+        for render_id, item in items.items():
+            if previous.get(render_id) != item:
+                self.canvas.addtag_withtag(tag, item)
+        self._group_tags[owner] = (tag, items)
+        self.canvas.move(tag, dx, dy)
 
     def _present_polyline(self, node):
         coordinates = []

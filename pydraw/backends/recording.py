@@ -3,9 +3,27 @@
 from collections import OrderedDict
 
 from pydraw.runtime import Runtime, ScreenBackend
+from pydraw.render import EllipseNode, ImageNode, PolygonNode, PolylineNode, TextNode
+
+
+def _translated(node, dx, dy):
+    def point(value):
+        return value[0] + dx, value[1] + dy
+
+    if isinstance(node, (PolygonNode, PolylineNode)):
+        return node._replace(points=tuple(point(value) for value in node.points))
+    if isinstance(node, EllipseNode):
+        return node._replace(center=point(node.center),
+                             points=tuple(point(value) for value in node.points))
+    if isinstance(node, (TextNode, ImageNode)):
+        return node._replace(position=point(node.position))
+    raise TypeError('RecordingBackend received an unsupported render node')
 
 
 class RecordingBackend(ScreenBackend):
+
+    def supports_group_translation(self):
+        return True
 
     def __init__(self, config):
         self.config = config
@@ -35,6 +53,11 @@ class RecordingBackend(ScreenBackend):
             self.nodes.pop(render_id, None)
         for node in batch.upserts:
             self.nodes[node.id] = node
+        for _, render_ids, dx, dy in batch.translations:
+            for render_id in render_ids:
+                node = self.nodes.get(render_id)
+                if node is not None:
+                    self.nodes[render_id] = _translated(node, dx, dy)
         for render_id in batch.backs:
             node = self.nodes.pop(render_id, None)
             if node is not None:

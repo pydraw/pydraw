@@ -1,7 +1,10 @@
 import unittest
 from unittest import mock
+from itertools import count
+from weakref import WeakKeyDictionary
 
 from pydraw.backends.recording import RecordingBackend
+from pydraw.backends.tk import TkBackend
 from pydraw.events import InputEvent
 from pydraw.render import (EllipseNode, ImageNode, PolygonNode, PolylineNode,
                            RenderBatch, RenderQueue, TextNode)
@@ -49,6 +52,24 @@ class RenderQueueTest(unittest.TestCase):
         source.assert_not_called()
         self.assertEqual(batch.upserts, ())
         self.assertEqual(batch.removals, (render_id,))
+
+    def test_group_translation_skips_dirty_and_removed_nodes(self):
+        queue = RenderQueue()
+        state = {1: 0, 2: 0, 3: 0}
+        ids = tuple(queue.register(lambda render_id=render_id: node(render_id, state[render_id]))
+                    for render_id in state)
+        queue.take()
+        owner = object()
+        queue.translate_group(owner, ids, 5, 0)
+        state[2] = 5
+        queue.invalidate(2)
+        queue.remove(3)
+
+        batch = queue.take()
+
+        self.assertEqual(batch.translations, ((owner, (1,), 5, 0),))
+        self.assertEqual(batch.upserts, (node(2, 5),))
+        self.assertEqual(batch.removals, (3,))
 
 
 class RecordingBackendTest(unittest.TestCase):
@@ -173,6 +194,31 @@ class RecordingBackendTest(unittest.TestCase):
         backend.present(RenderBatch((node,), (), (), ()))
 
         self.assertEqual(backend.nodes[1], node)
+
+
+class TkGroupTranslationTest(unittest.TestCase):
+
+    def test_reuses_tag_and_refreshes_membership(self):
+        class Group:
+            pass
+
+        backend = object.__new__(TkBackend)
+        backend.canvas = mock.Mock()
+        backend.items = {1: 11, 2: 22}
+        backend._group_tags = WeakKeyDictionary()
+        backend._next_group_tag = count()
+        owner = Group()
+
+        backend._translate_group(owner, (1, 2), 5, 0)
+        backend._translate_group(owner, (1, 2), -5, 0)
+        self.assertEqual(backend.canvas.addtag_withtag.call_count, 2)
+        self.assertEqual(backend.canvas.move.call_count, 2)
+        backend.canvas.move.assert_called_with('pydraw_compound_0', -5, 0)
+
+        backend.items = {1: 11, 3: 33}
+        backend._translate_group(owner, (1, 3), 2, 0)
+        backend.canvas.dtag.assert_called_once_with(22, 'pydraw_compound_0')
+        backend.canvas.addtag_withtag.assert_called_with('pydraw_compound_0', 33)
 
 
 if __name__ == '__main__':

@@ -68,6 +68,7 @@ def _toposort(edges):
         L - an ordered list of nodes that satisfy the dependencies of edges
     >>> _toposort({1: (2, 3), 2: (3, )})
     [1, 2, 3]
+
     Closely follows the wikipedia page [2]
     [1] Kahn, Arthur B. (1962), "Topological sorting of large networks",
     Communications of the ACM
@@ -215,12 +216,18 @@ class VariadicSignatureMeta(type):
     """
 
     def __getitem__(self, variadic_type):
-        if not (isinstance(variadic_type, (type, tuple)) or type(variadic_type)):
-            raise ValueError("Variadic types must be type or tuple of types"
-                             " (Variadic[int] or Variadic[(int, float)]")
+        if isinstance(variadic_type, type):
+            variadic_type = (variadic_type,)
+        elif not (
+            isinstance(variadic_type, tuple)
+            and variadic_type
+            and all(isinstance(item, type) for item in variadic_type)
+        ):
+            raise ValueError(
+                "Variadic types must be a type or non-empty tuple of types "
+                "(Variadic[int] or Variadic[(int, float)])."
+            )
 
-        if not isinstance(variadic_type, tuple):
-            variadic_type = variadic_type,
         return VariadicSignatureType(
             'Variadic[%s]' % typename(variadic_type),
             (),
@@ -233,10 +240,10 @@ class Variadic(metaclass=VariadicSignatureMeta):
     representing a specific variadic signature.
     Examples
     --------
-    >>> Variadic[int]  # any number of int arguments
-    <class 'multipledispatch.variadic.Variadic[int]'>
-    >>> Variadic[(int, str)]  # any number of one of int or str arguments
-    <class 'multipledispatch.variadic.Variadic[(int, str)]'>
+    >>> Variadic[int].__name__  # any number of int arguments
+    'Variadic[int]'
+    >>> Variadic[(int, str)].__name__  # any number of one of int or str arguments
+    'Variadic[(int, str)]'
     >>> issubclass(int, Variadic[int])
     True
     >>> issubclass(int, Variadic[(int, str)])
@@ -568,10 +575,11 @@ class Dispatcher(object):
         >>> D.add((float, float), lambda x, y: x + y)
         >>> D(1, 2)
         3
-        >>> D(1, 2.0)
+        >>> D(1, 2.0)  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
         ...
         NotImplementedError: Could not find signature for add: <int, float>
+
         When ``add`` detects a warning it calls the ``on_ambiguity`` callback
         with a dispatcher/itself, and a set of ambiguous type signature pairs
         as inputs.  See ``ambiguity_warn`` for an example.
@@ -690,6 +698,7 @@ class Dispatcher(object):
         4
         >>> print(inc.dispatch(float))
         None
+
         See Also:
           ``multipledispatch.conflict`` - module to determine resolution order
         """
@@ -870,11 +879,13 @@ def overload(*types, **kwargs):
     4
     >>> f(3.0)
     2.0
+
     Specify an isolated namespace with the namespace keyword argument
     >>> my_namespace = dict()
     >>> @overload(int, namespace=my_namespace)
     ... def foo(x):
     ...     return x + 1
+
     Dispatch on instance methods within classes
     >>> class MyClass(object):
     ...     @overload(list)
@@ -958,10 +969,12 @@ def verify_type(obj, required_type):
 
 def verify(*args):
     """
-    Takes a list of values and expected types and returns if all objects meet their expected types.
+    Validate a list of values against expected types.
 
     :param args: a list of objects and types, ex: (some_number, float, some_location, Location)
-    :return: True if all args meet their expected types, throws an error if not.
+    :return: None when every object meets its expected type.
+    :raises InvalidArgumentError: if the arguments are not object/type pairs or
+        an object does not meet its expected type.
     """
     if len(args) % 2 != 0:
         raise InvalidArgumentError(
@@ -996,6 +1009,7 @@ def verify_keywords(kwargs, allowed, method: str, case_sensitive: bool = True):
             raise InvalidArgumentError(f"{method}: unknown keyword '{keyword}'.")
 
 # from pydraw.errors import *
+from typing import Tuple, Union, cast, overload as _overload
 
 
 class Color:
@@ -1005,6 +1019,15 @@ class Color:
 
     NONE = None
 
+    @_overload
+    def __init__(self, __name: str) -> None: ...
+
+    @_overload
+    def __init__(self, __rgb: Tuple[int, int, int]) -> None: ...
+
+    @_overload
+    def __init__(self, __r: int, __g: int, __b: int) -> None: ...
+
     def __init__(self, *args):
         if len(args) == 0 or len(args) == 2 or len(args) > 3:
             raise NameError('Invalid arguments passed to color!')
@@ -1012,7 +1035,7 @@ class Color:
         self._name = None
         self._hex_value = None
 
-        # we should expect three-four arguments for rgb or rgba
+        # we should expect three arguments for RGB
         if len(args) >= 3:
             for arg in args:
                 if type(arg) is not int:
@@ -1025,6 +1048,11 @@ class Color:
             self._mode = 0
         elif len(args) == 1:
             if type(args[0]) is tuple:
+                if len(args[0]) != 3:
+                    raise InvalidArgumentError(
+                        'Color(): RGB tuples must contain exactly three values (R, G, B).'
+                    )
+
                 for arg in args[0]:
                     if type(arg) is not int:
                         raise NameError('Expected integer arguments, but found \'' + str(arg) + '\' instead.')
@@ -1064,7 +1092,7 @@ class Color:
                         self._g = int(rgb[1] / 256)
                         self._b = int(rgb[2] / 256)
 
-    def __value__(self):
+    def __value__(self) -> Union[Tuple[int, int, int], str]:
         """
         Retrieve the original color representation.
 
@@ -1073,9 +1101,9 @@ class Color:
         if self._mode == 0:
             return self.red(), self.green(), self.blue()
         elif self._mode == 1:
-            return self._name
+            return cast(str, self._name)
         else:
-            return self._hex_value
+            return cast(str, self._hex_value)
 
     def red(self):
         """
@@ -1186,23 +1214,23 @@ class Color:
     @staticmethod
     def all():
         """
-        Get all color values that have a string-name.
+        Return one Color for every canonical name in the color table.
 
-        :return: a tuple (immutable list) of all Colors.
+        :return: a tuple containing all named Colors
         """
 
-        return tuple(COLORS.copy())
+        return _ALL_COLORS
 
     @staticmethod
     def random():
         """
-        Retrieve a random Color.
+        Retrieve a random named Color from the full color table.
 
-        :return: returns
+        :return: a randomly selected Color
         """
 
         import random
-        return random.choice(COLORS).clone()
+        return random.choice(_ALL_COLORS).clone()
 
     def __repr__(self):
         return self.__str__()
@@ -1874,149 +1902,22 @@ _COLOR_TABLE = {
 }
 
 
-COLORS = [Color('snow'), Color('ghost white'), Color('white smoke'), Color('gainsboro'), Color('floral white'),
-          Color('old lace'),
-          Color('linen'), Color('antique white'), Color('papaya whip'), Color('blanched almond'), Color('bisque'),
-          Color('peach puff'),
-          Color('navajo white'), Color('lemon chiffon'), Color('mint cream'), Color('azure'), Color('alice blue'),
-          Color('lavender'),
-          Color('lavender blush'), Color('misty rose'), Color('dark slate gray'), Color('dim gray'),
-          Color('slate gray'),
-          Color('light slate gray'), Color('gray'), Color('light grey'), Color('midnight blue'), Color('navy'),
-          Color('cornflower blue'), Color('dark slate blue'),
-          Color('slate blue'), Color('medium slate blue'), Color('light slate blue'), Color('medium blue'),
-          Color('royal blue'), Color('blue'),
-          Color('dodger blue'), Color('deep sky blue'), Color('sky blue'), Color('light sky blue'), Color('steel blue'),
-          Color('light steel blue'),
-          Color('light blue'), Color('powder blue'), Color('pale turquoise'), Color('dark turquoise'),
-          Color('medium turquoise'), Color('turquoise'),
-          Color('cyan'), Color('light cyan'), Color('cadet blue'), Color('medium aquamarine'), Color('aquamarine'),
-          Color('dark green'), Color('dark olive green'),
-          Color('dark sea green'), Color('sea green'), Color('medium sea green'), Color('light sea green'),
-          Color('pale green'), Color('spring green'),
-          Color('lawn green'), Color('medium spring green'), Color('green yellow'), Color('lime green'),
-          Color('yellow green'),
-          Color('forest green'), Color('olive drab'), Color('dark khaki'), Color('khaki'), Color('pale goldenrod'),
-          Color('light goldenrod yellow'),
-          Color('light yellow'), Color('yellow'), Color('gold'), Color('light goldenrod'), Color('goldenrod'),
-          Color('dark goldenrod'), Color('rosy brown'),
-          Color('indian red'), Color('saddle brown'), Color('sandy brown'),
-          Color('dark salmon'), Color('salmon'), Color('light salmon'), Color('orange'), Color('dark orange'),
-          Color('coral'), Color('light coral'), Color('tomato'), Color('orange red'), Color('red'), Color('hot pink'),
-          Color('deep pink'), Color('pink'), Color('light pink'),
-          Color('pale violet red'), Color('maroon'), Color('medium violet red'), Color('violet red'),
-          Color('medium orchid'), Color('dark orchid'), Color('dark violet'), Color('blue violet'), Color('purple'),
-          Color('medium purple'),
-          Color('thistle'), Color('snow2'), Color('snow3'),
-          Color('snow4'), Color('seashell2'), Color('seashell3'), Color('seashell4'), Color('AntiqueWhite1'),
-          Color('AntiqueWhite2'),
-          Color('AntiqueWhite3'), Color('AntiqueWhite4'), Color('bisque2'), Color('bisque3'), Color('bisque4'),
-          Color('PeachPuff2'),
-          Color('PeachPuff3'), Color('PeachPuff4'), Color('NavajoWhite2'), Color('NavajoWhite3'), Color('NavajoWhite4'),
-          Color('LemonChiffon2'), Color('LemonChiffon3'), Color('LemonChiffon4'), Color('cornsilk2'),
-          Color('cornsilk3'),
-          Color('cornsilk4'), Color('ivory2'), Color('ivory3'), Color('ivory4'), Color('honeydew2'), Color('honeydew3'),
-          Color('honeydew4'),
-          Color('LavenderBlush2'), Color('LavenderBlush3'), Color('LavenderBlush4'), Color('MistyRose2'),
-          Color('MistyRose3'),
-          Color('MistyRose4'), Color('azure2'), Color('azure3'), Color('azure4'), Color('SlateBlue1'),
-          Color('SlateBlue2'), Color('SlateBlue3'),
-          Color('SlateBlue4'), Color('RoyalBlue1'), Color('RoyalBlue2'), Color('RoyalBlue3'), Color('RoyalBlue4'),
-          Color('blue2'), Color('blue4'),
-          Color('DodgerBlue2'), Color('DodgerBlue3'), Color('DodgerBlue4'), Color('SteelBlue1'), Color('SteelBlue2'),
-          Color('SteelBlue3'), Color('SteelBlue4'), Color('DeepSkyBlue2'), Color('DeepSkyBlue3'), Color('DeepSkyBlue4'),
-          Color('SkyBlue1'), Color('SkyBlue2'), Color('SkyBlue3'), Color('SkyBlue4'), Color('LightSkyBlue1'),
-          Color('LightSkyBlue2'),
-          Color('LightSkyBlue3'), Color('LightSkyBlue4'), Color('SlateGray1'), Color('SlateGray2'), Color('SlateGray3'),
-          Color('SlateGray4'), Color('LightSteelBlue1'), Color('LightSteelBlue2'), Color('LightSteelBlue3'),
-          Color('LightSteelBlue4'), Color('LightBlue1'), Color('LightBlue2'), Color('LightBlue3'), Color('LightBlue4'),
-          Color('LightCyan2'), Color('LightCyan3'), Color('LightCyan4'), Color('PaleTurquoise1'),
-          Color('PaleTurquoise2'),
-          Color('PaleTurquoise3'), Color('PaleTurquoise4'), Color('CadetBlue1'), Color('CadetBlue2'),
-          Color('CadetBlue3'),
-          Color('CadetBlue4'), Color('turquoise1'), Color('turquoise2'), Color('turquoise3'), Color('turquoise4'),
-          Color('cyan2'), Color('cyan3'),
-          Color('cyan4'), Color('DarkSlateGray1'), Color('DarkSlateGray2'), Color('DarkSlateGray3'),
-          Color('DarkSlateGray4'),
-          Color('aquamarine2'), Color('aquamarine4'), Color('DarkSeaGreen1'), Color('DarkSeaGreen2'),
-          Color('DarkSeaGreen3'),
-          Color('DarkSeaGreen4'), Color('SeaGreen1'), Color('SeaGreen2'), Color('SeaGreen3'), Color('PaleGreen1'),
-          Color('PaleGreen2'),
-          Color('PaleGreen3'), Color('PaleGreen4'), Color('SpringGreen2'), Color('SpringGreen3'), Color('SpringGreen4'),
-          Color('green2'), Color('green3'), Color('green4'), Color('chartreuse2'), Color('chartreuse3'),
-          Color('chartreuse4'),
-          Color('OliveDrab1'), Color('OliveDrab2'), Color('OliveDrab4'), Color('DarkOliveGreen1'),
-          Color('DarkOliveGreen2'),
-          Color('DarkOliveGreen3'), Color('DarkOliveGreen4'), Color('khaki1'), Color('khaki2'), Color('khaki3'),
-          Color('khaki4'),
-          Color('LightGoldenrod1'), Color('LightGoldenrod2'), Color('LightGoldenrod3'), Color('LightGoldenrod4'),
-          Color('LightYellow2'), Color('LightYellow3'), Color('LightYellow4'), Color('yellow2'), Color('yellow3'),
-          Color('yellow4'),
-          Color('gold2'), Color('gold3'), Color('gold4'), Color('goldenrod1'), Color('goldenrod2'), Color('goldenrod3'),
-          Color('goldenrod4'),
-          Color('DarkGoldenrod1'), Color('DarkGoldenrod2'), Color('DarkGoldenrod3'), Color('DarkGoldenrod4'),
-          Color('RosyBrown1'), Color('RosyBrown2'), Color('RosyBrown3'), Color('RosyBrown4'), Color('IndianRed1'),
-          Color('IndianRed2'),
-          Color('IndianRed3'), Color('IndianRed4'), Color('sienna1'), Color('sienna2'), Color('sienna3'),
-          Color('sienna4'), Color('burlywood1'),
-          Color('burlywood2'), Color('burlywood3'), Color('burlywood4'), Color('wheat1'), Color('wheat2'),
-          Color('wheat3'), Color('wheat4'), Color('tan1'),
-          Color('tan2'), Color('tan4'), Color('chocolate1'), Color('chocolate2'), Color('chocolate3'),
-          Color('firebrick1'), Color('firebrick2'),
-          Color('firebrick3'), Color('firebrick4'), Color('brown1'), Color('brown2'), Color('brown3'), Color('brown4'),
-          Color('salmon1'), Color('salmon2'),
-          Color('salmon3'), Color('salmon4'), Color('LightSalmon2'), Color('LightSalmon3'), Color('LightSalmon4'),
-          Color('orange2'),
-          Color('orange3'), Color('orange4'), Color('DarkOrange1'), Color('DarkOrange2'), Color('DarkOrange3'),
-          Color('DarkOrange4'),
-          Color('coral1'), Color('coral2'), Color('coral3'), Color('coral4'), Color('tomato2'), Color('tomato3'),
-          Color('tomato4'), Color('OrangeRed2'),
-          Color('OrangeRed3'), Color('OrangeRed4'), Color('red2'), Color('red3'), Color('red4'), Color('DeepPink2'),
-          Color('DeepPink3'), Color('DeepPink4'),
-          Color('HotPink1'), Color('HotPink2'), Color('HotPink3'), Color('HotPink4'), Color('pink1'), Color('pink2'),
-          Color('pink3'), Color('pink4'),
-          Color('LightPink1'), Color('LightPink2'), Color('LightPink3'), Color('LightPink4'), Color('PaleVioletRed1'),
-          Color('PaleVioletRed2'), Color('PaleVioletRed3'), Color('PaleVioletRed4'), Color('maroon1'), Color('maroon2'),
-          Color('maroon3'), Color('maroon4'), Color('VioletRed1'), Color('VioletRed2'), Color('VioletRed3'),
-          Color('VioletRed4'),
-          Color('magenta2'), Color('magenta3'), Color('magenta4'), Color('orchid1'), Color('orchid2'), Color('orchid3'),
-          Color('orchid4'), Color('plum1'),
-          Color('plum2'), Color('plum3'), Color('plum4'), Color('MediumOrchid1'), Color('MediumOrchid2'),
-          Color('MediumOrchid3'),
-          Color('MediumOrchid4'), Color('DarkOrchid1'), Color('DarkOrchid2'), Color('DarkOrchid3'),
-          Color('DarkOrchid4'),
-          Color('purple1'), Color('purple2'), Color('purple3'), Color('purple4'), Color('MediumPurple1'),
-          Color('MediumPurple2'),
-          Color('MediumPurple3'), Color('MediumPurple4'), Color('thistle1'), Color('thistle2'), Color('thistle3'),
-          Color('thistle4'),
-          Color('gray1'), Color('gray2'), Color('gray3'), Color('gray4'), Color('gray5'), Color('gray6'),
-          Color('gray7'), Color('gray8'), Color('gray9'), Color('gray10'),
-          Color('gray11'), Color('gray12'), Color('gray13'), Color('gray14'), Color('gray15'), Color('gray16'),
-          Color('gray17'), Color('gray18'), Color('gray19'),
-          Color('gray20'), Color('gray21'), Color('gray22'), Color('gray23'), Color('gray24'), Color('gray25'),
-          Color('gray26'), Color('gray27'), Color('gray28'),
-          Color('gray29'), Color('gray30'), Color('gray31'), Color('gray32'), Color('gray33'), Color('gray34'),
-          Color('gray35'), Color('gray36'), Color('gray37'),
-          Color('gray38'), Color('gray39'), Color('gray40'), Color('gray42'), Color('gray43'), Color('gray44'),
-          Color('gray45'), Color('gray46'), Color('gray47'),
-          Color('gray48'), Color('gray49'), Color('gray50'), Color('gray51'), Color('gray52'), Color('gray53'),
-          Color('gray54'), Color('gray55'), Color('gray56'),
-          Color('gray57'), Color('gray58'), Color('gray59'), Color('gray60'), Color('gray61'), Color('gray62'),
-          Color('gray63'), Color('gray64'), Color('gray65'),
-          Color('gray66'), Color('gray67'), Color('gray68'), Color('gray69'), Color('gray70'), Color('gray71'),
-          Color('gray72'), Color('gray73'), Color('gray74'),
-          Color('gray75'), Color('gray76'), Color('gray77'), Color('gray78'), Color('gray79'), Color('gray80'),
-          Color('gray81'), Color('gray82'), Color('gray83'),
-          Color('gray84'), Color('gray85'), Color('gray86'), Color('gray87'), Color('gray88'), Color('gray89'),
-          Color('gray90'), Color('gray91'), Color('gray92'),
-          Color('gray93'), Color('gray94'), Color('gray95'), Color('gray97'), Color('gray98'), Color('gray99')]
+_ALL_COLORS = tuple(Color(name) for name in _COLOR_TABLE)
 
 # from pydraw.errors import *
 # from pydraw.util import verify_keywords
+from typing import Tuple, overload as _overload
 import math
 
 
 class Location:
+    """A two-dimensional coordinate.
+
+    Locations can be constructed from two numbers, a ``Location``, a two-value
+    tuple, or partial coordinate keywords such as ``Location(x=10)`` and
+    ``Location(y=20)``. An omitted keyword coordinate defaults to zero.
+    """
+
     __slots__ = ('_x', '_y')
 
     @classmethod
@@ -2031,6 +1932,24 @@ class Location:
         location._x = x
         location._y = y
         return location
+
+    @_overload
+    def __init__(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def __init__(self, location: 'Location') -> None: ...
+
+    @_overload
+    def __init__(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def __init__(self, *, x: float) -> None: ...
+
+    @_overload
+    def __init__(self, *, y: float) -> None: ...
+
+    @_overload
+    def __init__(self, *, x: float, y: float) -> None: ...
 
     def __init__(self, *args, **kwargs):
         # Fast path: Location(x, y) with two numbers is by far the most common
@@ -2048,7 +1967,13 @@ class Location:
         # Basically we don't have an empty tuple at the start.
         if len(args) > 0 and (type(args[0]) is float or type(args[0]) is int or type(args[0]) is Location or
                               type(args[0]) is tuple and not len(args[0]) == 0):
-            if len(args) == 1 and (type(args[0]) is tuple or type(args[0]) is Location):
+            if len(args) == 1 and type(args[0]) is tuple:
+                if len(args[0]) != 2 or not all(type(value) in (int, float) for value in args[0]):
+                    raise InvalidArgumentError(
+                        'Location(): expected a tuple/Location or two numbers (x, y).'
+                    )
+                location = (args[0][0], args[0][1])
+            elif len(args) == 1 and type(args[0]) is Location:
                 location = (args[0][0], args[0][1])
             elif len(args) == 2 and all(type(arg) is float or type(arg) is int for arg in args):
                 location = (args[0], args[1])
@@ -2077,11 +2002,30 @@ class Location:
         self._x = location[0]
         self._y = location[1]
 
-    def move(self, *args, **kwargs):
+    @_overload
+    def move(self, dx: float, dy: float) -> 'Location': ...
+
+    @_overload
+    def move(self, location: 'Location') -> 'Location': ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> 'Location': ...
+
+    @_overload
+    def move(self, *, dx: float) -> 'Location': ...
+
+    @_overload
+    def move(self, *, dy: float) -> 'Location': ...
+
+    @_overload
+    def move(self, *, dx: float, dy: float) -> 'Location': ...
+
+    def move(self, *args, **kwargs) -> 'Location':
         """
         Moves the location by a specified difference.
 
-        Can take two numbers (dx, dy), a tuple, or a Location
+        Can take two numbers (dx, dy), a tuple, a Location, or at least one
+        coordinate keyword (dx and/or dy).
 
         :param dx: the dx to move by
         :param dy: the dy to move by
@@ -2148,11 +2092,30 @@ class Location:
 
         return self
 
-    def moveto(self, *args, **kwargs):
+    @_overload
+    def moveto(self, x: float, y: float) -> 'Location': ...
+
+    @_overload
+    def moveto(self, location: 'Location') -> 'Location': ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> 'Location': ...
+
+    @_overload
+    def moveto(self, *, x: float) -> 'Location': ...
+
+    @_overload
+    def moveto(self, *, y: float) -> 'Location': ...
+
+    @_overload
+    def moveto(self, *, x: float, y: float) -> 'Location': ...
+
+    def moveto(self, *args, **kwargs) -> 'Location':
         """
         Moves the location to a new location!
 
-        Can take two coordinates (x, y), a tuple, or a Location
+        Can take two coordinates (x, y), a tuple, a Location, or at least one
+        coordinate keyword (x and/or y).
 
         :param x: the x to move to
         :param y: the y to move to
@@ -2382,6 +2345,7 @@ class RenderBatch(NamedTuple):
     removals: tuple
     fronts: tuple
     backs: tuple
+    translations: tuple = ()
 
     def empty(self):
         return not any(self)
@@ -2396,6 +2360,7 @@ class RenderQueue:
         self._removals = OrderedDict()
         self._fronts = OrderedDict()
         self._backs = OrderedDict()
+        self._translations = []
 
     def allocate(self) -> int:
         render_id = self._next_id
@@ -2434,6 +2399,10 @@ class RenderQueue:
             self._fronts.pop(render_id, None)
             self._backs[render_id] = None
 
+    def translate_group(self, owner, render_ids, dx: float, dy: float) -> None:
+        """Queue a relative move for already presented render nodes."""
+        self._translations.append((owner, tuple(render_ids), dx, dy))
+
     def take(self) -> RenderBatch:
         upserts = []
         for render_id in self._dirty:
@@ -2445,17 +2414,37 @@ class RenderQueue:
                 raise ValueError('render source returned the wrong ID')
             upserts.append(node)
 
+        translations = []
+        for owner, ids, dx, dy in self._translations:
+            active = tuple(render_id for render_id in ids
+                           if render_id in self._sources and render_id not in self._dirty)
+            if active:
+                translations.append((owner, active, dx, dy))
+
         batch = RenderBatch(
             tuple(upserts),
             tuple(self._removals),
             tuple(self._fronts),
             tuple(self._backs),
+            tuple(translations),
         )
         self._dirty.clear()
         self._removals.clear()
         self._fronts.clear()
         self._backs.clear()
+        self._translations.clear()
         return batch
+
+
+__all__ = [
+    'EllipseNode',
+    'ImageNode',
+    'PolygonNode',
+    'PolylineNode',
+    'RenderBatch',
+    'RenderQueue',
+    'TextNode',
+]
 
 """Platform runtime selection and backend contracts.
 
@@ -2466,7 +2455,7 @@ lazy factory when it requests its backend.
 """
 
 from abc import ABCMeta, abstractmethod
-from typing import Callable, Iterable, NamedTuple
+from typing import Callable, Iterable, NamedTuple, Optional
 
 
 class ScreenConfig(NamedTuple):
@@ -2480,14 +2469,14 @@ class ScreenConfig(NamedTuple):
 class ScreenBackend(metaclass=ABCMeta):
     """Platform operations owned by one Screen.
 
-    Event and render payloads remain intentionally unspecified until their
-    platform-neutral data models are introduced by the corresponding migration
-    slices.  The lifecycle boundary itself is stable.
+    Backends translate platform input into :class:`pydraw.events.InputEvent`
+    values and consume :class:`pydraw.render.RenderBatch` frames. The
+    lifecycle boundary is intentionally independent of any one platform.
     """
 
     @abstractmethod
     def poll_events(self) -> Iterable:
-        """Return pending normalized input events without blocking."""
+        """Return pending normalized ``InputEvent`` values without blocking."""
         raise NotImplementedError
 
     @abstractmethod
@@ -2495,10 +2484,18 @@ class ScreenBackend(metaclass=ABCMeta):
         """Begin collecting platform input events."""
         raise NotImplementedError
 
+    def set_handlers(self, handlers) -> None:
+        """Publish the normalized input handlers registered by Screen."""
+        pass
+
     @abstractmethod
     def present(self, frame) -> None:
-        """Synchronously present or acknowledge one platform-neutral frame."""
+        """Synchronously present or acknowledge one ``RenderBatch`` frame."""
         raise NotImplementedError
+
+    def supports_group_translation(self) -> bool:
+        """Whether ``present`` can apply relative render-node translations."""
+        return False
 
     @abstractmethod
     def set_title(self, title: str) -> None:
@@ -2531,8 +2528,8 @@ class ScreenBackend(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def set_fullscreen(self, fullscreen: bool) -> None:
-        """Apply the host fullscreen state."""
+    def set_fullscreen(self, fullscreen: bool) -> bool:
+        """Apply and return the host fullscreen state."""
         raise NotImplementedError
 
     @abstractmethod
@@ -2541,8 +2538,8 @@ class ScreenBackend(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def prompt(self, text, title):
-        """Show a host text prompt and return its result."""
+    def prompt(self, text, title) -> Optional[str]:
+        """Show a host text prompt and return its text, or ``None``."""
         raise NotImplementedError
 
     @abstractmethod
@@ -2567,7 +2564,13 @@ class ScreenBackend(metaclass=ABCMeta):
 
     @abstractmethod
     def run(self, step: Callable[[], None], frame_duration: float) -> None:
-        """Run ``step`` repeatedly at the target frame duration."""
+        """Run ``step`` repeatedly until the screen closes.
+
+        ``step`` is the owning Screen's frame update and ``frame_duration`` is
+        the target time between frame starts, in seconds. Backends account for
+        time spent in ``step`` rather than adding a fixed post-frame delay. The
+        Screen enforces that both ``update()`` and ``loop()`` are non-reentrant.
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -2669,6 +2672,8 @@ __all__ = [
 
 import math
 import time
+from itertools import count
+from weakref import WeakKeyDictionary
 
 # from pydraw.runtime import BackendTerminated, Runtime, ScreenBackend
 # from pydraw.events import InputEvent
@@ -2676,6 +2681,9 @@ import time
 
 
 class TkBackend(ScreenBackend):
+
+    def supports_group_translation(self):
+        return True
 
     def __init__(self, config):
         import tkinter as tk
@@ -2693,6 +2701,8 @@ class TkBackend(ScreenBackend):
         self.width = config.width
         self.height = config.height
         self.items = {}
+        self._group_tags = WeakKeyDictionary()
+        self._next_group_tag = count()
         self.fonts = {}
         self.image_refs = {}
         self.image_keys = {}
@@ -2811,6 +2821,9 @@ class TkBackend(ScreenBackend):
             else:
                 raise TypeError('TkBackend received an unsupported render node')
 
+        for owner, render_ids, dx, dy in frame.translations:
+            self._translate_group(owner, render_ids, dx, dy)
+
         for render_id in frame.backs:
             item = self.items.get(render_id)
             if item is not None:
@@ -2823,6 +2836,29 @@ class TkBackend(ScreenBackend):
         if not frame.empty():
             self.canvas.update_idletasks()
         return None
+
+    def _translate_group(self, owner, render_ids, dx, dy):
+        items = {render_id: self.items[render_id] for render_id in render_ids
+                 if render_id in self.items}
+        if not items:
+            return
+        if len(items) == 1:
+            self.canvas.move(next(iter(items.values())), dx, dy)
+            return
+
+        state = self._group_tags.get(owner)
+        if state is None:
+            state = ('pydraw_compound_{}'.format(next(self._next_group_tag)), {})
+            self._group_tags[owner] = state
+        tag, previous = state
+        for render_id, item in previous.items():
+            if items.get(render_id) != item:
+                self.canvas.dtag(item, tag)
+        for render_id, item in items.items():
+            if previous.get(render_id) != item:
+                self.canvas.addtag_withtag(tag, item)
+        self._group_tags[owner] = (tag, items)
+        self.canvas.move(tag, dx, dy)
 
     def _present_polyline(self, node):
         coordinates = []
@@ -2983,10 +3019,15 @@ class TkBackend(ScreenBackend):
         if node.tint is not None:
             alpha = image.getchannel('A')
             gray = ImageOps.grayscale(image)
-            image = ImageOps.colorize(
+            tinted = ImageOps.colorize(
                 gray,
-                (0, 0, 0, 0),
-                node.tint + (node.tint_alpha,),
+                (0, 0, 0),
+                node.tint,
+            ).convert('RGBA')
+            image = PILImage.blend(
+                image,
+                tinted,
+                node.tint_alpha / 255,
             )
             image.putalpha(alpha)
         if node.border is not None:
@@ -3064,6 +3105,9 @@ class TkBackend(ScreenBackend):
 
     def set_fullscreen(self, fullscreen):
         self.root.attributes('-fullscreen', fullscreen)
+        return bool(self.root.tk.getboolean(
+            self.root.attributes('-fullscreen')
+        ))
 
     def alert(self, text, title, accept_text, cancel_text):
         from tkinter.simpledialog import SimpleDialog
@@ -3076,7 +3120,7 @@ class TkBackend(ScreenBackend):
             cancel=1,
             title=title,
         )
-        return dialog.go()
+        return dialog.go() == 0
 
     def prompt(self, text, title):
         from tkinter.simpledialog import askstring
@@ -3297,6 +3341,8 @@ class Screen:
         self._helperstate = 0
 
         self._scene = None  # We store our current Scene.
+        self._pending_scene = None
+        self._scene_frame_time = None
 
         self.registry = {}  # The input function registry (stores input callbacks)
 
@@ -3459,13 +3505,13 @@ class Screen:
         verify(text, str, title, str, accept_text, str, cancel_text, str)
         return self._backend.alert(text, title, accept_text, cancel_text)
 
-    def prompt(self, text: str, title: str = 'Prompt') -> str:
+    def prompt(self, text: str, title: str = 'Prompt') -> Optional[str]:
         """
         Prompts the user for keyboard input
 
         :param: text the text to prompt the user with
         :param: title the title of the dialog box
-        :return: None
+        :return: the entered text, or None if the prompt was cancelled
         """
 
         verify(text, str, title, str)
@@ -3599,8 +3645,7 @@ class Screen:
 
         if fullscreen is not None:
             verify(fullscreen, bool)
-            self._fullscreen = fullscreen
-            self._backend.set_fullscreen(fullscreen)
+            self._fullscreen = self._backend.set_fullscreen(fullscreen)
             self.update()
 
         return self._fullscreen
@@ -3633,6 +3678,9 @@ class Screen:
 
     def _invalidate_render(self, render_id):
         self._render_queue.invalidate(render_id)
+
+    def _translate_render_group(self, owner, render_ids, dx, dy):
+        self._render_queue.translate_group(owner, render_ids, dx, dy)
 
     def _remove_render(self, render_id):
         self._render_queue.remove(render_id)
@@ -3699,7 +3747,12 @@ class Screen:
 
     def clear(self) -> None:
         """
-        Clears the screen.
+        Remove all registered user objects from the Screen.
+
+        Screen decorations such as grid lines and coordinate helpers are
+        preserved, as are the background color or image, input handlers, and
+        the active Scene. Use :meth:`reset` to also clear lifecycle, handler,
+        and decoration state.
 
         :return: None
         """
@@ -3710,12 +3763,16 @@ class Screen:
 
     def scene(self, scene=None):
         """
-        Apply a new scene to the screen!
+        Get or apply a Scene.
 
-        Note that this will override ALL previously registered input handlers.
+        Applying a Scene stops the current Scene, removes its registered user
+        objects, grid/helper decorations, and input handlers, then starts the
+        replacement. Screen background configuration is preserved. A
+        transition requested from an input handler or Scene update is deferred
+        until the frame boundary.
 
-        :param scene: The Scene to apply!
-        :return: the new scene that was set, the existing scene if no args passed, or None
+        :param scene: the Scene to apply, if any
+        :return: the requested Scene, or the active Scene when called without one
         """
         # from pydraw import Scene
 
@@ -3727,12 +3784,15 @@ class Screen:
                 f'Screen#scene(): expected a Scene; received {type(scene)} ({scene!r}).'
             )
 
-        if self._scene is not None:
-            del self._scene # calls our delete handler
+        if self._updating:
+            self._pending_scene = scene
+            return scene
 
-        self.reset()  # Clears screen and destroys all registered input handlers.
+        return self._apply_scene(scene)
 
-        # Defines all input methods from the Scene.
+    def _apply_scene(self, scene):
+        self.reset()
+
         for (name, function) in inspect.getmembers(scene, predicate=inspect.ismethod):
             if name.lower() not in INPUT_TYPES:
                 continue
@@ -3741,16 +3801,58 @@ class Screen:
 
         self._scene = scene
         self._listen()
-        scene.activate(self)
+        try:
+            scene._activate(self)
+        except BaseException:
+            self.registry.clear()
+            self._scene = None
+            self._scene_frame_time = None
+            if scene.screen() is self:
+                scene._screen = None
+            self.clear()
+            raise
+        return scene
+
+    def _apply_pending_scene(self):
+        scene = self._pending_scene
+        if scene is None:
+            return False
+
+        self._pending_scene = None
+        self._apply_scene(scene)
+        return True
+
+    def _update_scene(self):
+        if self._scene is None:
+            return
+
+        now = time.perf_counter()
+        if self._scene_frame_time is None:
+            dt = 0.0
+        else:
+            dt = now - self._scene_frame_time
+        self._scene_frame_time = now
+        self._scene._step(dt)
+
+    def _deactivate_scene(self):
+        scene = self._scene
+        self._scene = None
+        self._scene_frame_time = None
+        if scene is not None:
+            scene._deactivate()
 
     def reset(self) -> None:
         """
-        Resets the screen, removing all objects and input methods.
+        Reset lifecycle state, deactivating the Scene and removing registered
+        user objects, grid/helper decorations, and input handlers. Screen
+        background configuration is preserved.
 
         :return: None
         """
 
-        # A reset commonly starts a new scene and therefore a new frame loop.
+        self._deactivate_scene()
+        self._pending_scene = None
+
         self._last_frame_time = None
         self._next_frame_time = None
 
@@ -3846,7 +3948,15 @@ class Screen:
 
     def update(self) -> None:
         """
-        Updates the screen.
+        Process and present one complete frame.
+
+        The frame order is: poll pending input, run each input callback
+        synchronously, advance the active Scene once, and present the render
+        batch produced by that work. Input callbacks and the Scene step are
+        therefore visible in the same frame. Scene transitions requested by
+        either stage are applied at a safe frame boundary before presentation.
+        This method is not reentrant; calling ``update()`` from a callback (or
+        another update) raises ``PydrawError``.
 
         :return: None
         """
@@ -3857,6 +3967,9 @@ class Screen:
         try:
             for event in self._backend.poll_events():
                 self._dispatch_input_event(event)
+            self._apply_pending_scene()
+            self._update_scene()
+            self._apply_pending_scene()
             self._backend.present(self._render_queue.take())
         except BackendTerminated:
             print('Terminated.')
@@ -3875,7 +3988,15 @@ class Screen:
 
     def loop(self, fps: float = 60) -> None:
         """
-        Hold the program open while targeting the requested frames per second.
+        Hold the program open while the backend calls ``update()`` per frame.
+
+        The backend owns the platform loop, but each frame follows the same
+        poll, synchronous callback, Scene-step, and present order as an
+        explicit ``update()`` call. ``loop()`` is not reentrant and cannot be
+        called while another loop is running. The backend targets ``fps`` by
+        waiting only for the portion of the frame budget left after
+        ``update()`` finishes. The actual frame rate may be lower when a frame
+        takes longer than that budget.
 
         :param fps: positive, finite target frames per second; defaults to 60
         :returns: None
@@ -3910,6 +4031,8 @@ class Screen:
             self._backend.run(self.update, frame_duration)
         finally:
             self._looping = False
+            self._pending_scene = None
+            self._deactivate_scene()
 
     def exit(self) -> None:
         """
@@ -3921,22 +4044,25 @@ class Screen:
 
         # Prevent queued Tk events from reaching callbacks while the canvas and
         # its objects are being destroyed.
+        self._pending_scene = None
+        self._deactivate_scene()
         self.registry.clear()
         self._backend.close()
         exit(0)
 
     def listen(self) -> None:
         """
-        Reads the file for input functions and registers them as callbacks!
-        The input-type is determined by the name of the function.
+        Inspect the caller's module for input functions and register them as
+        callbacks. The input type is determined by each function's name.
 
         Allowed Names:
           - mousedown
           - mouseup
           - mousedrag
+          - mousemove
           - keydown
           - keyup
-          - keypress (deprecated)
+          - keypress (deprecated legacy/custom-backend event; Tk does not emit it)
 
         :return: None
         """
@@ -3953,6 +4079,7 @@ class Screen:
         self._listen()
 
     def _listen(self):
+        self._backend.set_handlers(tuple(self.registry))
         self._backend.listen()
 
     class Key:
@@ -4033,6 +4160,8 @@ class Screen:
         self.registry['keypress'](self.Key(key.lower()))
 
     def _mousedown(self, button, location) -> None:
+        self._mouse = location
+
         if 'mousedown' not in self.registry:
             return
 
@@ -4051,6 +4180,8 @@ class Screen:
         self.registry['mousedown'](location, button)
 
     def _mouseup(self, button, location) -> None:
+        self._mouse = location
+
         if 'mouseup' not in self.registry:
             return
 
@@ -4075,6 +4206,8 @@ class Screen:
         self.registry['mouseclick'](button, location)
 
     def _mousedrag(self, button, location) -> None:
+        self._mouse = location
+
         if 'mousedrag' not in self.registry:
             return
 
@@ -4101,105 +4234,118 @@ class Screen:
 
         self.registry['mousemove'](location)
 
+import inspect
+
 # from pydraw import Screen, Location
+# from pydraw.errors import PydrawError
 
 
 class Scene:
-    """
-    An abstraction of the Screen, designed to store the Screen in a certain state while retaining registered input
-    handlers and the positions and attributes of objects registered to it.
+    """A reusable Screen state with lifecycle and input hooks.
 
-    You can use Scenes to create multi-screen games or to manage different levels easily. It works exactly like a screen
-    but will not render anything until it is "applied" to a Screen via `Screen.scene(some_scene)`
+    ``Screen`` owns the application loop. A Scene creates its objects in
+    :meth:`start`, advances one frame in :meth:`update`, and releases any
+    external state in :meth:`stop`. Input methods are registered automatically
+    when the Scene is applied with ``screen.scene(scene)``.
     """
 
     def __init__(self):
         self._screen = None
+        self._update_accepts_dt = True
 
     def screen(self):
-        """
-        Retrieve the screen that the scene is tied to
+        """Return the bound Screen, or ``None`` before activation."""
 
-        :return: a Screen
-        """
         return self._screen
 
     def start(self) -> None:
-        """
-        Run as the initializer for the scene
+        """Initialize the Scene after it has been bound to a Screen."""
 
-        :return: None
+    def update(self, dt: float = None) -> None:
+        """Advance the Scene by one frame.
+
+        Subclasses may define either ``update(self)`` or ``update(self, dt)``.
+
+        :param dt: optional elapsed seconds since the previous frame; ``0.0``
+                   on the first frame after activation
         """
 
-    def run(self) -> None:
-        """
-        Run the scene (the loop should go here)
+    def stop(self) -> None:
+        """Release Scene state immediately before deactivation."""
 
-        :return: None
+    def goto(self, scene: 'Scene') -> 'Scene':
+        """Request another Scene.
+
+        During an input callback or frame update, the transition is deferred
+        until the safe frame boundary. Outside an update, it is applied
+        immediately.
+
+        :param scene: the Scene to activate next
+        :return: the requested Scene
         """
+
+        if self._screen is None:
+            raise PydrawError('Scene#goto(): the Scene is not active.')
+        return self._screen.scene(scene)
 
     def mousedown(self, location: Location, button: int) -> None:
-        """
-        Mouse event, called when a mouse button is pressed down.
+        """Handle a pointer-button press.
 
-        :param location: the location that was clicked
-        :param button: the button pressed (0-2)
-        :return: None
+        :param location: the pressed location
+        :param button: left, middle, or right button (1-3)
         """
 
     def mouseup(self, location: Location, button: int) -> None:
-        """
-        Mouse event, called when a mouse button is released.
+        """Handle a pointer-button release.
 
-        :param location: the location that was clicked
-        :param button: the button released (0-2)
-        :return: None
+        :param location: the released location
+        :param button: left, middle, or right button (1-3)
         """
 
     def mousedrag(self, location: Location, button: int) -> None:
-        """
-        Mouse event, called when the mouse moves after a mousedown event (without a mouseup event)
+        """Handle pointer movement while a button is held.
 
-        :param location: the Location the mouse has moved to
-        :param button: the button being held (0-2)
-        :return: None
+        :param location: the current pointer location
+        :param button: held left, middle, or right button (1-3)
         """
 
     def mousemove(self, location: Location) -> None:
-        """
-        Mouse event called when the mouse moves over the Screen
-
-        :param location: the Location the mouse moved to
-        :return: None
-        """
+        """Handle pointer movement without a held button."""
 
     def keydown(self, key: Screen.Key) -> None:
-        """
-        Key event called when a key is pressed
-
-        :param key: the Key that was pressed
-        :return: None
-        """
+        """Handle a normalized key press."""
 
     def keyup(self, key: Screen.Key) -> None:
-        """
-        Key event called when a key is released
+        """Handle a normalized key release."""
 
-        :param key: the Key that was released
-        :return: None
-        """
-
-    def activate(self, screen: Screen) -> None:
-        """
-        Activates the Scene with a Screen (called internally)
-
-        :param screen: the Screen to display the Scene on
-        :return: None
-        """
+    def _activate(self, screen: Screen) -> None:
+        signature = inspect.signature(self.update)
+        try:
+            signature.bind(0.0)
+            self._update_accepts_dt = True
+        except TypeError:
+            try:
+                signature.bind()
+                self._update_accepts_dt = False
+            except TypeError as error:
+                raise PydrawError(
+                    'Scene#update(): expected update(self) or update(self, dt).'
+                ) from error
 
         self._screen = screen
         self.start()
-        self.run()
+
+    def _step(self, dt: float) -> None:
+        if self._update_accepts_dt:
+            self.update(dt)
+        else:
+            self.update()
+
+    def _deactivate(self) -> None:
+        try:
+            self.stop()
+        finally:
+            self._screen = None
 
 """
 Objects in the PyDraw library
@@ -4208,7 +4354,7 @@ Objects in the PyDraw library
 """
 
 import math
-from typing import Union, List
+from typing import TYPE_CHECKING, Optional, Tuple, Union, List, overload as _overload
 # import asyncio
 
 # from pydraw.errors import *  # util gives us our errors for us :)
@@ -4221,7 +4367,7 @@ from typing import Union, List
 
 # from pydraw.overload import overload
 
-PIXEL_RATIO = 20
+_NORMALIZED_SHAPE_SIZE = 20
 NoneType = type(None)
 
 
@@ -4250,6 +4396,18 @@ class Pen:
             return self._coordinates[-1]
 
         return self._location
+
+    @_overload
+    def move(self, dx: float, dy: float) -> Location: ...
+
+    @_overload
+    def move(self, location: Location) -> Location: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> Location: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> Location: ...
 
     def move(self, *args, **kwargs):
         """
@@ -4306,6 +4464,18 @@ class Pen:
 
         self._update()
         return location
+
+    @_overload
+    def moveto(self, x: float, y: float) -> Location: ...
+
+    @_overload
+    def moveto(self, location: Location) -> Location: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> Location: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> Location: ...
 
     def moveto(self, *args, **kwargs):
         """
@@ -4364,7 +4534,7 @@ class Pen:
         self._update()
         return new_location
 
-    def coordinates(self, *coords) -> List[Location]:
+    def coordinates(self, *coords: Union[Location, Tuple[float, float]]) -> List[Location]:
 
         if len(coords) > 0:
             self._coordinates = []
@@ -4555,6 +4725,18 @@ class Object:
     def location(self) -> Location:
         return self._location
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
@@ -4565,6 +4747,18 @@ class Object:
         self._location.move(*args, **kwargs)
         self.update()
         self._sync_pen()
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -4618,12 +4812,15 @@ class Object:
 
         return self._pen
 
+    def _pen_location(self) -> Location:
+        return Location(self.x(), self.y())
+
     def _sync_pen(self) -> None:
         pen = getattr(self, '_pen', None)
         if pen is None or not pen.drawing():
             return
 
-        location = Location(self.x(), self.y())
+        location = self._pen_location()
         if pen.location() != location:
             pen.moveto(location)
 
@@ -4632,7 +4829,10 @@ class Object:
         verify(color, Color, width, int, top, bool)
 
         if self._pen is None:
-            self._pen = Pen(self._screen, self.x(), self.y(), color, width, top)
+            location = self._pen_location()
+            self._pen = Pen(
+                self._screen, location.x(), location.y(), color, width, top
+            )
         else:
             self._pen.color(color)
             self._pen.width(width)
@@ -4693,10 +4893,11 @@ class Object:
 
 class Renderable(Object):
     """
-    Test class for new itemconfigure-based pyDraw objects.
+    Base class for drawable, transformable shapes.
 
-    Update method is now only used for changes in position (and possibly changes that cannot be configured and require
-    the item to be remade)
+    Subclasses provide their own geometry and rendering details. ``update()``
+    synchronizes the rendered object with its current state; subclasses may
+    rebuild geometry when a change cannot be applied in place.
     """
 
     # bounds() cache. Class-level defaults so every subclass inherits them, even
@@ -4705,6 +4906,10 @@ class Renderable(Object):
     # instance shadows these with per-instance values.
     _bounds_sig = None
     _bounds_cache = None
+
+    def _pen_location(self) -> Location:
+        return self.center()
+
     def _render_color(self, color):
         return None if color == Color.NONE else color.rgb()
 
@@ -4765,6 +4970,18 @@ class Renderable(Object):
     def location(self) -> Location:
         return self._location
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
@@ -4776,6 +4993,18 @@ class Renderable(Object):
         before_y = self._location._y
         self._location.move(*args, **kwargs)
         self._translate(self._location._x - before_x, self._location._y - before_y)
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -4839,9 +5068,22 @@ class Renderable(Object):
 
         return self._height
 
+    @_overload
+    def center(self, x: float, y: float, *, centroid: bool = ...) -> Location: ...
+
+    @_overload
+    def center(self, location: Location, *, centroid: bool = ...) -> Location: ...
+
+    @_overload
+    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ..., centroid: bool = ...) -> Location: ...
+
     def center(self, *args, **kwargs) -> Location:
         """
-        Returns the location of the center
+        Get or set the object's center.
+
+        By default the center is the midpoint of the object's unrotated
+        bounding rectangle. With ``centroid=True``, it is the arithmetic mean
+        of the current vertices (not an area-weighted polygon centroid).
 
         :param move_to: if defined, Move the center to a new Location (Easily center objects!)
         :param x: if defined, move the center x-coordinate to the specified value
@@ -5139,7 +5381,11 @@ class Renderable(Object):
 
     def distance(self, obj) -> float:
         """
-        Returns the distance between two objs or locations in pixels (center to center)
+        Return the center-to-center Euclidean distance in pixels.
+
+        A ``Location`` is measured from this object's center; a Renderable is
+        measured from the other object's reported center. This is not an
+        edge-to-edge or collision distance.
 
         :param obj: the Renderable/location to check distance between
         :return: the distance between this obj and the passed Renderable/Location.
@@ -5217,8 +5463,11 @@ class Renderable(Object):
 
     def vertices(self) -> list:
         """
-        Returns the list of vertices for the Renderable.
-        (The vertices will be returned clockwise, starting from the top-leftmost point)
+        Return the shape's vertices as ``Location`` objects.
+
+        Vertex count and ordering are subclass-specific; callers should not
+        assume that every Renderable starts at the top-left corner or uses the
+        same winding order.
 
         :return: a list of Locations representing the vertices
         """
@@ -5254,6 +5503,15 @@ class Renderable(Object):
         self._bounds_sig = sig
         self._bounds_cache = result
         return result
+
+    @_overload
+    def contains(self, __x: float, __y: float) -> bool: ...
+
+    @_overload
+    def contains(self, __location: Location) -> bool: ...
+
+    @_overload
+    def contains(self, __xy: Tuple[float, float]) -> bool: ...
 
     def contains(self, *args) -> bool:
         """
@@ -5589,7 +5847,10 @@ class Renderable(Object):
         width = self._width
         height = self._height
 
-        scale_factor = (width / PIXEL_RATIO, height / PIXEL_RATIO)
+        scale_factor = (
+            width / _NORMALIZED_SHAPE_SIZE,
+            height / _NORMALIZED_SHAPE_SIZE,
+        )
 
         cx = 0
         cy = 0
@@ -5639,8 +5900,8 @@ class Renderable(Object):
 
         # Hoist per-object constants out of the vertex loops. (cx/cy were always
         # 0, so the old `(v - c) + c` was a no-op.)
-        scale_x = self._width / PIXEL_RATIO
-        scale_y = self._height / PIXEL_RATIO
+        scale_x = self._width / _NORMALIZED_SHAPE_SIZE
+        scale_y = self._height / _NORMALIZED_SHAPE_SIZE
         offset_x = self.x() + self._width / 2
         offset_y = self.y() + self._height / 2
 
@@ -5670,37 +5931,54 @@ class CustomRenderable(Renderable):
 class RoundedRectangle(CustomRenderable):
     """
     A rectangle with rounded corners.
+
+    The requested radius is retained by :meth:`radius`, while the effective
+    geometry clamps it to half the rectangle's width and height.
     """
 
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float),
-              Color, Color, bool, (int, float), bool, (int, float))
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True,
-                 radius: float = 10):
-        self._radius = self._validate_radius(radius)
-        super().__init__(screen, x, y, width, height, color, border,
-                         fill, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ..., radius: float = ...) -> None: ...
 
-    @overload(Screen, Location, (int, float), (int, float), Color, Color,
-              bool, (int, float), bool, (int, float))
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True,
-                 radius: float = 10):
-        self._radius = self._validate_radius(radius)
-        super().__init__(screen, location.x(), location.y(), width, height,
-                         color, border, fill, rotation, visible)
+        @_overload
+        def __init__(self, screen: Screen, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ..., radius: float = ...) -> None: ...
+
+        def __init__(self, *args, **kwargs) -> None: ...
+
+    else:
+        @overload(Screen, (int, float), (int, float), (int, float), (int, float),
+                  Color, Color, bool, (int, float), bool, (int, float))
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True,
+                     radius: float = 10):
+            self._radius = self._validate_radius(radius)
+            super().__init__(screen, x, y, width, height, color, border,
+                             fill, rotation, visible)
+
+        @overload(Screen, Location, (int, float), (int, float), Color, Color,
+                  bool, (int, float), bool, (int, float))
+        def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True,
+                     radius: float = 10):
+            self._radius = self._validate_radius(radius)
+            super().__init__(screen, location.x(), location.y(), width, height,
+                             color, border, fill, rotation, visible)
 
     def radius(self, radius: float = None) -> float:
         """
-        Set the corner radius of the rounded shape in pixels.
+        Get or set the requested corner radius in pixels.
+
+        The rendered radius is clamped to no more than half the current width
+        and height, so a requested value can be larger than the effective
+        corner radius.
 
         :param radius: the radius to set
         :return: the radius
@@ -5859,6 +6137,18 @@ class CustomPolygon(CustomRenderable):
 
         self._pen = None
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs):
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
@@ -5881,6 +6171,18 @@ class CustomPolygon(CustomRenderable):
         self._vertex_offset[1] += dy
         self._invalidate_render()
         self._sync_pen()
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs):
         """
@@ -5987,15 +6289,14 @@ class CustomPolygon(CustomRenderable):
 
             return center
 
-        # We are going to create a centroid, so we can rotate the points around a realistic center
-        # Sorry for those of you that get weird rotations..
+        # Use the arithmetic mean of the vertices so this agrees with the
+        # centroid=True contract on Renderable, rather than an area centroid.
         x_list = []
         y_list = []
         for vertex in self.vertices():
             x_list.append(vertex.x())
             y_list.append(vertex.y())
 
-        # Create a simple centroid (not full centroid)
         centroid_x = sum(x_list) / len(y_list)
         centroid_y = sum(y_list) / len(x_list)
 
@@ -6100,32 +6401,42 @@ class Rectangle(Renderable):
     # Two constructor forms: (x, y) and (location). The dispatcher honors
     # default arguments, so each full signature also covers every shorter call
     # that omits trailing optional args (color, border, fill, rotation, visible).
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
-                          Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
+        @_overload
+        def __init__(self, screen: Screen, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
-                          Location(x, y + height)]
-        self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        def __init__(self, *args, **kwargs) -> None: ...
+
+    else:
+        @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                              Location(x, y + height)]
+            self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+
+        @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            x = location.x()
+            y = location.y()
+
+            self._vertices = [Location(x, y), Location(x + width, y), Location(x + width, y + height),
+                              Location(x, y + height)]
+            self._shape = ((-10, 10), (10, 10), (10, -10), (-10, -10))
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
 
 class Oval(Renderable):
@@ -6139,38 +6450,48 @@ class Oval(Renderable):
 
     # Two constructor forms: (x, y) and (location). The dispatcher honors
     # default arguments, so each full signature also covers every shorter call.
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._width = width
-        self._height = height
-        self._custom_wedges = False
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        @_overload
+        def __init__(self, screen: Screen, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
+        def __init__(self, *args, **kwargs) -> None: ...
 
-        self._width = width
-        self._height = height
-        self._custom_wedges = False
+    else:
+        @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._width = width
+            self._height = height
+            self._custom_wedges = False
 
-        vertices = self._convert_vertices()
-        self._shape = vertices
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+            vertices = self._convert_vertices()
+            self._shape = vertices
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+
+        @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            x = location.x()
+            y = location.y()
+
+            self._width = width
+            self._height = height
+            self._custom_wedges = False
+
+            vertices = self._convert_vertices()
+            self._shape = vertices
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
     def width(self, width: float = None) -> float:
         """
@@ -6207,7 +6528,7 @@ class Oval(Renderable):
             verify(wedges, int)
             if wedges < 20:
                 raise InvalidArgumentError('Oval(): wedges must be at least 20.')
-            self._shape = self._generate_vertices(PIXEL_RATIO / 2, wedges=wedges)
+            self._shape = self._generate_vertices(_NORMALIZED_SHAPE_SIZE / 2, wedges=wedges)
             self._wedges = wedges
             self._custom_wedges = True
             self._update_coords()
@@ -6216,10 +6537,12 @@ class Oval(Renderable):
 
     def slices(self) -> list:
         """
-        Gets the slices of the Oval based on wedges. Note that this generates slices that are not tied to the oval,
-        these are simply slices of the oval based on its wedges. You can use them how you see fit.
+        Return a list of triangular ``CustomPolygon`` slices for the Oval.
 
-        :return: a tuple (immutable list) of CustomPolygons
+        The returned polygons are independent objects generated from the
+        current wedges; they are not kept in sync with the Oval.
+
+        :return: a list of CustomPolygons
         """
 
         return self._generate_slices()
@@ -6241,7 +6564,7 @@ class Oval(Renderable):
     def _convert_vertices(self):
         radius = ((self._width + self._height) / 2) / 2
         angle = 18 if radius <= 150 else (radius * 9) / 300
-        shape_vertices = self._generate_vertices(PIXEL_RATIO / 2, angle)
+        shape_vertices = self._generate_vertices(_NORMALIZED_SHAPE_SIZE / 2, angle)
 
         # Report the wedge count actually generated (size-dependent), not a fixed default.
         self._wedges = len(shape_vertices)
@@ -6283,77 +6606,100 @@ class Triangle(Renderable):
 
     # Two constructor forms: (x, y) and (location). The dispatcher honors
     # default arguments, so each full signature also covers every shorter call.
-    @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        x = location.x()
-        y = location.y()
+        @_overload
+        def __init__(self, screen: Screen, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        self._shape = ((10, -10), (0, 10), (-10, -10))
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        def __init__(self, *args, **kwargs) -> None: ...
+
+    else:
+        @overload(Screen, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._shape = ((10, -10), (0, 10), (-10, -10))
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+
+        @overload(Screen, Location, (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            x = location.x()
+            y = location.y()
+
+            self._shape = ((10, -10), (0, 10), (-10, -10))
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
 
 class Polygon(Renderable):
 
+    _num_sides: int
+    _shape: tuple
+
     # Two constructor forms: (num_sides, x, y) and (num_sides, location). The
     # dispatcher honors default arguments, so each full signature also covers
     # every shorter call.
-    @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        if num_sides < 3:
-            raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
+        @_overload
+        def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float, color: Color = ..., border: Optional[Color] = ..., fill: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        def __init__(self, *args, **kwargs) -> None: ...
 
-    @overload(Screen, int, Location, (int, float), (int, float), Color, Color, bool, int, bool)
-    def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
-                 color: Color = Color('black'),
-                 border: Color = None,
-                 fill: bool = True,
-                 rotation: float = 0,
-                 visible: bool = True):
-        if num_sides < 3:
-            raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
+    else:
+        @overload(Screen, int, (int, float), (int, float), (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, num_sides: int, x: float, y: float, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            if num_sides < 3:
+                raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
 
-        x = location.x()
-        y = location.y()
+            self._num_sides = num_sides
+            radius = _NORMALIZED_SHAPE_SIZE / 2
+            shape_points = []
+            for i in range(num_sides):
+                shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                     radius * math.cos(2 * math.pi / num_sides * i)))
+            self._shape = shape_points
 
-        self._num_sides = num_sides
-        radius = PIXEL_RATIO / 2
-        shape_points = []
-        for i in range(num_sides):
-            shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
-                                 radius * math.cos(2 * math.pi / num_sides * i)))
-        self._shape = shape_points
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
-        super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
+        @overload(Screen, int, Location, (int, float), (int, float), Color, Color, bool, int, bool)
+        def __init__(self, screen: Screen, num_sides: int, location: Location, width: float, height: float,
+                     color: Color = Color('black'),
+                     border: Color = None,
+                     fill: bool = True,
+                     rotation: float = 0,
+                     visible: bool = True):
+            if num_sides < 3:
+                raise InvalidArgumentError('Polygon(): num_sides must be at least 3.')
+
+            x = location.x()
+            y = location.y()
+
+            self._num_sides = num_sides
+            radius = _NORMALIZED_SHAPE_SIZE / 2
+            shape_points = []
+            for i in range(num_sides):
+                shape_points.append((radius * math.sin(2 * math.pi / num_sides * i),
+                                     radius * math.cos(2 * math.pi / num_sides * i)))
+            self._shape = shape_points
+
+            super().__init__(screen, x, y, width, height, color, border, fill, rotation, visible)
 
     def _setup(self):
         if not hasattr(self, '_shape'):
@@ -6362,14 +6708,14 @@ class Polygon(Renderable):
 
         shape = self._shape  # List of normal vertices.
 
-        a = math.pi * 2 / self._num_sides * (PIXEL_RATIO / 2)
+        a = math.pi * 2 / self._num_sides * (_NORMALIZED_SHAPE_SIZE / 2)
         n = self._num_sides
 
         # Degree converted to radians
         apothem = a / (2 * math.tan((180 / n) *
                                     math.pi / 180))
 
-        true_width = PIXEL_RATIO
+        true_width = _NORMALIZED_SHAPE_SIZE
         true_height = apothem * 2
 
         width = self._width
@@ -6386,7 +6732,7 @@ class Polygon(Renderable):
             vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy)
 
             vertex.move(self.x() + width / 2, self.y() + height / 2)
-            vertex.move(dy=PIXEL_RATIO - true_height)
+            vertex.move(dy=_NORMALIZED_SHAPE_SIZE - true_height)
 
         self._vertices = vertices
 
@@ -6406,14 +6752,14 @@ class Polygon(Renderable):
         self._check()
         shape = self._shape  # List of normal vertices.
 
-        a = math.pi * 2 / self._num_sides * (PIXEL_RATIO / 2)
+        a = math.pi * 2 / self._num_sides * (_NORMALIZED_SHAPE_SIZE / 2)
         n = self._num_sides
 
         # Degree converted to radians
         apothem = a / (2 * math.tan((180 / n) *
                                     math.pi / 180))
 
-        true_width = PIXEL_RATIO
+        true_width = _NORMALIZED_SHAPE_SIZE
         true_height = apothem * 2
 
         width = self._width
@@ -6430,7 +6776,7 @@ class Polygon(Renderable):
             vertex.moveto(scale_factor[0] * (vertex.x() - cx) + cx, -scale_factor[1] * (vertex.y() - cy) + cy)
 
             vertex.move(self.x() + width / 2, self.y() + height / 2)
-            vertex.move(dy=PIXEL_RATIO - true_height)
+            vertex.move(dy=_NORMALIZED_SHAPE_SIZE - true_height)
 
         self._vertices = vertices
 
@@ -6440,11 +6786,12 @@ class Polygon(Renderable):
 
 class Image(Renderable):
     """
-    Image class. Supports basic formats: PNG, GIF, JPG, PPM, images.
+    Drawable image supporting the basic PNG, GIF, and PPM formats.
 
-    NOTE: This class supports the basic displaying of images, but also supports much more,
-    such as image modification (width, height, color, etc) if you have PIL (Pillow) installed!
-    You can install PIL/Pillow by running: `pip install pillow` in a terminal!
+    Displaying those formats and reading intrinsic dimensions use the Tk
+    backend directly. Pillow is additionally required for other formats and
+    for bitmap operations such as resizing, tinting, rotating, flipping, and
+    animated-frame control.
     """
 
     # (x, y) INITIALIZERS
@@ -6452,31 +6799,56 @@ class Image(Renderable):
     # Two constructor forms: (x, y) and (location). The dispatcher honors default
     # arguments, so each full signature also covers every shorter call. Only the
     # screen and image path are required; x, y, width and height all default.
-    @overload(Screen, str, (int, float), (int, float), (int, float), (int, float), Color, Color, int, bool)
-    def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._init_image(screen, image, x, y, width, height, color, border, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, image: str, x: float = ..., y: float = ..., width: Optional[float] = ..., height: Optional[float] = ..., color: Optional[Color] = ..., border: Color = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, str, Location, (int, float), (int, float), Color, Color, int, bool)
-    def __init__(self, screen: Screen, image: str, location: Location,
-                 width: float = None,
-                 height: float = None,
-                 color: Color = None,
-                 border: Color = Color.NONE,
-                 rotation: float = 0,
-                 visible: bool = True):
-        self._init_image(screen, image, location.x(), location.y(),
-                         width, height, color, border, rotation, visible)
+        @_overload
+        def __init__(self, screen: Screen, image: str, location: Location, width: Optional[float] = ..., height: Optional[float] = ..., color: Optional[Color] = ..., border: Color = ..., rotation: float = ..., visible: bool = ...) -> None: ...
+
+        def __init__(self, *args, **kwargs) -> None: ...
+
+    else:
+        @overload(Screen, str, (int, float), (int, float), (int, float), (int, float), Color, Color, int, bool)
+        def __init__(self, screen: Screen, image: str, x: float = 0, y: float = 0,
+                     width: float = None,
+                     height: float = None,
+                     color: Color = None,
+                     border: Color = Color.NONE,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._init_image(screen, image, x, y, width, height, color, border, rotation, visible)
+
+        @overload(Screen, str, Location, (int, float), (int, float), Color, Color, int, bool)
+        def __init__(self, screen: Screen, image: str, location: Location,
+                     width: float = None,
+                     height: float = None,
+                     color: Color = None,
+                     border: Color = Color.NONE,
+                     rotation: float = 0,
+                     visible: bool = True):
+            self._init_image(screen, image, location.x(), location.y(),
+                             width, height, color, border, rotation, visible)
 
     def _init_image(self, screen, image, x, y, width, height, color, border, rotation, visible):
         self._image_name = image
 
         self._width, self._height = screen._backend.measure_image(image)
+
+        if width is not None:
+            verify(width, (float, int))
+        if height is not None:
+            verify(height, (float, int))
+
+        if width is not None and height is None:
+            height = self._height * width / self._width
+        elif height is not None and width is None:
+            width = self._width * height / self._height
+
+        if width is not None:
+            self._width = width
+        if height is not None:
+            self._height = height
 
         self._frame = -1
         self._frames = -1
@@ -6495,11 +6867,6 @@ class Image(Renderable):
 
         super().__init__(screen, x, y, self._width, self._height, color=Color.NONE, border=border,
                          rotation=rotation, visible=visible)
-
-        if width is not None and width != self._width:
-            self.width(width)
-        if height is not None and height != self._height:
-            self.height(height)
 
         if color is not None:
             self.color(color)
@@ -6543,10 +6910,14 @@ class Image(Renderable):
 
     def width(self, width: float = None) -> float:
         """
-        Get or set the width of the image (REQUIRES: PIL or Pillow)
+        Get or set the image width in pixels.
+
+        Reading the current width does not require Pillow. Setting it rebuilds
+        the bitmap and may require Pillow; the Tk backend requires Pillow when
+        the displayed size actually changes.
 
         :param width: the width to set to, if any
-        :return: None
+        :return: the width of the image
         """
 
         if width is not None:
@@ -6584,12 +6955,16 @@ class Image(Renderable):
         Retrieves or applies a color-mask to the image
 
         :param color: the color to mask to, if any
-        :param alpha: The alpha level of the mask, defaults to 123 (half of 255)
+        :param alpha: Tint intensity from 0 (original colors) to 255 (full tint), defaults to 123
         :return: the mask-color of the object
         """
 
         if color is not None:
-            verify(color, Color)
+            verify(color, Color, alpha, int)
+            if alpha < 0 or alpha > 255:
+                raise InvalidArgumentError(
+                    'Image#color(): alpha must be between 0 and 255.'
+                )
 
             if self._color == color and self._mask == alpha:
                 return self._color
@@ -6688,6 +7063,15 @@ class Image(Renderable):
 
 
 
+    @_overload
+    def center(self, x: float, y: float) -> Location: ...
+
+    @_overload
+    def center(self, location: Location) -> Location: ...
+
+    @_overload
+    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ...) -> Location: ...
+
     def center(self, *args, **kwargs) -> Location:
         """
         Returns the location of the center
@@ -6779,8 +7163,12 @@ class Image(Renderable):
 
     def vertices(self) -> list:
         """
-        Returns the list of vertices for the Renderable.
-        (The vertices will be returned clockwise, starting from the top-leftmost point)
+        Return the four transformed image corners clockwise.
+
+        At zero rotation the order is top-left, top-right, bottom-right,
+        bottom-left. With rotation, the same corner identities remain in that
+        order; the first point is not necessarily the top-leftmost point on
+        the screen.
 
         :return: a list of Locations representing the vertices
         """
@@ -6861,10 +7249,18 @@ class Image(Renderable):
 
     def next(self) -> None:
         """
-        Changes frame to the next frame (Can only be used with animated GIFs)
+        Advance to the next frame of a successfully loaded animated image.
 
-        :return:
+        Call :meth:`load` first. Raises ``PydrawError`` when no positive frame
+        count has been loaded.
+
+        :return: None
         """
+        if self._frames <= 0:
+            raise PydrawError(
+                'Image#next(): load an animated image before advancing frames.'
+            )
+
         self._frame += 1
 
         if self._frame >= self._frames:
@@ -6888,9 +7284,12 @@ class Image(Renderable):
 
     def frames(self) -> int:
         """
-        Returns how many frames there are, returns -1 if not animated, 0 if corrupted file.
+        Return the loaded frame count.
 
-        :return:
+        Before :meth:`load`, this returns ``-1``. After a successful load it
+        is a positive frame count; errors raised while loading are propagated.
+
+        :return: ``-1`` before loading, otherwise the positive frame count
         """
 
         return self._frames
@@ -6927,33 +7326,43 @@ class Text(CustomRenderable):
 
     # Four constructor forms ((x, y)/(location), each with optional Color) defer to _init_text.
     # noinspection PyProtectedMember
-    @overload(Screen, str, (int, float), (int, float))
-    def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
-                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
-                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._init_text(screen, text, x, y, color, font, size, align,
-                        bold, italic, underline, strikethrough, rotation, visible)
+    if TYPE_CHECKING:
+        @_overload
+        def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = ..., font: str = ..., size: int = ..., align: str = ..., bold: bool = ..., italic: bool = ..., underline: bool = ..., strikethrough: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, str, (int, float), (int, float), Color)
-    def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
-                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
-                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._init_text(screen, text, x, y, color, font, size, align,
-                        bold, italic, underline, strikethrough, rotation, visible)
+        @_overload
+        def __init__(self, screen: Screen, text: str, location: Location, color: Color = ..., font: str = ..., size: int = ..., align: str = ..., bold: bool = ..., italic: bool = ..., underline: bool = ..., strikethrough: bool = ..., rotation: float = ..., visible: bool = ...) -> None: ...
 
-    @overload(Screen, str, Location)
-    def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
-                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
-                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
-                        bold, italic, underline, strikethrough, rotation, visible)
+        def __init__(self, *args, **kwargs) -> None: ...
 
-    @overload(Screen, str, Location, Color)
-    def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
-                 font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
-                 underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
-        self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
-                        bold, italic, underline, strikethrough, rotation, visible)
+    else:
+        @overload(Screen, str, (int, float), (int, float))
+        def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
+                     font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                     underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+            self._init_text(screen, text, x, y, color, font, size, align,
+                            bold, italic, underline, strikethrough, rotation, visible)
+
+        @overload(Screen, str, (int, float), (int, float), Color)
+        def __init__(self, screen: Screen, text: str, x: float, y: float, color: Color = Color('black'),  # noqa
+                     font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                     underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+            self._init_text(screen, text, x, y, color, font, size, align,
+                            bold, italic, underline, strikethrough, rotation, visible)
+
+        @overload(Screen, str, Location)
+        def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
+                     font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                     underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+            self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
+                            bold, italic, underline, strikethrough, rotation, visible)
+
+        @overload(Screen, str, Location, Color)
+        def __init__(self, screen: Screen, text: str, location: Location, color: Color = Color('black'),  # noqa
+                     font: str = 'Arial', size: int = 16, align: str = 'left', bold: bool = False, italic: bool = False,
+                     underline: bool = False, strikethrough: bool = False, rotation: float = 0, visible: bool = True):
+            self._init_text(screen, text, location.x(), location.y(), color, font, size, align,
+                            bold, italic, underline, strikethrough, rotation, visible)
 
     # noinspection PyProtectedMember
     def _init_text(self, screen, text, x, y, color, font, size, align,
@@ -6973,6 +7382,7 @@ class Text(CustomRenderable):
         self._strikethrough = strikethrough
         self._angle = rotation
         self._visible = visible
+        self._pen = None
 
         verify(screen, Screen, text, str, x, (float, int), y, (float, int), color, Color, font, str, size, int,
                align, str, bold, bool, italic, bool, underline, bool, strikethrough, bool, rotation, (float, int),
@@ -7011,7 +7421,7 @@ class Text(CustomRenderable):
 
     def text(self, text: str = None) -> str:
         """
-        Get or set the text. Use '\n' to separate lines
+        Get or set the text. Use '\\n' to separate lines.
 
         :param text: text to set to (str), if any
         :return: the text
@@ -7026,6 +7436,18 @@ class Text(CustomRenderable):
 
         return self._text
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
         Can take either a tuple, Location, or two numbers (dx, dy)
@@ -7037,6 +7459,18 @@ class Text(CustomRenderable):
         before_y = self._location._y
         self._location.move(*args, **kwargs)
         self._translate(self._location._x - before_x, self._location._y - before_y)
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -7064,7 +7498,10 @@ class Text(CustomRenderable):
     # noinspection PyMethodOverriding
     def width(self) -> float:
         """
-        Get the width of the text (cannot be modified)
+        Return the text width (read-only directly).
+
+        The value is derived from the current text, font, size, and font
+        styles, so it can change when those properties are modified.
 
         :return the width of the text
         """
@@ -7074,7 +7511,10 @@ class Text(CustomRenderable):
     # noinspection PyMethodOverriding
     def height(self) -> float:
         """
-        Get the height of the text, (cannot be modified, although technically the font-size is the text's height)
+        Return the text height (read-only directly).
+
+        The value is derived from the current text, font, size, and font
+        styles, so it can change when those properties are modified.
 
         :return: the height of the text.
         """
@@ -7220,7 +7660,7 @@ class Text(CustomRenderable):
         """
         Get or set the rotation of the text
 
-        :param rotation: the strikethrough to set to, if any
+        :param rotation: the angle to set in degrees, if any
         :return: the rotation of the text
         """
 
@@ -7256,6 +7696,15 @@ class Text(CustomRenderable):
         theta = math.degrees(theta) + 90
 
         self.rotate(theta)
+
+    @_overload
+    def center(self, x: float, y: float) -> Location: ...
+
+    @_overload
+    def center(self, location: Location) -> Location: ...
+
+    @_overload
+    def center(self, *, move_to: Location = ..., x: float = ..., y: float = ...) -> Location: ...
 
     def center(self, *args, **kwargs) -> Location:
         """
@@ -7325,7 +7774,12 @@ class Text(CustomRenderable):
 
     def vertices(self) -> list:
         """
-        Get the vertices of a Rectangle superposed in the same transform of the Text
+        Return the four transformed corners of the Text's bounding rectangle.
+
+        At zero rotation the order is top-left, top-right, bottom-right,
+        bottom-left. Rotation preserves those corner identities and their
+        clockwise order; the first point is not necessarily top-leftmost on
+        the screen.
 
         :return: a list of Locations
         """
@@ -7500,6 +7954,15 @@ class Line(Object):
     def _restore_render(self):
         self._screen._register_render_source(self._render_node, self._render_id)
 
+    @_overload
+    def pos1(self) -> Location: ...
+
+    @_overload
+    def pos1(self, __location: Union[Location, Tuple[float, float]]) -> Location: ...
+
+    @_overload
+    def pos1(self, __x: float, __y: float) -> Location: ...
+
     def pos1(self, *args) -> Location:
         """
         Get or set the position of the first endpoint.
@@ -7519,6 +7982,15 @@ class Line(Object):
             self._update_angle()
             self._invalidate_render()
         return self._pos1
+
+    @_overload
+    def pos2(self) -> Location: ...
+
+    @_overload
+    def pos2(self, __location: Union[Location, Tuple[float, float]]) -> Location: ...
+
+    @_overload
+    def pos2(self, __x: float, __y: float) -> Location: ...
 
     def pos2(self, *args) -> Location:
         """
@@ -7540,15 +8012,28 @@ class Line(Object):
             self._invalidate_render()
         return self._pos2
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
-        Move both endpoints by the same dx and dy
+        Move one or both endpoints by a delta.
 
         Can take either a tuple, Location, or two numbers (dx, dy)
 
         :param dx: the distance x to move
         :param dy: the distance y to move
-        :param point: affect only one of the endpoints options: (1, 2), default=0 (Must be 1 or 2)
+        :param point: endpoint to affect: ``1`` moves ``pos1``, ``2`` moves
+            ``pos2``, and ``0`` (the default) moves both endpoints.
         :return: None
         """
 
@@ -7597,6 +8082,18 @@ class Line(Object):
             self._update_angle()
 
         self._invalidate_render()
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -7662,9 +8159,19 @@ class Line(Object):
 
     # noinspection PyUnusedLocal
     # TODO: Allow for point specification (center)
+    @_overload
+    def lookat(self, location: Union[Location, Tuple[float, float]], point: int = ...) -> None: ...
+
+    @_overload
+    def lookat(self, x: float, y: float, point: int = ...) -> None: ...
+
     def lookat(self, *args, **kwargs) -> None:
         """
-        Make the line look at the given point by moving the second point.
+        Rotate the line toward a target while preserving its length.
+
+        ``point=2`` (the default) keeps ``pos1`` as the pivot and aims
+        ``pos2`` at the target. ``point=1`` keeps ``pos2`` as the pivot and
+        aims ``pos1`` at the target.
 
         :return: None
         """
@@ -7715,7 +8222,8 @@ class Line(Object):
         else:
             raise InvalidArgumentError('Line#lookat(): point must be 1 or 2.')
 
-        self.rotate(math.degrees(theta))
+        pivot = 1 if point == 2 else 2
+        self.rotate(math.degrees(theta), point=pivot)
 
     def rotation(self, angle: float = None):
         """
@@ -7830,14 +8338,19 @@ class Line(Object):
 
     def dashes(self, dashes: Union[int, tuple] = None) -> Union[int, tuple]:
         """
-        Retrieve or enable/disable the dashes for the line
+        Get or set the line's dash pattern.
+
+        An integer is a symmetric dash-and-gap length; an ``(on, off)`` tuple
+        supplies the dash and gap lengths in pixels. When no pattern has been configured, the
+        getter returns ``None`` and the line is solid. The backend may choose
+        the closest supported pattern.
 
         On systems which support only a limited set of dash patterns, the dash pattern will be displayed as the closest
         dash pattern that is available. For example, on Windows only a few dash patterns are available, most of which
         do not allow for special dash-spacing (if passing in a tuple).
 
-        :param dashes: the visibility to set to, if any
-        :return: the toggle-state of dashes
+        :param dashes: an integer or dash/gap tuple to set, if any
+        :return: the configured pattern, or ``None``
         """
 
         if dashes is not None:
@@ -7892,9 +8405,10 @@ class Line(Object):
 
     def intersects(self, obj) -> bool:
         """
-        Check if a line intersects with another line or Renderable
+        Check if a line intersects with another line, Renderable, or sequence
+        of ``Location`` vertices.
 
-        :param obj: Line, Renderable, or List/Tuple
+        :param obj: Line, Renderable, or list/tuple containing Locations
         :return: Whether the line intersects with the object
         """
 
@@ -8004,10 +8518,11 @@ class Line(Object):
         self._check()
         self._invalidate_render()
 
-from typing import Union, Tuple
+from typing import Optional, Union, Tuple, overload as _overload
 
 # from pydraw import Object, Renderable, verify
 # from pydraw import Location, Color
+# from pydraw.objects import CustomPolygon, Text, Rectangle, RoundedRectangle, Oval, Triangle, Polygon, Image
 # from pydraw.errors import *
 
 import math
@@ -8020,7 +8535,7 @@ class CompoundObject(Object):
 
     _PEN_SUPPORTED = False
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Object, **kwargs: Object):
         """
         Pass in the shapes/objects to be used to create the CompoundObject
 
@@ -8080,6 +8595,18 @@ class CompoundObject(Object):
 
         return self._location.y()
 
+    @_overload
+    def move(self, dx: float, dy: float) -> None: ...
+
+    @_overload
+    def move(self, location: Location) -> None: ...
+
+    @_overload
+    def move(self, dxy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def move(self, *, dx: float = ..., dy: float = ...) -> None: ...
+
     def move(self, *args, **kwargs) -> None:
         """
         Move the compound shape by a certain distance (dx, dy)
@@ -8087,13 +8614,44 @@ class CompoundObject(Object):
         :return: None
         """
 
-        for obj in self._objects.values():
-            obj.move(*args, **kwargs)
+        if not kwargs and len(args) == 2 and all(type(value) in (int, float) for value in args):
+            dx, dy = args
+        else:
+            delta = Location._raw(0, 0)
+            delta.move(*args, **kwargs)
+            dx, dy = delta._x, delta._y
 
-        # Shift the tracked bounds once (not once per child, which would
-        # multiply the delta by the number of objects).
-        self._location.move(*args, **kwargs)
-        self._end.move(*args, **kwargs)
+        if dx == 0 and dy == 0:
+            return
+
+        leaves = tuple(self._leaf_objects())
+        if (len({id(obj) for obj in leaves}) == len(leaves)
+                and all(self._batchable(obj)
+                        and obj._screen._backend.supports_group_translation()
+                        for obj in leaves)):
+            groups = {}
+            for obj in leaves:
+                groups.setdefault(obj._screen, []).append(obj._render_id)
+            self._move_cached(dx, dy)
+            for screen, render_ids in groups.items():
+                screen._translate_render_group(self, render_ids, dx, dy)
+            return
+
+        for obj in self._objects.values():
+            obj.move(dx, dy)
+        self._shift_bounds(dx, dy)
+
+    @_overload
+    def moveto(self, x: float, y: float) -> None: ...
+
+    @_overload
+    def moveto(self, location: Location) -> None: ...
+
+    @_overload
+    def moveto(self, xy: Tuple[float, float]) -> None: ...
+
+    @_overload
+    def moveto(self, *, x: float = ..., y: float = ...) -> None: ...
 
     def moveto(self, *args, **kwargs) -> None:
         """
@@ -8121,9 +8679,11 @@ class CompoundObject(Object):
 
     def width(self, width: float = None) -> float:
         """
-        Get the width of the compound object
+        Return the compound object's bounding width.
 
-        :param width: a new width, if provided
+        This is a getter only; setting the width is unsupported.
+
+        :param width: unsupported legacy argument; omit it when reading width
         :return: a float
         """
 
@@ -8134,9 +8694,11 @@ class CompoundObject(Object):
 
     def height(self, height: float = None) -> float:
         """
-        Get the height of the compound object
+        Return the compound object's bounding height.
 
-        :param height: a new height, if provided
+        This is a getter only; setting the height is unsupported.
+
+        :param height: unsupported legacy argument; omit it when reading height
         :return: a float
         """
 
@@ -8156,7 +8718,11 @@ class CompoundObject(Object):
 
         verify(angle_diff, (float, int), pivot, Location)
 
+        if angle_diff == 0:
+            return
+
         pivot = self.center(centroid=True) if pivot is None else pivot
+        pivot_x, pivot_y = pivot._x, pivot._y
 
         # Convert the angle_diff to radians
         angle_diff_rad = math.radians(angle_diff)
@@ -8164,6 +8730,17 @@ class CompoundObject(Object):
         sine = math.sin(angle_diff_rad)
 
         for obj in self._objects.values():
+            if self._rotation_batchable(obj):
+                center_x = obj._location._x + obj._width / 2
+                center_y = obj._location._y + obj._height / 2
+                dx = center_x - pivot_x
+                dy = center_y - pivot_y
+                obj._location._x = dx * cosine - dy * sine + pivot_x - obj._width / 2
+                obj._location._y = dx * sine + dy * cosine + pivot_y - obj._height / 2
+                obj.rotate(angle_diff)
+                obj._sync_pen()
+                continue
+
             # An object's location is its unrotated top-left anchor, but
             # Object#rotate() spins it around its center.  Revolving that anchor
             # and then spinning around the center applies two incompatible
@@ -8207,9 +8784,13 @@ class CompoundObject(Object):
 
     def center(self, centroid: bool = True) -> Location:
         """
-        Calculate the center point of the CompoundObject
+        Calculate the center point of the CompoundObject.
 
-        :centroid: whether to use the centroid or the center of the bounding box
+        With the default ``centroid=True``, this is the arithmetic mean of the
+        child centers. With ``centroid=False``, it is the midpoint of the
+        compound's axis-aligned bounding box.
+        :param centroid: whether to average child centers instead of using the
+            bounding-box midpoint
         :return: Location of the center
         """
 
@@ -8221,6 +8802,15 @@ class CompoundObject(Object):
         center_y = sum(center.y() for center in centers) / len(centers)
 
         return Location(center_x, center_y)
+
+    @_overload
+    def contains(self, __x: float, __y: float) -> bool: ...
+
+    @_overload
+    def contains(self, __location: Location) -> bool: ...
+
+    @_overload
+    def contains(self, __xy: Tuple[float, float]) -> bool: ...
 
     def contains(self, *args) -> bool:
         """
@@ -8310,6 +8900,7 @@ class CompoundObject(Object):
         Add another Object to the CompoundObject
 
         :param obj: the Object to add
+        :param name: optional registry key; when omitted, ``str(obj)`` is used
         :return: None
         """
 
@@ -8336,7 +8927,7 @@ class CompoundObject(Object):
         if obj.y() + obj.height() > self._end.y():
             self._end.y(obj.y() + obj.height())
 
-    def remove(self, obj: Object = None, name=None) -> Object:
+    def remove(self, obj: Object = None, name=None) -> Optional[Object]:
         """
         Remove an object from the Compound Object
 
@@ -8345,21 +8936,21 @@ class CompoundObject(Object):
         :return: the Object that got removed (or None)
         """
 
-        removed_obj = None
-
         if obj is not None and name is None:
-            removed_obj = self._objects.pop(str(obj))
-        elif name is not None:
-            removed_obj = self._objects.pop(name)
+            return self._objects.pop(str(obj), None)
+        if name is not None:
+            return self._objects.pop(name, None)
 
-        return removed_obj
+        return None
 
     def object(self, name) -> Object:
         """
         Retrieve a specific object
 
-        :param name: the name of the object (can be a str, or another type of object)
-        :return: Object
+        :param name: the registry key. Positional constructor objects and
+            unnamed additions are keyed by ``str(obj)``; keyword constructor
+            arguments and named additions use the supplied name.
+        :return: the registered Object, or ``None`` when the key is absent
         """
 
         return self._objects.get(name)
@@ -8372,6 +8963,15 @@ class CompoundObject(Object):
         """
 
         return tuple(self._objects.values())
+
+    def visible(self, visible: bool) -> None:
+        """Set the visibility of every child in the compound."""
+        if visible is None:
+            raise InvalidArgumentError(
+                'CompoundObject#visible(): supply True or False; query children individually.'
+            )
+        for obj in self._objects.values():
+            obj.visible(visible)
 
     def color(self, color: Color):
         """Change the color of all the objects in the compound object."""
@@ -8386,6 +8986,61 @@ class CompoundObject(Object):
         """Updates values of the compound object."""
 
         self._location, self._end = self._calculate_bounds()
+
+    def _leaf_objects(self):
+        for obj in self._objects.values():
+            if isinstance(obj, CompoundObject):
+                yield from obj._leaf_objects()
+            else:
+                yield obj
+
+    @staticmethod
+    def _batchable(obj) -> bool:
+        return (
+            type(obj) in (Renderable, CustomPolygon, Text, Rectangle, RoundedRectangle,
+                          Oval, Triangle, Polygon, Image)
+            and type(obj).move in (Renderable.move, CustomPolygon.move, Text.move)
+            and hasattr(obj, '_render_id')
+            and hasattr(obj, '_location')
+            and (hasattr(obj, '_vertices') or isinstance(obj, Text))
+        )
+
+    @staticmethod
+    def _rotation_batchable(obj) -> bool:
+        return (
+            type(obj) in (Renderable, CustomPolygon, Rectangle, RoundedRectangle,
+                          Oval, Triangle, Polygon)
+            and hasattr(obj, '_location')
+            and hasattr(obj, '_width')
+            and hasattr(obj, '_height')
+        )
+
+    @staticmethod
+    def _move_child_cached(obj, dx, dy):
+        obj._location._x += dx
+        obj._location._y += dy
+        if hasattr(obj, '_vertex_offset'):
+            obj._vertex_offset[0] += dx
+            obj._vertex_offset[1] += dy
+        else:
+            for vertex in getattr(obj, '_vertices', ()):
+                vertex._x += dx
+                vertex._y += dy
+        obj._sync_pen()
+
+    def _move_cached(self, dx, dy):
+        for obj in self._objects.values():
+            if isinstance(obj, CompoundObject):
+                obj._move_cached(dx, dy)
+            else:
+                self._move_child_cached(obj, dx, dy)
+        self._shift_bounds(dx, dy)
+
+    def _shift_bounds(self, dx, dy):
+        self._location._x += dx
+        self._location._y += dy
+        self._end._x += dx
+        self._end._y += dy
 
     def _calculate_bounds(self) -> Tuple[Location, Location]:
         """Return the axis-aligned bounds of the children's live geometry."""

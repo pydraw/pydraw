@@ -45,6 +45,10 @@ class ScreenBackend(metaclass=ABCMeta):
         """Synchronously present or acknowledge one ``RenderBatch`` frame."""
         raise NotImplementedError
 
+    def supports_group_translation(self) -> bool:
+        """Whether ``present`` can apply relative render-node translations."""
+        return False
+
     @abstractmethod
     def set_title(self, title: str) -> None:
         """Apply a platform title when the host supports one."""

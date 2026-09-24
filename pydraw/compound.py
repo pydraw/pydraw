@@ -2,6 +2,7 @@ from typing import Optional, Union, Tuple, overload as _overload
 
 from pydraw import Object, Renderable, verify
 from pydraw import Location, Color
+from pydraw.objects import CustomPolygon, Text, Rectangle, RoundedRectangle, Oval, Triangle, Polygon, Image
 from pydraw.errors import *
 
 import math
@@ -93,13 +94,32 @@ class CompoundObject(Object):
         :return: None
         """
 
-        for obj in self._objects.values():
-            obj.move(*args, **kwargs)
+        if not kwargs and len(args) == 2 and all(type(value) in (int, float) for value in args):
+            dx, dy = args
+        else:
+            delta = Location._raw(0, 0)
+            delta.move(*args, **kwargs)
+            dx, dy = delta._x, delta._y
 
-        # Shift the tracked bounds once (not once per child, which would
-        # multiply the delta by the number of objects).
-        self._location.move(*args, **kwargs)
-        self._end.move(*args, **kwargs)
+        if dx == 0 and dy == 0:
+            return
+
+        leaves = tuple(self._leaf_objects())
+        if (len({id(obj) for obj in leaves}) == len(leaves)
+                and all(self._batchable(obj)
+                        and obj._screen._backend.supports_group_translation()
+                        for obj in leaves)):
+            groups = {}
+            for obj in leaves:
+                groups.setdefault(obj._screen, []).append(obj._render_id)
+            self._move_cached(dx, dy)
+            for screen, render_ids in groups.items():
+                screen._translate_render_group(self, render_ids, dx, dy)
+            return
+
+        for obj in self._objects.values():
+            obj.move(dx, dy)
+        self._shift_bounds(dx, dy)
 
     @_overload
     def moveto(self, x: float, y: float) -> None: ...
@@ -178,7 +198,11 @@ class CompoundObject(Object):
 
         verify(angle_diff, (float, int), pivot, Location)
 
+        if angle_diff == 0:
+            return
+
         pivot = self.center(centroid=True) if pivot is None else pivot
+        pivot_x, pivot_y = pivot._x, pivot._y
 
         # Convert the angle_diff to radians
         angle_diff_rad = math.radians(angle_diff)
@@ -186,6 +210,17 @@ class CompoundObject(Object):
         sine = math.sin(angle_diff_rad)
 
         for obj in self._objects.values():
+            if self._rotation_batchable(obj):
+                center_x = obj._location._x + obj._width / 2
+                center_y = obj._location._y + obj._height / 2
+                dx = center_x - pivot_x
+                dy = center_y - pivot_y
+                obj._location._x = dx * cosine - dy * sine + pivot_x - obj._width / 2
+                obj._location._y = dx * sine + dy * cosine + pivot_y - obj._height / 2
+                obj.rotate(angle_diff)
+                obj._sync_pen()
+                continue
+
             # An object's location is its unrotated top-left anchor, but
             # Object#rotate() spins it around its center.  Revolving that anchor
             # and then spinning around the center applies two incompatible
@@ -409,6 +444,15 @@ class CompoundObject(Object):
 
         return tuple(self._objects.values())
 
+    def visible(self, visible: bool) -> None:
+        """Set the visibility of every child in the compound."""
+        if visible is None:
+            raise InvalidArgumentError(
+                'CompoundObject#visible(): supply True or False; query children individually.'
+            )
+        for obj in self._objects.values():
+            obj.visible(visible)
+
     def color(self, color: Color):
         """Change the color of all the objects in the compound object."""
 
@@ -422,6 +466,61 @@ class CompoundObject(Object):
         """Updates values of the compound object."""
 
         self._location, self._end = self._calculate_bounds()
+
+    def _leaf_objects(self):
+        for obj in self._objects.values():
+            if isinstance(obj, CompoundObject):
+                yield from obj._leaf_objects()
+            else:
+                yield obj
+
+    @staticmethod
+    def _batchable(obj) -> bool:
+        return (
+            type(obj) in (Renderable, CustomPolygon, Text, Rectangle, RoundedRectangle,
+                          Oval, Triangle, Polygon, Image)
+            and type(obj).move in (Renderable.move, CustomPolygon.move, Text.move)
+            and hasattr(obj, '_render_id')
+            and hasattr(obj, '_location')
+            and (hasattr(obj, '_vertices') or isinstance(obj, Text))
+        )
+
+    @staticmethod
+    def _rotation_batchable(obj) -> bool:
+        return (
+            type(obj) in (Renderable, CustomPolygon, Rectangle, RoundedRectangle,
+                          Oval, Triangle, Polygon)
+            and hasattr(obj, '_location')
+            and hasattr(obj, '_width')
+            and hasattr(obj, '_height')
+        )
+
+    @staticmethod
+    def _move_child_cached(obj, dx, dy):
+        obj._location._x += dx
+        obj._location._y += dy
+        if hasattr(obj, '_vertex_offset'):
+            obj._vertex_offset[0] += dx
+            obj._vertex_offset[1] += dy
+        else:
+            for vertex in getattr(obj, '_vertices', ()):
+                vertex._x += dx
+                vertex._y += dy
+        obj._sync_pen()
+
+    def _move_cached(self, dx, dy):
+        for obj in self._objects.values():
+            if isinstance(obj, CompoundObject):
+                obj._move_cached(dx, dy)
+            else:
+                self._move_child_cached(obj, dx, dy)
+        self._shift_bounds(dx, dy)
+
+    def _shift_bounds(self, dx, dy):
+        self._location._x += dx
+        self._location._y += dy
+        self._end._x += dx
+        self._end._y += dy
 
     def _calculate_bounds(self) -> Tuple[Location, Location]:
         """Return the axis-aligned bounds of the children's live geometry."""

@@ -8,7 +8,9 @@ unit.
 
 import os
 import unittest
-from pydraw import Screen, Location, Color, Rectangle, Polygon, Triangle, Image
+from unittest import mock
+from pydraw import Screen, Location, Color, Rectangle, Polygon, Triangle, Image, CustomPolygon, Text
+from pydraw.backends.recording import RecordingRuntime
 from pydraw.compound import CompoundObject
 from pydraw.errors import InvalidArgumentError
 
@@ -20,7 +22,9 @@ class CompoundObjectTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.screen = Screen(800, 600)
+        runtime = RecordingRuntime()
+        with mock.patch('pydraw.screen._default_runtime', return_value=runtime):
+            cls.screen = Screen(800, 600)
 
     def setUp(self) -> None:
         self.screen.clear()
@@ -59,6 +63,86 @@ class CompoundObjectTest(unittest.TestCase):
         comp.move(5, 5)
         self.assertEqual(comp.center(centroid=False), Location(65, 15))
 
+    def test_move_uses_one_render_translation_after_initial_frame(self):
+        a, b, comp = self._pair()
+        self.screen.update()
+        backend = self.screen._backend
+        previous_a = backend.nodes[a._render_id]
+
+        comp.move(5, 7)
+        self.screen.update()
+
+        batch = backend.batches[-1]
+        self.assertEqual(batch.upserts, ())
+        self.assertEqual(batch.translations, ((comp, (a._render_id, b._render_id), 5, 7),))
+        self.assertEqual(backend.nodes[a._render_id].points,
+                         tuple((x + 5, y + 7) for x, y in previous_a.points))
+
+    def test_dirty_child_is_upserted_once_after_group_move(self):
+        a, b, comp = self._pair()
+        self.screen.update()
+
+        comp.move(5, 0)
+        a.color(Color('blue'))
+        self.screen.update()
+
+        batch = self.screen._backend.batches[-1]
+        self.assertEqual(tuple(node.id for node in batch.upserts), (a._render_id,))
+        self.assertEqual(batch.translations, ((comp, (b._render_id,), 5, 0),))
+        self.assertEqual(self.screen._backend.nodes[a._render_id].points[0], (5, 0))
+        self.assertEqual(self.screen._backend.nodes[b._render_id].points[0], (105, 0))
+
+    def test_new_children_render_at_moved_position(self):
+        a, b, comp = self._pair()
+        comp.move(8, 9)
+        self.screen.update()
+
+        batch = self.screen._backend.batches[-1]
+        self.assertEqual(batch.translations, ())
+        self.assertEqual(self.screen._backend.nodes[a._render_id].points[0], (8, 9))
+        self.assertEqual(self.screen._backend.nodes[b._render_id].points[0], (108, 9))
+
+    def test_backend_without_translation_uses_individual_updates(self):
+        a, b, comp = self._pair()
+        self.screen.update()
+        with mock.patch.object(self.screen._backend, 'supports_group_translation', return_value=False):
+            comp.move(3, 4)
+        self.screen.update()
+
+        batch = self.screen._backend.batches[-1]
+        self.assertEqual(batch.translations, ())
+        self.assertEqual({node.id for node in batch.upserts}, {a._render_id, b._render_id})
+
+    def test_nested_group_and_membership_changes(self):
+        a, b, inner = self._pair()
+        outer = CompoundObject(inner)
+        self.screen.update()
+        outer.move(3, 4)
+        self.screen.update()
+        self.assertEqual(inner.center(centroid=False), Location(63, 14))
+        self.assertEqual(self.screen._backend.nodes[b._render_id].points[0], (103, 4))
+
+        inner.remove(b)
+        outer.move(2, 0)
+        self.screen.update()
+        self.assertEqual(self.screen._backend.nodes[a._render_id].points[0], (5, 4))
+        self.assertEqual(self.screen._backend.nodes[b._render_id].points[0], (103, 4))
+
+    def test_rotation_rebuilds_each_child_only_once(self):
+        a, b, comp = self._pair()
+        self.screen.update()
+        with mock.patch.object(a, 'move', wraps=a.move) as move_a, \
+                mock.patch.object(b, 'move', wraps=b.move) as move_b:
+            comp.rotate(90)
+        move_a.assert_not_called()
+        move_b.assert_not_called()
+        self.screen.update()
+        batch = self.screen._backend.batches[-1]
+        self.assertEqual(len(batch.upserts), 2)
+        self.assertEqual(batch.translations, ())
+        self._assert_at(a, 50, -50)
+        self._assert_at(b, 50, 50)
+
     def test_moveto_translates_children_and_bounds_once(self):
         a, b, comp = self._pair()
         comp.moveto(50, 75)
@@ -78,6 +162,38 @@ class CompoundObjectTest(unittest.TestCase):
         comp.color(Color('blue'))
         self.assertEqual(a.color(), Color('blue'))
         self.assertEqual(b.color(), Color('blue'))
+
+    def test_visible_applies_to_all(self):
+        a, b, comp = self._pair()
+        comp.visible(False)
+        self.assertFalse(a.visible())
+        self.assertFalse(b.visible())
+        comp.visible(True)
+        self.assertTrue(a.visible())
+        self.assertTrue(b.visible())
+        self.assertRaises(InvalidArgumentError, comp.visible, None)
+
+    def test_move_mixed_render_nodes(self):
+        polygon = CustomPolygon(self.screen, [(0, 0), (20, 0), (10, 20)])
+        text = Text(self.screen, 'test', 30, 10)
+        image = Image(self.screen, PNG, 70, 10, 20, 20)
+        comp = CompoundObject(polygon, text, image)
+        self.screen.update()
+        old_nodes = {obj._render_id: self.screen._backend.nodes[obj._render_id]
+                     for obj in (polygon, text, image)}
+
+        comp.move(4, 6)
+        self.screen.update()
+
+        batch = self.screen._backend.batches[-1]
+        self.assertEqual(batch.upserts, ())
+        self.assertEqual(len(batch.translations), 1)
+        self.assertEqual(self.screen._backend.nodes[polygon._render_id].points[0],
+                         tuple(value + delta for value, delta in zip(old_nodes[polygon._render_id].points[0], (4, 6))))
+        self.assertEqual(self.screen._backend.nodes[text._render_id].position,
+                         tuple(value + delta for value, delta in zip(old_nodes[text._render_id].position, (4, 6))))
+        self.assertEqual(self.screen._backend.nodes[image._render_id].position,
+                         tuple(value + delta for value, delta in zip(old_nodes[image._render_id].position, (4, 6))))
 
     def test_add_and_object_lookup(self):
         a, b, comp = self._pair()

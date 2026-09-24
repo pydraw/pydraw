@@ -405,6 +405,9 @@ class Screen:
     def _invalidate_render(self, render_id):
         self._render_queue.invalidate(render_id)
 
+    def _translate_render_group(self, owner, render_ids, dx, dy):
+        self._render_queue.translate_group(owner, render_ids, dx, dy)
+
     def _remove_render(self, render_id):
         self._render_queue.remove(render_id)
 
