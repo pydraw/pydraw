@@ -1,5 +1,5 @@
 """
-pyDraw v2.2.1
+pyDraw v3.0a1
 
 This library is a graphics-interface library designed to make graphics in Python
 easier and more simple. It was designed to be easy to teach/learn and to utilize
